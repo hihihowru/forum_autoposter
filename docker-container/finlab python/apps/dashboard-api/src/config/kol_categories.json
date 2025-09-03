@@ -1,0 +1,229 @@
+{
+  "persona_categories": [
+    {
+      "id": "technical",
+      "name": "技術派",
+      "description": "專注技術分析、圖表解讀、指標計算",
+      "keywords": ["技術分析", "K線", "均線", "RSI", "MACD", "支撐", "壓力", "突破", "回檔"],
+      "content_preferences": ["chart_analysis", "technical_breakdown", "indicator_analysis"],
+      "target_audience": ["active_traders", "technical_analysts"]
+    },
+    {
+      "id": "macro",
+      "name": "總經派", 
+      "description": "專注總體經濟、政策分析、利率變化",
+      "keywords": ["總經", "GDP", "CPI", "利率", "匯率", "政策", "央行", "通膨", "經濟指標"],
+      "content_preferences": ["macro_analysis", "policy_impact", "economic_outlook"],
+      "target_audience": ["long_term_investors", "institutional_investors"]
+    },
+    {
+      "id": "news",
+      "name": "新聞派",
+      "description": "專注新聞事件、突發消息、市場反應",
+      "keywords": ["新聞", "突發", "消息", "事件", "公告", "聲明", "回應", "澄清"],
+      "content_preferences": ["news_commentary", "event_analysis", "market_reaction"],
+      "target_audience": ["news_sensitive_traders", "event_driven_investors"]
+    },
+    {
+      "id": "sentiment",
+      "name": "籌碼派",
+      "description": "專注資金流向、主力動向、籌碼分析",
+      "keywords": ["籌碼", "主力", "外資", "投信", "自營", "資金流向", "持股", "買賣超"],
+      "content_preferences": ["fund_flow_analysis", "institutional_activity", "sentiment_analysis"],
+      "target_audience": ["institutional_traders", "fund_managers"]
+    },
+    {
+      "id": "emotional",
+      "name": "情緒派",
+      "description": "專注市場情緒、投資心理、行為分析",
+      "keywords": ["情緒", "心理", "恐慌", "貪婪", "信心", "氣氛", "氛圍", "投資心理"],
+      "content_preferences": ["sentiment_analysis", "psychology_insights", "market_mood"],
+      "target_audience": ["retail_investors", "psychology_aware_traders"]
+    },
+    {
+      "id": "value",
+      "name": "價值派",
+      "description": "專注基本面分析、估值模型、長期投資",
+      "keywords": ["價值", "基本面", "財報", "估值", "本益比", "股價淨值比", "ROE", "長期投資"],
+      "content_preferences": ["fundamental_analysis", "valuation_models", "long_term_outlook"],
+      "target_audience": ["value_investors", "long_term_investors"]
+    },
+    {
+      "id": "insider",
+      "name": "消息派",
+      "description": "專注內幕消息、小道消息、市場傳聞",
+      "keywords": ["內幕", "消息", "傳聞", "小道", "獨家", "爆料", "知情人士"],
+      "content_preferences": ["insider_news", "rumor_analysis", "exclusive_info"],
+      "target_audience": ["information_sensitive_traders", "insider_traders"]
+    },
+    {
+      "id": "quantitative",
+      "name": "量化派",
+      "description": "專注數據分析、回測模型、量化策略",
+      "keywords": ["量化", "回測", "模型", "數據", "統計", "算法", "策略", "程式交易"],
+      "content_preferences": ["quantitative_analysis", "backtesting", "model_validation"],
+      "target_audience": ["quantitative_traders", "algorithmic_traders"]
+    }
+  ],
+  "industry_categories": [
+    {
+      "id": "semiconductor",
+      "name": "半導體",
+      "keywords": ["半導體", "晶片", "IC", "封測", "晶圓", "台積電", "聯發科", "聯詠", "瑞昱"]
+    },
+    {
+      "id": "finance",
+      "name": "金融",
+      "keywords": ["金融", "銀行", "保險", "證券", "金控", "富邦", "國泰", "中信", "玉山"]
+    },
+    {
+      "id": "traditional",
+      "name": "傳產",
+      "keywords": ["傳產", "傳統產業", "製造", "紡織", "塑化", "鋼鐵", "水泥", "台塑", "中鋼"]
+    },
+    {
+      "id": "technology",
+      "name": "科技",
+      "keywords": ["科技", "電子", "通訊", "網路", "軟體", "硬體", "鴻海", "廣達", "仁寶"]
+    },
+    {
+      "id": "biotech",
+      "name": "生技",
+      "keywords": ["生技", "醫療", "製藥", "疫苗", "檢測", "浩鼎", "中裕", "藥華"]
+    },
+    {
+      "id": "energy",
+      "name": "能源",
+      "keywords": ["能源", "石油", "天然氣", "太陽能", "風電", "綠能", "中油", "台塑化"]
+    },
+    {
+      "id": "consumer",
+      "name": "消費",
+      "keywords": ["消費", "零售", "食品", "飲料", "統一", "味全", "全家", "7-11"]
+    },
+    {
+      "id": "real_estate",
+      "name": "地產",
+      "keywords": ["地產", "房地產", "建設", "營建", "土地", "信義", "遠雄", "華固"]
+    },
+    {
+      "id": "shipping",
+      "name": "航運",
+      "keywords": ["航運", "海運", "空運", "物流", "長榮", "陽明", "萬海", "華航"]
+    },
+    {
+      "id": "steel",
+      "name": "鋼鐵",
+      "keywords": ["鋼鐵", "金屬", "中鋼", "豐興", "新光鋼", "世紀鋼"]
+    }
+  ],
+  "event_categories": [
+    {
+      "id": "earnings_call",
+      "name": "法說會",
+      "keywords": ["法說會", "法人說明會", "財報說明", "營運展望"]
+    },
+    {
+      "id": "financial_report",
+      "name": "財報",
+      "keywords": ["財報", "季報", "年報", "損益表", "資產負債表", "現金流量表"]
+    },
+    {
+      "id": "monthly_revenue",
+      "name": "月營收",
+      "keywords": ["月營收", "營收", "營收公告", "營收成長", "營收衰退"]
+    },
+    {
+      "id": "policy",
+      "name": "政策",
+      "keywords": ["政策", "法規", "監管", "政府", "央行", "金管會", "證交所"]
+    },
+    {
+      "id": "merger_acquisition",
+      "name": "併購",
+      "keywords": ["併購", "收購", "合併", "分割", "重組", "策略聯盟"]
+    },
+    {
+      "id": "capital_increase",
+      "name": "增資",
+      "keywords": ["增資", "減資", "現金增資", "私募", "可轉債", "GDR"]
+    },
+    {
+      "id": "dividend",
+      "name": "除權息",
+      "keywords": ["除權息", "配息", "配股", "股利", "除權", "除息"]
+    },
+    {
+      "id": "shareholder_meeting",
+      "name": "股東會",
+      "keywords": ["股東會", "股東常會", "股東臨時會", "董監改選"]
+    },
+    {
+      "id": "board_meeting",
+      "name": "董事會",
+      "keywords": ["董事會", "董事", "監事", "獨立董事", "公司治理"]
+    }
+  ],
+  "stock_categories": [
+    {
+      "id": "tsmc",
+      "name": "台積電",
+      "symbol": "2330",
+      "keywords": ["台積電", "TSMC", "2330", "晶圓代工", "先進製程"]
+    },
+    {
+      "id": "mediatek",
+      "name": "聯發科",
+      "symbol": "2454",
+      "keywords": ["聯發科", "MediaTek", "2454", "手機晶片", "5G"]
+    },
+    {
+      "id": "hon_hai",
+      "name": "鴻海",
+      "symbol": "2317",
+      "keywords": ["鴻海", "Foxconn", "2317", "代工", "iPhone"]
+    },
+    {
+      "id": "cht",
+      "name": "中華電",
+      "symbol": "2412",
+      "keywords": ["中華電", "CHT", "2412", "電信", "5G"]
+    },
+    {
+      "id": "formosa_plastics",
+      "name": "台塑",
+      "symbol": "1301",
+      "keywords": ["台塑", "1301", "石化", "塑化"]
+    },
+    {
+      "id": "china_steel",
+      "name": "中鋼",
+      "symbol": "2002",
+      "keywords": ["中鋼", "2002", "鋼鐵", "鋼材"]
+    },
+    {
+      "id": "evergreen",
+      "name": "長榮",
+      "symbol": "2603",
+      "keywords": ["長榮", "2603", "海運", "貨櫃"]
+    },
+    {
+      "id": "yang_ming",
+      "name": "陽明",
+      "symbol": "2609",
+      "keywords": ["陽明", "2609", "海運", "貨櫃"]
+    },
+    {
+      "id": "wan_hai",
+      "name": "萬海",
+      "symbol": "2615",
+      "keywords": ["萬海", "2615", "海運", "貨櫃"]
+    },
+    {
+      "id": "fubon",
+      "name": "富邦金",
+      "symbol": "2881",
+      "keywords": ["富邦金", "2881", "金控", "銀行"]
+    }
+  ]
+}
