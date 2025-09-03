@@ -1,6 +1,7 @@
 # Table of contents
 
 * [AI 發文系統技術文檔](README.md)
+* [本週進度總結報告](week-1-summary-report.md)
 
 ## 1. AI 系統概覽
 
