@@ -1,0 +1,71 @@
+#!/usr/bin/env python3
+"""
+自動發文腳本
+"""
+
+import os
+import sys
+import asyncio
+from dotenv import load_dotenv
+
+# 載入環境變數
+load_dotenv()
+
+# 添加專案根目錄到 Python 路徑
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+from src.services.publish.publish_service import PublishService
+from src.clients.google.sheets_client import GoogleSheetsClient
+
+async def main():
+    """自動發文主流程"""
+    
+    print("=== 自動發文開始 ===\n")
+    
+    # 初始化服務
+    sheets_client = GoogleSheetsClient(
+        credentials_file=os.getenv('GOOGLE_CREDENTIALS_FILE'),
+        spreadsheet_id=os.getenv('GOOGLE_SHEETS_ID')
+    )
+    
+    publish_service = PublishService(sheets_client)
+    
+    try:
+        # 步驟1: 登入所有 KOL
+        print("步驟1: 登入所有 KOL...")
+        login_success = await publish_service.login_all_kols()
+        
+        if not login_success:
+            print("❌ KOL 登入失敗，無法繼續發文")
+            return
+        
+        # 步驟2: 獲取準備發文的記錄
+        print("\n步驟2: 獲取準備發文的記錄...")
+        ready_posts = publish_service.get_ready_to_post_records()
+        
+        if not ready_posts:
+            print("❌ 沒有找到準備發文的記錄")
+            return
+        
+        print(f"✅ 找到 {len(ready_posts)} 篇準備發文的記錄")
+        
+        # 顯示準備發文的記錄
+        for i, post in enumerate(ready_posts, 1):
+            print(f"  {i}. {post['kol_nickname']} (Serial: {post['kol_serial']})")
+            print(f"     標題: {post['title']}")
+            print(f"     內容長度: {len(post['content'])} 字")
+            print()
+        
+        # 步驟3: 開始間隔發文
+        print("步驟3: 開始間隔發文...")
+        await publish_service.publish_posts_with_interval(ready_posts, interval_minutes=2)
+        
+        print("\n✅ 發文流程完成！")
+        
+    except Exception as e:
+        print(f"❌ 發文流程失敗: {e}")
+        import traceback
+        traceback.print_exc()
+
+if __name__ == "__main__":
+    asyncio.run(main())

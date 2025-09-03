@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  batch-post-publisher:
+    build: .
+    container_name: batch-post-publisher
+    restart: unless-stopped
+    environment:
+      - PYTHONPATH=/app/src
+      - PYTHONUNBUFFERED=1
+    volumes:
+      # 掛載Google服務帳號憑證
+      - ./credentials/google-service-account.json:/app/credentials/google-service-account.json:ro
+      # 掛載環境變數文件
+      - ./.env:/app/.env:ro
+      # 掛載日誌目錄
+      - ./logs:/app/logs
+    networks:
+      - post-publisher-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  post-publisher-network:
+    driver: bridge
