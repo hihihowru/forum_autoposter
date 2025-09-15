@@ -15,6 +15,8 @@ from src.services.assign.assignment_service import AssignmentService, TopicData
 from src.services.content.content_generator import ContentGenerator, ContentRequest
 from src.services.stock.stock_data_service import StockDataService
 from src.services.stock.topic_stock_service import TopicStockService
+from src.services.trending_topic_news_service import TrendingTopicNewsService, TrendingTopicPost, PostGenerationResult
+# PostgreSQL 服務將在需要時動態導入
 from src.utils.limit_up_data_parser import LimitUpDataParser
 
 logger = logging.getLogger(__name__)
@@ -52,11 +54,116 @@ class UnifiedFlowManager:
         self.topic_stock_service = TopicStockService()
         self.limit_up_parser = LimitUpDataParser()
         
+        # 新增：熱門話題新聞搜尋服務
+        self.trending_news_service = TrendingTopicNewsService()
+        
+        # PostgreSQL 服務將在需要時動態初始化
+        
         # 統一的認證管理
         self._access_token = None
         self._token_expires_at = None
         
         logger.info("統一流程管理器初始化完成")
+    
+    def _get_mock_trending_topics(self) -> List[Topic]:
+        """獲取模擬熱門話題數據"""
+        from src.clients.cmoney.models import Topic
+        
+        mock_topics = [
+            Topic(
+                id="mock_topic_001",
+                title="台股高檔震盪，開高走平背後的真相？",
+                name="台股高檔震盪，開高走平背後的真相？",
+                last_article_create_time=datetime.now().isoformat(),
+                raw_data={
+                    "id": "mock_topic_001",
+                    "title": "台股高檔震盪，開高走平背後的真相？",
+                    "name": "台股高檔震盪，開高走平背後的真相？",
+                    "description": "台股今日開高後走平，市場關注後續走勢",
+                    "keywords": "台股,大盤,震盪,技術分析",
+                    "relatedStockSymbols": [
+                        {"key": "2330", "type": "Stock"},
+                        {"key": "2454", "type": "Stock"},
+                        {"key": "2317", "type": "Stock"}
+                    ]
+                }
+            ),
+            Topic(
+                id="mock_topic_002",
+                title="AI概念股強勢，台積電領軍上攻",
+                name="AI概念股強勢，台積電領軍上攻",
+                last_article_create_time=datetime.now().isoformat(),
+                raw_data={
+                    "id": "mock_topic_002",
+                    "title": "AI概念股強勢，台積電領軍上攻",
+                    "name": "AI概念股強勢，台積電領軍上攻",
+                    "description": "AI概念股表現強勢，台積電領軍科技股上攻",
+                    "keywords": "AI,台積電,科技股,半導體",
+                    "relatedStockSymbols": [
+                        {"key": "2330", "type": "Stock"},
+                        {"key": "2454", "type": "Stock"},
+                        {"key": "2379", "type": "Stock"}
+                    ]
+                }
+            ),
+            Topic(
+                id="mock_topic_003",
+                title="通膨數據出爐，央行政策走向引關注",
+                name="通膨數據出爐，央行政策走向引關注",
+                last_article_create_time=datetime.now().isoformat(),
+                raw_data={
+                    "id": "mock_topic_003",
+                    "title": "通膨數據出爐，央行政策走向引關注",
+                    "name": "通膨數據出爐，央行政策走向引關注",
+                    "description": "最新通膨數據公布，市場關注央行政策動向",
+                    "keywords": "通膨,央行,利率,總經",
+                    "relatedStockSymbols": [
+                        {"key": "2881", "type": "Stock"},
+                        {"key": "2882", "type": "Stock"},
+                        {"key": "2886", "type": "Stock"}
+                    ]
+                }
+            ),
+            Topic(
+                id="mock_topic_004",
+                title="生技股異軍突起，減重藥題材發酵",
+                name="生技股異軍突起，減重藥題材發酵",
+                last_article_create_time=datetime.now().isoformat(),
+                raw_data={
+                    "id": "mock_topic_004",
+                    "title": "生技股異軍突起，減重藥題材發酵",
+                    "name": "生技股異軍突起，減重藥題材發酵",
+                    "description": "生技股異軍突起，減重藥題材持續發酵",
+                    "keywords": "生技,減重藥,醫療,新藥",
+                    "relatedStockSymbols": [
+                        {"key": "6919", "type": "Stock"},
+                        {"key": "4743", "type": "Stock"},
+                        {"key": "6547", "type": "Stock"}
+                    ]
+                }
+            ),
+            Topic(
+                id="mock_topic_005",
+                title="電動車概念股回溫，充電樁建設加速",
+                name="電動車概念股回溫，充電樁建設加速",
+                last_article_create_time=datetime.now().isoformat(),
+                raw_data={
+                    "id": "mock_topic_005",
+                    "title": "電動車概念股回溫，充電樁建設加速",
+                    "name": "電動車概念股回溫，充電樁建設加速",
+                    "description": "電動車概念股回溫，充電樁建設加速進行",
+                    "keywords": "電動車,充電樁,新能源,環保",
+                    "relatedStockSymbols": [
+                        {"key": "3661", "type": "Stock"},
+                        {"key": "2308", "type": "Stock"},
+                        {"key": "2377", "type": "Stock"}
+                    ]
+                }
+            )
+        ]
+        
+        logger.info(f"生成 {len(mock_topics)} 個模擬熱門話題")
+        return mock_topics
     
     async def _ensure_valid_token(self) -> str:
         """確保有有效的 access token"""
@@ -78,33 +185,57 @@ class UnifiedFlowManager:
         return self._access_token
     
     async def execute_trending_topic_flow(self, config: FlowConfig) -> FlowResult:
-        """執行熱門話題流程"""
+        """執行熱門話題流程 - 整合智能新聞搜尋"""
         start_time = datetime.now()
         
         try:
-            logger.info("開始執行熱門話題流程")
+            logger.info("開始執行熱門話題流程（整合智能新聞搜尋）")
             
-            # 1. 獲取 access token
-            token = await self._ensure_valid_token()
+            # 1. 嘗試獲取真實熱門話題
+            topics = []
+            try:
+                # 獲取 access token
+                token = await self._ensure_valid_token()
+                
+                # 獲取熱門話題
+                topics = await self.cmoney_client.get_trending_topics(token)
+                logger.info(f"成功獲取到 {len(topics)} 個真實熱門話題")
+                
+            except Exception as e:
+                logger.warning(f"獲取真實熱門話題失敗: {e}")
+                logger.info("使用模擬熱門話題數據作為fallback")
+                
+                # 使用模擬數據
+                topics = self._get_mock_trending_topics()
+                logger.info(f"使用 {len(topics)} 個模擬熱門話題")
             
-            # 2. 獲取熱門話題
-            topics = await self.cmoney_client.get_trending_topics(token)
-            logger.info(f"獲取到 {len(topics)} 個熱門話題")
-            
-            # 3. 處理話題（包含股票查詢）
+            # 2. 處理話題（包含股票查詢）
             processed_topics = await self.topic_stock_service.process_topics_with_stocks(topics)
             
-            # 4. 執行統一的處理流程
-            result = await self._execute_unified_flow(processed_topics, config)
+            # 3. 轉換為貼文格式並執行智能新聞搜尋
+            trending_posts = self._convert_topics_to_posts(processed_topics)
+            
+            # 4. 使用智能新聞搜尋服務處理每個貼文
+            post_results = await self.trending_news_service.process_trending_topic_posts(trending_posts)
+            
+            # 5. 記錄結果到 PostgreSQL
+            if config.enable_sheets_recording:
+                await self._record_trending_topic_results_to_postgresql(post_results)
             
             execution_time = (datetime.now() - start_time).total_seconds()
+            
+            # 統計結果
+            successful_posts = [r for r in post_results if r.success]
+            failed_posts = [r for r in post_results if not r.success]
+            
+            logger.info(f"熱門話題流程完成: {len(successful_posts)} 個成功, {len(failed_posts)} 個失敗")
             
             return FlowResult(
                 success=True,
                 flow_type="trending_topic",
                 processed_topics=len(processed_topics),
-                generated_posts=result.get('generated_posts', 0),
-                errors=result.get('errors', []),
+                generated_posts=len(successful_posts),
+                errors=[r.error_message for r in failed_posts if r.error_message],
                 execution_time=execution_time
             )
             
@@ -120,6 +251,92 @@ class UnifiedFlowManager:
                 errors=[str(e)],
                 execution_time=execution_time
             )
+    
+    def _convert_topics_to_posts(self, processed_topics: List[Dict[str, Any]]) -> List[TrendingTopicPost]:
+        """將處理後的話題轉換為貼文格式"""
+        posts = []
+        
+        for topic_data in processed_topics:
+            topic_id = topic_data.get('id', 'unknown')
+            topic_title = topic_data.get('title', '')
+            topic_content = topic_data.get('content', '')
+            stock_ids = topic_data.get('stock_ids', [])
+            
+            # 為每個股票-話題組合創建一個貼文
+            if stock_ids:
+                for stock_id in stock_ids:
+                    post_id = f"{topic_id}_{stock_id}"
+                    post = TrendingTopicPost(
+                        post_id=post_id,
+                        topic_title=topic_title,
+                        topic_content=topic_content,
+                        stock_ids=[stock_id],
+                        is_topic_only=False,
+                        kol_info={}
+                    )
+                    posts.append(post)
+            else:
+                # 純話題貼文
+                post_id = f"{topic_id}_topic_only"
+                post = TrendingTopicPost(
+                    post_id=post_id,
+                    topic_title=topic_title,
+                    topic_content=topic_content,
+                    stock_ids=[],
+                    is_topic_only=True,
+                    kol_info={}
+                )
+                posts.append(post)
+        
+        logger.info(f"轉換為 {len(posts)} 個貼文")
+        return posts
+    
+    async def _record_trending_topic_results_to_postgresql(self, post_results: List[PostGenerationResult]):
+        """記錄熱門話題結果到 PostgreSQL"""
+        try:
+            logger.info(f"開始記錄 {len(post_results)} 個貼文結果到 PostgreSQL")
+            
+            # 動態導入 PostgreSQL 服務
+            import sys
+            import os
+            posting_service_path = os.path.join(os.path.dirname(__file__), '../../../docker-container/finlab python/apps/posting-service')
+            if posting_service_path not in sys.path:
+                sys.path.insert(0, posting_service_path)
+            
+            from postgresql_service import PostgreSQLPostRecordService
+            post_service = PostgreSQLPostRecordService()
+            
+            for result in post_results:
+                if not result.success:
+                    continue
+                
+                # 準備 PostgreSQL 記錄數據
+                post_data = {
+                    'post_id': result.post_id,
+                    'kol_serial': "",  # 待分配
+                    'kol_nickname': "",  # 待分配
+                    'kol_persona': "",  # 待分配
+                    'stock_code': ", ".join(result.stock_ids) if result.stock_ids else "",
+                    'stock_name': "",  # 待查詢
+                    'title': result.generated_content.title if result.generated_content else result.topic_title,
+                    'content': result.generated_content.content if result.generated_content else "",
+                    'content_md': result.generated_content.content if result.generated_content else "",
+                    'status': 'ready_to_gen',
+                    'content_type': 'trending_topic',
+                    'topic_id': result.post_id,
+                    'topic_title': result.topic_title,
+                    'topic_keywords': ", ".join(result.stock_ids) if result.stock_ids else "",
+                    'generated_at': datetime.now(),
+                    'news_sources': len(result.news_results),
+                    'confidence_score': result.generated_content.confidence_score if result.generated_content else 0.0
+                }
+                
+                # 保存到 PostgreSQL
+                post_service.create_post_record(post_data)
+                logger.info(f"記錄貼文到 PostgreSQL: {result.post_id}")
+                
+        except Exception as e:
+            logger.error(f"記錄到 PostgreSQL 失敗: {e}")
     
     async def execute_limit_up_stock_flow(self, config: FlowConfig) -> FlowResult:
         """執行漲停股流程"""

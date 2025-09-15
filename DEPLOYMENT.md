@@ -102,3 +102,11 @@ docker run -it --rm \
   batch-post-publisher \
   python -u batch_post_publisher.py
 ```
+
+
+
+
+
+
+
+

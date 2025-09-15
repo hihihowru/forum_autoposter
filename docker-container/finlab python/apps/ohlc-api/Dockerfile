@@ -9,15 +9,12 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends build-essential && rm -rf /var/lib/apt/lists/*
 
 # Install service deps
-COPY requirements.txt /tmp/requirements.txt
-RUN pip install --upgrade pip && pip install -r /tmp/requirements.txt
+COPY requirements.txt .
+RUN pip install --upgrade pip && pip install -r requirements.txt
 
-# Copy source tree (for shared and service code)
-COPY . /app
+# Copy source tree
+COPY . .
 
-# Install shared package if exists
-RUN if [ -f "/app/packages/shared/pyproject.toml" ]; then pip install -e /app/packages/shared; fi
-
-WORKDIR /app/apps/ohlc-api
+EXPOSE 8000
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

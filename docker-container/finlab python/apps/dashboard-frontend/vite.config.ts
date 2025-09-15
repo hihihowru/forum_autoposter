@@ -9,7 +9,47 @@ export default defineConfig({
     host: true,
     proxy: {
       '/api': {
-        target: 'http://localhost:8007',
+        target: 'http://localhost:8007',  // dashboard-api 端口
+        changeOrigin: true,
+        secure: false,
+      },
+      '/trending': {
+        target: 'http://localhost:8004',  // trending-api 端口
+        changeOrigin: true,
+        secure: false,
+      },
+      '/extract-keywords': {
+        target: 'http://localhost:8004',  // trending-api 端口
+        changeOrigin: true,
+        secure: false,
+      },
+      '/search-stocks-by-keywords': {
+        target: 'http://localhost:8004',  // trending-api 端口
+        changeOrigin: true,
+        secure: false,
+      },
+      '/extract-and-search': {
+        target: 'http://localhost:8004',  // trending-api 端口
+        changeOrigin: true,
+        secure: false,
+      },
+      '/analyze-topic': {
+        target: 'http://localhost:8004',  // trending-api 端口
+        changeOrigin: true,
+        secure: false,
+      },
+      '/generate-search-strategy': {
+        target: 'http://localhost:8004',  // trending-api 端口
+        changeOrigin: true,
+        secure: false,
+      },
+      '/generate-content': {
+        target: 'http://localhost:8004',  // trending-api 端口
+        changeOrigin: true,
+        secure: false,
+      },
+      '/intelligent-extract-keywords': {
+        target: 'http://localhost:8004',  // trending-api 端口
         changeOrigin: true,
         secure: false,
       }

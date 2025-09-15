@@ -196,36 +196,8 @@ class TopicStockService:
         Returns:
             股票名稱
         """
-        # 常見股票名稱對照表
-        stock_names = {
-            "2330": "台積電",
-            "2454": "聯發科", 
-            "2317": "鴻海",
-            "2881": "富邦金",
-            "2882": "國泰金",
-            "1101": "台泥",
-            "1102": "亞泥",
-            "1216": "統一",
-            "1303": "南亞",
-            "1326": "台化",
-            "2002": "中鋼",
-            "2308": "台達電",
-            "2377": "微星",
-            "2382": "廣達",
-            "2408": "南亞科",
-            "2474": "可成",
-            "2498": "宏達電",
-            "3008": "大立光",
-            "3034": "聯詠",
-            "3231": "緯創",
-            "3711": "日月光投控",
-            "4938": "和碩",
-            "6505": "台塑化",
-            "8046": "南電",
-            "9910": "豐泰"
-        }
-        
-        return stock_names.get(stock_id, f"股票{stock_id}")
+        from ...utils.stock_mapping import get_stock_name
+        return get_stock_name(stock_id)
     
     def assign_stocks_to_kols(self, stocks: List[StockInfo], kol_serials: List[str]) -> Dict[str, Optional[StockInfo]]:
         """

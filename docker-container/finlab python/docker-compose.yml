@@ -1,23 +1,14 @@
 services:
-  python-service:
-    build: ./python-service
-    env_file:
-      - ./python-service/.env
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./python-service:/app
-    working_dir: /app
-    command: uvicorn get_ohlc:app --host 0.0.0.0 --port 8000
-
   # 微服務架構
   ohlc-api:
     build: ./apps/ohlc-api
     ports:
-      - "8001:8001"
+      - "8005:8001"
     volumes:
       - ./apps/ohlc-api:/app
     working_dir: /app
+    environment:
+      - FINLAB_API_KEY=${FINLAB_API_KEY}
     command: uvicorn main:app --host 0.0.0.0 --port 8001 --reload
 
   analyze-api:
@@ -50,11 +41,14 @@ services:
   posting-service:
     build: ./apps/posting-service
     ports:
-      - "8005:8005"
+      - "8001:8000"
     volumes:
       - ./apps/posting-service:/app
     working_dir: /app
-    command: uvicorn main:app --host 0.0.0.0 --port 8005 --reload
+    environment:
+      - SERPER_API_KEY=${SERPER_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
   trainer:
     build: ./apps/trainer
@@ -137,5 +131,5 @@ services:
       - ./apps/fundamental-analyzer:/app
     working_dir: /app
     environment:
-      - FINLAB_API_KEY=AOl10aUjuRAwxdHjbO25jGoH7c8LOhXqKz/HgT9WlcCPkBwL8Qp6PDlqpd59YuR7#vip_m
+      - FINLAB_API_KEY=${FINLAB_API_KEY}
     command: uvicorn main:app --host 0.0.0.0 --port 8010 --reload

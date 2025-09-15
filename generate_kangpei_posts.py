@@ -148,7 +148,7 @@ class KangpeiPostGenerator:
             credentials_file='./credentials/google-service-account.json',
             spreadsheet_id='148CUhBxqE-BZDPTKaAmOJG6m52CxB4KrxD9p5LikN2s'
         )
-        self.news_client = SerperNewsClient("59eac2d4f87afca3ae6e252f4214098defdd40fa")
+        self.news_client = SerperNewsClient(os.getenv('SERPER_API_KEY'))
         self.kol_settings = PersonalizedKOLSettings()
         
     async def get_kol_credentials(self) -> List[Dict[str, Any]]:

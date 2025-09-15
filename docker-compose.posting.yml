@@ -1,0 +1,96 @@
+version: '3.8'
+
+services:
+  # PostgreSQL 數據庫
+  postgres:
+    image: postgres:15
+    container_name: posting_management_db
+    environment:
+      POSTGRES_DB: posting_management
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - posting_network
+    restart: unless-stopped
+
+  # Redis 緩存
+  redis:
+    image: redis:7-alpine
+    container_name: posting_management_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - posting_network
+    restart: unless-stopped
+
+  # 後端API服務
+  backend:
+    build:
+      context: ./docker-container/finlab python/apps/dashboard-backend
+      dockerfile: Dockerfile
+    container_name: posting_management_backend
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/posting_management
+      - REDIS_URL=redis://redis:6379
+      - ENVIRONMENT=development
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./docker-container/finlab python/apps/dashboard-backend:/app
+    networks:
+      - posting_network
+    restart: unless-stopped
+    command: >
+      sh -c "
+        echo '等待數據庫啟動...' &&
+        sleep 10 &&
+        echo '運行數據庫遷移...' &&
+        alembic upgrade head &&
+        echo '啟動後端服務...' &&
+        uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+      "
+
+  # 前端服務
+  frontend:
+    build:
+      context: ./docker-container/finlab python/apps/dashboard-frontend
+      dockerfile: Dockerfile
+    container_name: posting_management_frontend
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    volumes:
+      - ./docker-container/finlab python/apps/dashboard-frontend:/app
+    networks:
+      - posting_network
+    restart: unless-stopped
+    command: >
+      sh -c "
+        echo '安裝依賴...' &&
+        npm install &&
+        echo '啟動前端服務...' &&
+        npm run dev -- --host 0.0.0.0
+      "
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  posting_network:
+    driver: bridge

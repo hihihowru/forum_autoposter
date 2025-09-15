@@ -5,7 +5,8 @@ import {
   CheckCircleOutlined, 
   ClockCircleOutlined,
   ExclamationCircleOutlined,
-  LinkOutlined
+  LinkOutlined,
+  DeleteOutlined
 } from '@ant-design/icons';
 import { PostHistoryProps, PostHistory as PostHistoryType } from '../../types/kol-types';
 
@@ -19,6 +20,8 @@ const PostHistory: React.FC<PostHistoryProps> = ({
 }) => {
   const [selectedPost, setSelectedPost] = useState<PostHistoryType | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [deletingPost, setDeletingPost] = useState<PostHistoryType | null>(null);
 
   // 處理平台 URL 點擊
   const handlePlatformUrlClick = (url: string) => {
@@ -49,6 +52,40 @@ const PostHistory: React.FC<PostHistoryProps> = ({
   const handleViewDetail = (post: PostHistoryType) => {
     setSelectedPost(post);
     setModalVisible(true);
+  };
+
+  // 顯示刪除確認對話框
+  const handleDeleteClick = (post: PostHistoryType) => {
+    setDeletingPost(post);
+    setDeleteModalVisible(true);
+  };
+
+  // 執行刪除貼文
+  const handleDeleteConfirm = async () => {
+    if (!deletingPost) return;
+    
+    try {
+      const response = await fetch(`/api/dashboard/posts/${deletingPost.post_id}/delete`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (response.ok) {
+        message.success('貼文已成功刪除');
+        setDeleteModalVisible(false);
+        setDeletingPost(null);
+        // 刷新頁面數據
+        window.location.reload();
+      } else {
+        const errorData = await response.json();
+        message.error(errorData.message || '刪除貼文失敗');
+      }
+    } catch (error) {
+      console.error('刪除貼文錯誤:', error);
+      message.error('刪除貼文時發生錯誤');
+    }
   };
 
   // 表格列定義
@@ -144,7 +181,28 @@ const PostHistory: React.FC<PostHistoryProps> = ({
       },
     },
     {
-      title: '平台 URL',
+      title: 'CMoney文章ID',
+      dataIndex: 'platform_post_id',
+      key: 'platform_post_id',
+      width: 120,
+      render: (articleId: string, record: PostHistoryType) => {
+        if (record.status !== '已發布') {
+          return <Tag color="orange">未發布</Tag>;
+        }
+        
+        if (!articleId || articleId.trim() === '') {
+          return <Tag color="red">無ID</Tag>;
+        }
+        
+        return (
+          <Text code style={{ fontSize: '12px', backgroundColor: '#f5f5f5', padding: '2px 6px', borderRadius: '3px' }}>
+            {articleId}
+          </Text>
+        );
+      },
+    },
+    {
+      title: 'CMoney連結',
       dataIndex: 'platform_post_url',
       key: 'platform_post_url',
       width: 100,
@@ -173,7 +231,7 @@ const PostHistory: React.FC<PostHistoryProps> = ({
     {
       title: '操作',
       key: 'action',
-      width: 100,
+      width: 150,
       render: (record: PostHistoryType) => (
         <Space>
           <Button 
@@ -183,6 +241,16 @@ const PostHistory: React.FC<PostHistoryProps> = ({
             onClick={() => handleViewDetail(record)}
           >
             詳情
+          </Button>
+          <Button 
+            type="link" 
+            size="small" 
+            danger
+            icon={<DeleteOutlined />}
+            onClick={() => handleDeleteClick(record)}
+            disabled={record.status === '已刪除' || record.status !== '已發布' || !record.platform_post_id}
+          >
+            刪除
           </Button>
         </Space>
       ),
@@ -329,6 +397,35 @@ const PostHistory: React.FC<PostHistoryProps> = ({
             </Descriptions.Item>
           </Descriptions>
         )}
+      </Modal>
+      
+      {/* 刪除確認對話框 */}
+      <Modal
+        title="確認刪除貼文"
+        open={deleteModalVisible}
+        onOk={handleDeleteConfirm}
+        onCancel={() => {
+          setDeleteModalVisible(false);
+          setDeletingPost(null);
+        }}
+        okText="確認刪除"
+        cancelText="取消"
+        okButtonProps={{ danger: true }}
+      >
+        <p>您確定要刪除這篇貼文嗎？</p>
+        {deletingPost && (
+          <>
+            <p><strong>貼文 ID:</strong> {deletingPost.post_id}</p>
+            <p><strong>KOL:</strong> {deletingPost.kol_nickname}</p>
+            <p><strong>話題標題:</strong> {deletingPost.topic_title}</p>
+            <p><strong>狀態:</strong> {deletingPost.status}</p>
+          </>
+        )}
+        <div style={{ marginTop: '16px', padding: '12px', backgroundColor: '#fff7e6', border: '1px solid #ffd591', borderRadius: '4px' }}>
+          <p style={{ margin: 0, color: '#d46b08' }}>
+            <strong>⚠️ 注意：</strong>此操作將從CMoney平台實際刪除貼文，並在我們的系統中標記為已刪除。此操作不可逆轉！
+          </p>
+        </div>
       </Modal>
     </div>
   );

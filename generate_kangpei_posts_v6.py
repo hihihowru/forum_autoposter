@@ -477,7 +477,7 @@ class KangpeiPostGeneratorV6:
     """康霈生技貼文生成器 V6 - 修正版本"""
     
     def __init__(self):
-        self.news_client = SerperNewsClient("59eac2d4f87afca3ae6e252f4214098defdd40fa")
+        self.news_client = SerperNewsClient(os.getenv('SERPER_API_KEY'))
         self.prompt_generator = PersonalizedPromptGenerator()
         
         # 初始化 Google Sheets 客戶端

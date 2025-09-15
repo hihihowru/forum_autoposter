@@ -98,7 +98,7 @@ class SmartLimitUpGenerator:
         
         self.assignment_service = AssignmentService(self.sheets_client)
         self.llm_client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
-        self.news_client = SerperNewsClient("59eac2d4f87afca3ae6e252f4214098defdd40fa")
+        self.news_client = SerperNewsClient(os.getenv('SERPER_API_KEY'))
         
         print("🚀 智能漲停股貼文生成器初始化完成")
     

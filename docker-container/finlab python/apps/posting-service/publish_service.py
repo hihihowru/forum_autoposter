@@ -14,25 +14,57 @@ class PostPublishService:
     """貼文發佈服務"""
     
     def __init__(self):
-        # KOL憑證配置
-        self.kol_credentials = {
-            "150": {"email": "forum_150@cmoney.com.tw", "password": "N9t1kY3x", "member_id": "150"},
-            "151": {"email": "forum_151@cmoney.com.tw", "password": "m7C1lR4t", "member_id": "151"},
-            "152": {"email": "forum_152@cmoney.com.tw", "password": "x2U9nW5p", "member_id": "152"},
-            "153": {"email": "forum_153@cmoney.com.tw", "password": "y7O3cL9k", "member_id": "153"},
-            "154": {"email": "forum_154@cmoney.com.tw", "password": "f4E9sC8w", "member_id": "154"},
-            "155": {"email": "forum_155@cmoney.com.tw", "password": "Z5u6dL9o", "member_id": "155"},
-            "156": {"email": "forum_156@cmoney.com.tw", "password": "T1t7kS9j", "member_id": "156"},
-            "157": {"email": "forum_157@cmoney.com.tw", "password": "w2B3cF6l", "member_id": "157"},
-            "158": {"email": "forum_158@cmoney.com.tw", "password": "q4N8eC7h", "member_id": "158"},
-            "159": {"email": "forum_159@cmoney.com.tw", "password": "V5n6hK0f", "member_id": "159"},
-            "160": {"email": "forum_160@cmoney.com.tw", "password": "D8k9mN2p", "member_id": "160"}
-        }
+        # KOL憑證配置 - 從Google Sheets讀取
+        self.kol_credentials = {}
+        self._load_kol_credentials()
         
         # Token快取
         self.kol_tokens = {}
         
         logger.info("🔐 貼文發佈服務初始化完成")
+    
+    def _load_kol_credentials(self):
+        """從KOL服務載入KOL憑證"""
+        try:
+            # 使用新的 KOL 服務
+            from kol_service import kol_service
+            
+            # 獲取所有 KOL 憑證
+            for serial in kol_service.get_all_kol_serials():
+                creds = kol_service.get_kol_credentials(serial)
+                if creds:
+                    self.kol_credentials[serial] = {
+                        "email": creds["email"],
+                        "password": creds["password"],
+                        "member_id": serial
+                    }
+                    logger.info(f"載入KOL憑證: {serial} - {creds['email']}")
+            
+            logger.info(f"✅ 成功載入 {len(self.kol_credentials)} 個KOL憑證")
+            
+        except Exception as e:
+            logger.error(f"❌ 從KOL服務載入KOL憑證失敗: {e}")
+            logger.info("使用預設配置")
+            self._load_default_credentials()
+    
+    def _load_default_credentials(self):
+        """載入預設KOL憑證（備用方案）"""
+        self.kol_credentials = {
+            "186": {"email": "forum_186@cmoney.com.tw", "password": "t7L9uY0f", "member_id": "186"},
+            "187": {"email": "forum_187@cmoney.com.tw", "password": "a4E9jV8t", "member_id": "187"},
+            "188": {"email": "forum_188@cmoney.com.tw", "password": "z6G5wN2m", "member_id": "188"},
+            "189": {"email": "forum_189@cmoney.com.tw", "password": "c8L5nO3q", "member_id": "189"},
+            "190": {"email": "forum_190@cmoney.com.tw", "password": "W4x6hU0r", "member_id": "190"},
+            "191": {"email": "forum_191@cmoney.com.tw", "password": "H7u4rE2j", "member_id": "191"},
+            "192": {"email": "forum_192@cmoney.com.tw", "password": "S3c6oJ9h", "member_id": "192"},
+            "193": {"email": "forum_193@cmoney.com.tw", "password": "X2t1vU7l", "member_id": "193"},
+            "194": {"email": "forum_194@cmoney.com.tw", "password": "j3H5dM7p", "member_id": "194"},
+            "195": {"email": "forum_195@cmoney.com.tw", "password": "P9n1fT3x", "member_id": "195"},
+            "196": {"email": "forum_196@cmoney.com.tw", "password": "b4C1pL3r", "member_id": "196"},
+            "197": {"email": "forum_197@cmoney.com.tw", "password": "O8a3pF4c", "member_id": "197"},
+            "198": {"email": "forum_198@cmoney.com.tw", "password": "i0L5fC3s", "member_id": "198"}
+        }
+        logger.info("使用預設KOL憑證配置")
     
     def get_kol_credentials(self, kol_serial: str) -> Optional[Dict[str, str]]:
         """獲取KOL憑證"""
@@ -59,9 +91,10 @@ class PostPublishService:
             # 使用CMoney Client登入
             import sys
             import os
-            # 添加正確的路徑
-            project_root = os.path.join(os.path.dirname(__file__), '../../../..')
-            sys.path.insert(0, project_root)
+            # 添加正確的路徑 - src 目錄現在掛載在 /app/src
+            src_path = '/app/src'
+            if src_path not in sys.path:
+                sys.path.insert(0, src_path)
             from src.clients.cmoney.cmoney_client import CMoneyClient, LoginCredentials
             cmoney_client = CMoneyClient()
             
@@ -93,26 +126,33 @@ class PostPublishService:
         try:
             import sys
             import os
-            # 添加正確的路徑
-            project_root = os.path.join(os.path.dirname(__file__), '../../../..')
-            sys.path.insert(0, project_root)
-            from src.clients.cmoney.cmoney_client import ArticleData, CommodityTag, CommunityTopic, CMoneyClient
+            # 添加正確的路徑 - src 目錄現在掛載在 /app/src
+            src_path = '/app/src'
+            if src_path not in sys.path:
+                sys.path.insert(0, src_path)
+            from src.clients.cmoney.cmoney_client import ArticleData, CMoneyClient
             
             # 構建商品標籤
             commodity_tags = []
             if post_record.stock_code:
-                commodity_tags.append(CommodityTag(
-                    type="Stock",
-                    key=post_record.stock_code,
-                    bullOrBear=0  # 預設為0，可以根據內容分析調整
-                ))
+                commodity_tags.append({
+                    "type": "Stock",
+                    "key": post_record.stock_code,
+                    "bullOrBear": 0  # 預設為0，可以根據內容分析調整
+                })
+            
+            # 構建社區話題標籤
+            communityTopic = None
+            if hasattr(post_record, 'topic_id') and post_record.topic_id:
+                communityTopic = {"id": post_record.topic_id}
+                logger.info(f"🏷️ 設置社區話題標籤: {post_record.topic_id}")
             
             # 構建文章數據
             article_data = ArticleData(
                 title=post_record.title,
                 text=post_record.content,
                 commodity_tags=commodity_tags,
-                community_topic=None  # 可以根據需要設置話題
+                communityTopic=communityTopic
             )
             
             logger.info(f"📤 準備發文數據: 標題={article_data.title[:50]}...")

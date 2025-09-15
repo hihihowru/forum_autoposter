@@ -13,6 +13,11 @@ import json
 from dotenv import load_dotenv
 import logging
 
+# 添加專案根目錄到 Python 路徑
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..'))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 # 設置日誌
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -29,10 +34,16 @@ print("📝 載入環境變數...")
 load_dotenv(os.path.join(os.path.dirname(__file__), '../../../../.env'))
 print("✅ 環境變數載入完成")
 
-# 使用本地的post_record_service
-print("📦 導入post_record_service...")
-from post_record_service import PostRecordCreate, CommodityTag, CommunityTopic, GenerationParams, PostRecordService, PostRecordUpdate
-print("✅ post_record_service導入完成")
+# 使用PostgreSQL服務
+print("📦 導入PostgreSQL服務...")
+from postgresql_service import PostgreSQLPostRecordService
+# 導入數據模型 (CommodityTag 將在需要時動態導入)
+try:
+    from post_record_service import CommunityTopic, GenerationParams, PostRecordCreate, PostRecordUpdate
+    print("✅ 核心數據模型導入完成")
+except ImportError as e:
+    print(f"❌ 數據模型導入失敗: {e}")
+print("✅ PostgreSQL服務導入完成")
 
 print("🏗️ 創建FastAPI應用...")
 app = FastAPI(title="Posting Service", description="虛擬KOL自動發文服務")
@@ -49,6 +60,12 @@ app.add_middleware(
 )
 print("✅ CORS中間件添加完成")
 
+# 包含路由模組
+print("🛣️ 載入路由模組...")
+from routes import main_router
+app.include_router(main_router)
+print("✅ 路由模組載入完成")
+
 # API 端點配置
 print("⚙️ 配置API端點...")
 TRENDING_API_URL = os.getenv("TRENDING_API_URL", "http://localhost:8004")
@@ -56,10 +73,19 @@ SUMMARY_API_URL = os.getenv("SUMMARY_API_URL", "http://summary-api:8003")
 OHLC_API_URL = os.getenv("OHLC_API_URL", "http://ohlc-api:8001")
 print("✅ API端點配置完成")
 
-# 初始化數據庫服務
-print("💾 初始化數據庫服務...")
-post_record_service = PostRecordService()
-print("✅ 數據庫服務初始化完成")
+# 初始化PostgreSQL數據庫服務
+print("💾 準備PostgreSQL數據庫服務...")
+# 延遲初始化，避免啟動時連接數據庫
+post_record_service = None
+
+def get_post_record_service():
+    """獲取PostgreSQL服務實例（延遲初始化）"""
+    global post_record_service
+    if post_record_service is None:
+        print("💾 初始化PostgreSQL數據庫服務...")
+        post_record_service = PostgreSQLPostRecordService()
+        print("✅ PostgreSQL數據庫服務初始化完成")
+    return post_record_service
 
 class PostingRequest(BaseModel):
     stock_code: Optional[str] = None
@@ -74,11 +100,20 @@ class PostingRequest(BaseModel):
     session_id: Optional[int] = None
     # 內容長度設定
     content_length: str = "medium"
-    max_words: int = 200
+    max_words: int = 1000
     # 新增數據源相關欄位
     data_sources: Optional[Dict[str, Any]] = None
+    # 新聞時間範圍設定
+    news_time_range: Optional[str] = "d2"
     explainability_config: Optional[Dict[str, Any]] = None
     news_config: Optional[Dict[str, Any]] = None
+    # 標籤配置
+    tags_config: Optional[Dict[str, Any]] = None
+    # 共享 commodity tags (用於批量生成)
+    shared_commodity_tags: Optional[List[Dict[str, Any]]] = None
+    # 熱門話題相關欄位
+    topic_id: Optional[str] = None
+    topic_title: Optional[str] = None
 
 class PostingResult(BaseModel):
     success: bool
@@ -94,6 +129,7 @@ class BatchPostRequest(BaseModel):
     data_sources: Optional[Dict[str, Any]] = None
     explainability_config: Optional[Dict[str, Any]] = None
     news_config: Optional[Dict[str, Any]] = None
+    tags_config: Optional[Dict[str, Any]] = None  # 新增：標籤配置
 
 class BatchPostResponse(BaseModel):
     success: bool
@@ -169,12 +205,97 @@ async def auto_post_content(background_tasks: BackgroundTasks, config: AutoPosti
             timestamp=datetime.now()
         )
 
+@app.post("/post/simple")
+async def simple_post_content(request: PostingRequest):
+    """簡化版貼文生成，跳過複雜邏輯直接存入數據庫"""
+    try:
+        print(f"🚀 簡化模式：開始生成貼文")
+        
+        # 基本參數
+        stock_id = request.stock_code or "2330"
+        stock_name = request.stock_name or "台積電"
+        kol_serial = int(request.kol_serial) if request.kol_serial else 200
+        session_id = request.session_id or 1  # 使用簡單數字 1, 2, 3...
+        
+        # 創建簡單內容
+        simple_content = {
+            "title": f"{stock_name}({stock_id}) - 技術分析",
+            "content": f"今日{stock_name}表現如何？讓我們來看看技術面的狀況...",
+            "stock_code": stock_id,
+            "stock_name": stock_name,
+            "kol_serial": kol_serial,
+            "session_id": session_id,
+            "post_id": f"simple_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+            "status": "pending_review",
+            "created_at": datetime.now().isoformat()
+        }
+        
+        # 嘗試保存到數據庫（不使用 CommodityTag）
+        try:
+            from postgresql_service import PostgreSQLPostRecordService
+            post_service = PostgreSQLPostRecordService()
+            
+            # 獲取 KOL 暱稱
+            kol_nickname = f"KOL-{kol_serial}"  # 默認名稱
+            try:
+                from kol_service import kol_service
+                kol_data = kol_service.get_kol_by_serial(kol_serial)
+                if kol_data and 'nickname' in kol_data:
+                    kol_nickname = kol_data['nickname']
+            except Exception as kol_error:
+                print(f"⚠️ 獲取 KOL 信息失敗，使用默認名稱: {kol_error}")
+            
+            # 創建簡化的貼文記錄，不包含 commodity_tags
+            post_record = post_service.create_post_record_simple(
+                stock_code=stock_id,
+                stock_name=stock_name,
+                kol_serial=str(kol_serial),
+                kol_nickname=kol_nickname,
+                session_id=session_id
+            )
+            
+            simple_content["database_saved"] = True
+            simple_content["database_post_id"] = post_record.post_id if post_record else None
+            print(f"✅ 簡化貼文已保存到數據庫: {simple_content['database_post_id']}")
+            
+        except Exception as db_error:
+            print(f"⚠️ 數據庫保存失敗，但內容生成成功: {db_error}")
+            simple_content["database_saved"] = False
+            simple_content["database_error"] = str(db_error)
+        
+        print(f"✅ 簡化貼文生成完成")
+        
+        return {
+            "success": True,
+            "post_id": simple_content["post_id"],
+            "content": simple_content,
+            "timestamp": datetime.now()
+        }
+        
+    except Exception as e:
+        import traceback
+        print(f"❌ 簡化模式錯誤: {e}")
+        traceback.print_exc()
+        return {
+            "success": False,
+            "error": str(e),
+            "timestamp": datetime.now()
+        }
+
 @app.post("/post/manual", response_model=PostingResult)
 async def manual_post_content(request: PostingRequest):
     """手動發文 - 指定股票和KOL風格"""
     
     print(f"🚀 開始手動發文生成 - 請求參數: {request}")
     print(f"📝 內容長度設定: content_length={request.content_length}, max_words={request.max_words}")
+    
+    # 添加調試信息
+    print(f"🔍 後端調試 - 接收到的參數:")
+    print(f"  - tags_config: {request.tags_config}")
+    print(f"  - topic_tags: {request.tags_config.get('topic_tags', {}) if request.tags_config else {}}")
+    print(f"  - mixed_mode: {request.tags_config.get('topic_tags', {}).get('mixed_mode', False) if request.tags_config else False}")
+    print(f"  - topic_id: {request.topic_id}")
+    print(f"  - topic_title: {request.topic_title}")
     
     try:
         # 如果前端指定了股票代號，使用指定的股票
@@ -279,18 +400,31 @@ async def manual_post_content(request: PostingRequest):
         try:
             # 提取新聞搜尋關鍵字配置
             search_keywords = None
-            if request.news_config and request.news_config.get('search_keywords'):
-                search_keywords = request.news_config.get('search_keywords')
-                print(f"📝 使用前端新聞關鍵字配置: {len(search_keywords)} 個關鍵字")
-                for kw in search_keywords:
-                    print(f"   - {kw.get('type', 'custom')}: {kw.get('keyword', '')}")
+            time_range = "d2"  # 預設時間範圍
+            
+            if request.news_config:
+                # 提取搜尋關鍵字
+                if request.news_config.get('search_keywords'):
+                    search_keywords = request.news_config.get('search_keywords')
+                    print(f"📝 使用前端新聞關鍵字配置: {len(search_keywords)} 個關鍵字")
+                    for kw in search_keywords:
+                        print(f"   - {kw.get('type', 'custom')}: {kw.get('keyword', '')}")
+                
+                # 提取時間範圍設定
+                if request.news_config.get('time_range'):
+                    time_range = request.news_config.get('time_range')
+                    print(f"⏰ 使用前端時間範圍設定: {time_range}")
+                elif request.news_time_range:
+                    time_range = request.news_time_range
+                    print(f"⏰ 使用請求時間範圍設定: {time_range}")
             else:
                 print("📝 使用預設新聞搜尋關鍵字")
             
             serper_analysis = serper_service.get_comprehensive_stock_analysis(
                 stock_id, 
                 stock_name, 
-                search_keywords=search_keywords
+                search_keywords=search_keywords,
+                time_range=time_range
             )
             news_items = serper_analysis.get('news_items', [])
             limit_up_analysis = serper_analysis.get('limit_up_analysis', {})
@@ -355,6 +489,50 @@ async def manual_post_content(request: PostingRequest):
             print(f"⚠️ 內容整合失敗: {e}")
             enhanced_content = kol_content
         
+        # 5. 內容檢查和修復（在新聞整合後進行）
+        print("🔍 開始內容檢查和修復...")
+        try:
+            from content_checker import ContentChecker
+            content_checker = ContentChecker()
+            
+            # 檢查並修復內容（檢查 content_md 字段）
+            content_to_check = enhanced_content.get('content_md', enhanced_content.get('content', ''))
+            check_result = content_checker.check_and_fix_content(
+                content_to_check,
+                stock_name,
+                stock_id,
+                request.kol_persona,
+                request.kol_serial
+            )
+            
+            if check_result['success']:
+                print(f"✅ 內容檢查完成: {check_result['fix_method']} 修復")
+                if check_result['issues_found']:
+                    print(f"🔧 發現問題: {', '.join(check_result['issues_found'])}")
+                
+                # 使用修復後的內容，但保留新聞來源
+                # 檢查是否有新聞來源需要保留
+                news_sources_section = ""
+                if "新聞來源:" in enhanced_content['content']:
+                    news_sources_start = enhanced_content['content'].find("新聞來源:")
+                    news_sources_section = enhanced_content['content'][news_sources_start:]
+                    print(f"🔍 保留新聞來源: {len(news_sources_section)} 字")
+                
+                enhanced_content['content'] = check_result['fixed_content']
+                enhanced_content['content_md'] = check_result['fixed_content']
+                
+                # 如果有新聞來源，重新添加
+                if news_sources_section:
+                    enhanced_content['content'] += "\n\n" + news_sources_section
+                    enhanced_content['content_md'] += "\n\n" + news_sources_section
+                    print(f"✅ 新聞來源已重新添加: {len(news_sources_section)} 字")
+                enhanced_content['content_check'] = check_result
+            else:
+                print(f"⚠️ 內容檢查失敗: {check_result.get('error', '未知錯誤')}")
+                
+        except Exception as e:
+            print(f"⚠️ 內容檢查器初始化失敗: {e}")
+        
         # 添加額外的欄位以符合前端期望
         enhanced_content.update({
             "stock_code": stock_id,
@@ -366,14 +544,9 @@ async def manual_post_content(request: PostingRequest):
         
         # 準備商品標籤
         print("🏷️ 準備商品標籤...")
+        # 生成 commodity tags (暫時禁用以解決導入問題)
         commodity_tags = []
-        if stock_id:
-            commodity_tag = CommodityTag(
-                type="Stock",
-                key=stock_id,
-                bullOrBear=0  # 中性，可根據技術分析調整
-            )
-            commodity_tags.append(commodity_tag.model_dump())
+        print("⚠️ 商品標籤功能暫時禁用，不影響貼文生成")
         
         print(f"✅ 生成的商品標籤: {commodity_tags}")
         print(f"📊 股票代號: {stock_id}, 股票名稱: {stock_name}")
@@ -401,44 +574,148 @@ async def manual_post_content(request: PostingRequest):
         # 創建貼文記錄
         print("💾 開始保存貼文記錄到資料庫...")
         try:
-            # 轉換 commodity_tags 為 Pydantic 模型列表
+            # 暫時禁用 CommodityTag 模型轉換
             commodity_tag_models = []
-            for tag_dict in commodity_tags:
-                commodity_tag_models.append(CommodityTag(**tag_dict))
+            print("⚠️ CommodityTag 模型轉換暫時禁用")
             
-            post_record_data = PostRecordCreate(
-                session_id=request.session_id or 0,
-                kol_serial=int(request.kol_serial or "1"),
-                kol_nickname=f"KOL-{request.kol_serial or '1'}",
-                kol_persona=request.kol_persona,
-                stock_code=stock_id,
-                stock_name=stock_name,
-                title=enhanced_content.get("title", f"{stock_name}分析"),
-                content=enhanced_content.get("content_md", enhanced_content.get("content", "")),
-                content_md=enhanced_content.get("content_md"),
-                commodity_tags=commodity_tag_models,
-                community_topic=community_topic,
-                status="pending_review",  # 添加狀態
-                generation_params=generation_params,
-                topic_id=None,
-                topic_title=None
-            )
+            # 確保使用存在的 KOL
+            from kol_service import kol_service
+            available_kol_ids = list(kol_service.kol_credentials.keys())
+            if request.kol_serial and str(request.kol_serial) in available_kol_ids:
+                kol_serial = int(request.kol_serial)
+            else:
+                # 使用第一個可用的 KOL
+                kol_serial = int(available_kol_ids[0])
+                print(f"⚠️ KOL {request.kol_serial} 不存在，使用 KOL {kol_serial}")
             
-            print(f"📝 貼文記錄數據準備完成: {post_record_data.title}")
-            print(f"🔍 貼文記錄數據詳情: session_id={post_record_data.session_id}, stock_code={post_record_data.stock_code}")
-            
-            # 保存到數據庫
-            post_record = post_record_service.create_post_record(post_record_data)
-            print(f"✅ 貼文記錄保存成功: {post_record.post_id}")
-            print(f"🔍 數據庫中貼文總數: {len(post_record_service.db)}")
-            
-            # 更新enhanced_content包含post_id
-            enhanced_content["post_id"] = post_record.post_id
-            enhanced_content["status"] = "pending_review"
+            # 準備貼文記錄數據
+            print(f"📝 準備貼文記錄數據: {enhanced_content.get('title', '未命名貼文')}")
+            print(f"🔍 貼文記錄數據詳情: session_id={request.session_id}, stock_code={stock_id}")
             
         except Exception as e:
-            print(f"❌ 保存貼文記錄失敗: {e}")
-            # 即使保存失敗也繼續返回結果
+            print(f"❌ 準備貼文記錄數據失敗: {e}")
+            # 不設置 error 狀態，繼續嘗試保存到數據庫
+        
+        # 處理熱門話題 ID（混和模式）- 在保存到數據庫之前執行
+        print("🔍 開始處理熱門話題 ID（混和模式）")
+        topic_id = request.topic_id
+        topic_title = request.topic_title
+        
+        # 調試日誌
+        print(f"🔍 調試標籤模式條件:")
+        print(f"  - topic_id: {topic_id}")
+        print(f"  - topic_title: {topic_title}")
+        print(f"  - tags_config: {request.tags_config}")
+        print(f"  - tag_mode: {request.tags_config.get('tag_mode', 'stock_tags') if request.tags_config else 'stock_tags'}")
+        print(f"  - topic_tags: {request.tags_config.get('topic_tags', {}) if request.tags_config else {}}")
+        print(f"  - mixed_mode: {request.tags_config.get('topic_tags', {}).get('mixed_mode', False) if request.tags_config else False}")
+        
+        # 檢查標籤模式條件
+        tag_mode = request.tags_config.get('tag_mode', 'stock_tags') if request.tags_config else 'stock_tags'
+        mixed_mode_enabled = request.tags_config and request.tags_config.get('topic_tags', {}).get('mixed_mode', False)
+        topic_tags_enabled = request.tags_config and request.tags_config.get('topic_tags', {}).get('enabled', False)
+        
+        print(f"🔍 標籤模式條件檢查:")
+        print(f"  - request.tags_config 存在: {bool(request.tags_config)}")
+        print(f"  - tag_mode: {tag_mode}")
+        print(f"  - mixed_mode_enabled: {mixed_mode_enabled}")
+        print(f"  - topic_id 為空: {not topic_id}")
+        
+        # 判斷是否需要自動獲取熱門話題
+        should_auto_fetch_topic = (
+            (not topic_id or topic_id == 'auto_fetch') and  # 沒有提供 topic_id 或明確要求自動獲取
+            (
+                tag_mode == 'topic_tags' or  # 純熱門話題模式
+                tag_mode == 'both' or  # 混合模式
+                mixed_mode_enabled or  # 或者啟用了混和模式
+                topic_id == 'auto_fetch'  # 或者明確要求自動獲取
+            )
+        )
+        
+        print(f"  - 應該自動獲取熱門話題: {should_auto_fetch_topic}")
+        
+        # 如果沒有提供 topic_id 但需要熱門話題標籤，自動從 trending API 獲取
+        if should_auto_fetch_topic:
+            try:
+                print("🔄 自動獲取熱門話題（基於標籤模式）...")
+                print(f"🔍 調用 trending API: {TRENDING_API_URL}/trending")
+                trending_response = requests.get(f"{TRENDING_API_URL}/trending", params={"limit": 1})
+                print(f"🔍 trending API 響應狀態: {trending_response.status_code}")
+                trending_response.raise_for_status()
+                trending_data = trending_response.json()
+                print(f"🔍 trending API 響應數據: {trending_data}")
+                
+                if trending_data.get("topics") and len(trending_data["topics"]) > 0:
+                    trending_topic = trending_data["topics"][0]
+                    topic_id = trending_topic.get("id")
+                    topic_title = trending_topic.get("title")
+                    print(f"✅ 自動獲取到熱門話題 - ID: {topic_id}, 標題: {topic_title}")
+                    print(f"🔍 完整話題數據: {trending_topic}")
+                else:
+                    print("⚠️ 未獲取到熱門話題數據")
+                    print(f"🔍 響應數據結構: {trending_data}")
+            except Exception as e:
+                print(f"❌ 獲取熱門話題失敗: {e}")
+                import traceback
+                print(f"🔍 錯誤堆疊: {traceback.format_exc()}")
+        
+        # 保存到數據庫 - 使用完整的 enhanced_content
+        try:
+            post_service = get_post_record_service()
+            
+            # 準備完整的貼文數據
+            print(f"🔍 準備保存到數據庫的 topic_id: {topic_id}")
+            print(f"🔍 準備保存到數據庫的 topic_title: {topic_title}")
+            
+            post_data = {
+                'session_id': request.session_id or 1,
+                'kol_serial': int(request.kol_serial or 200),
+                'kol_nickname': f"KOL-{request.kol_serial or 200}",
+                'kol_persona': request.kol_persona,
+                'stock_code': request.stock_code or "2330",
+                'stock_name': request.stock_name or "台積電",
+                'title': enhanced_content.get("title", f"【KOL-{request.kol_serial or 200}】{request.stock_name or '台積電'}({request.stock_code or '2330'}) 盤後分析"),
+                'content': enhanced_content.get("content", ""),
+                'content_md': enhanced_content.get("content_md", ""),
+                'status': 'draft',
+                'technical_analysis': enhanced_content.get("technical_analysis"),
+                'serper_data': enhanced_content.get("serper_data"),
+                'quality_score': enhanced_content.get("quality_score"),
+                'ai_detection_score': enhanced_content.get("ai_detection_score"),
+                'risk_level': enhanced_content.get("risk_level"),
+                'topic_id': topic_id,  # 使用處理後的 topic_id
+                'topic_title': topic_title,  # 使用處理後的 topic_title
+                'generation_params': json.dumps({
+                    "method": "manual",
+                    "kol_persona": request.kol_persona,
+                    "content_style": request.content_style,
+                    "target_audience": request.target_audience,
+                    "topic_id": topic_id,
+                    "topic_title": topic_title,
+                    "tag_mode": tag_mode,
+                    "topic_tags_enabled": topic_tags_enabled,
+                    "mixed_mode": mixed_mode_enabled,
+                    "created_at": datetime.now().isoformat()
+                })
+            }
+            
+            print(f"🔍 完整的 post_data: {post_data}")
+            
+            # 創建完整的貼文記錄
+            post_record = post_service.create_post_record(post_data)
+            
+            print(f"✅ 貼文記錄保存成功: {post_record.post_id}")
+            enhanced_content["post_id"] = post_record.post_id
+            enhanced_content["status"] = "draft"  # 設置為 draft 狀態
+            
+            # 將 topic_id 和 topic_title 添加到 enhanced_content 中
+            if topic_id:
+                enhanced_content["topic_id"] = topic_id
+                enhanced_content["topic_title"] = topic_title
+                print(f"✅ 已更新 enhanced_content 中的話題信息: {topic_id} - {topic_title}")
+            
+        except Exception as db_error:
+            print(f"❌ 保存貼文記錄失敗: {db_error}")
             enhanced_content["post_id"] = f"temp_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
             enhanced_content["status"] = "error"
         
@@ -493,7 +770,7 @@ def generate_kol_content_direct(stock_id: str, stock_name: str, kol_persona: str
     persona = kol_personas.get(kol_persona, kol_personas["technical"])
     
     # 生成標題 - 純文字格式
-    title = f"{stock_name}({stock_id}) {persona['name']}觀點 - 技術面深度解析"
+    title = f"{stock_name} {persona['name']}觀點"
     
     # 生成內容 - 純文字格式
     content_md = f"""{stock_name}({stock_id}) 技術面分析報告
@@ -565,14 +842,19 @@ def enhance_content_with_news(kol_content: Dict, topic: Dict, news_items: List[D
     
     # 在內容中加入新聞素材
     if news_items:
-        news_section = "\n\n### 📰 相關新聞素材\n"
-        for i, news in enumerate(news_items[:3], 1):
-            news_section += f"{i}. **{news['title']}**\n"
-            news_section += f"   {news['summary'][:100]}...\n"
-            news_section += f"   [閱讀更多]({news['url']})\n\n"
+        news_section = "\n\n相關新聞素材\n"
+        news_sources = []
+        for i, news in enumerate(news_items[:5], 1):  # 取前5則新聞
+            news_section += f"{news['title']}: {news['summary'][:100]}...\n\n"
+            news_sources.append(f"{i}. {news['title']}\n   [閱讀更多]({news['url']})")
         
         # 在內容末尾加入新聞素材
         enhanced_content["content_md"] += news_section
+        
+        # 添加新聞來源到最後
+        if news_sources:
+            sources_section = "\n\n新聞來源:\n" + "\n".join(news_sources)
+            enhanced_content["content_md"] += sources_section
         
         # 更新關鍵點
         if "key_points" in enhanced_content:
@@ -655,25 +937,46 @@ class KOLCredentialManager:
     """KOL憑證管理器"""
     
     def __init__(self):
-        # KOL憑證配置 (實際使用時應該從環境變量或數據庫讀取)
-        self.kol_credentials = {
-            "150": {"email": "forum_150@cmoney.com.tw", "password": "N9t1kY3x", "member_id": "150"},
-            "151": {"email": "forum_151@cmoney.com.tw", "password": "m7C1lR4t", "member_id": "151"},
-            "152": {"email": "forum_152@cmoney.com.tw", "password": "x2U9nW5p", "member_id": "152"},
-            "153": {"email": "forum_153@cmoney.com.tw", "password": "y7O3cL9k", "member_id": "153"},
-            "154": {"email": "forum_154@cmoney.com.tw", "password": "f4E9sC8w", "member_id": "154"},
-            "155": {"email": "forum_155@cmoney.com.tw", "password": "Z5u6dL9o", "member_id": "155"},
-            "156": {"email": "forum_156@cmoney.com.tw", "password": "T1t7kS9j", "member_id": "156"},
-            "157": {"email": "forum_157@cmoney.com.tw", "password": "w2B3cF6l", "member_id": "157"},
-            "158": {"email": "forum_158@cmoney.com.tw", "password": "q4N8eC7h", "member_id": "158"},
-            "159": {"email": "forum_159@cmoney.com.tw", "password": "V5n6hK0f", "member_id": "159"},
-            "160": {"email": "forum_160@cmoney.com.tw", "password": "D8k9mN2p", "member_id": "160"}
-        }
-        
-        # Token快取
+        # 使用 KOL 服務載入憑證
+        self.kol_credentials = {}
         self.kol_tokens = {}
+        self._load_kol_credentials()
         
         print("🔐 KOL憑證管理器初始化完成")
+    
+    def _load_kol_credentials(self):
+        """從 KOL 服務載入憑證"""
+        try:
+            from kol_service import kol_service
+            
+            # 獲取所有 KOL 憑證
+            for serial in kol_service.get_all_kol_serials():
+                creds = kol_service.get_kol_credentials(serial)
+                if creds:
+                    self.kol_credentials[str(serial)] = {
+                        "email": creds["email"],
+                        "password": creds["password"],
+                        "member_id": creds["member_id"]
+                    }
+                    print(f"載入KOL憑證: {serial} - {creds['email']}")
+            
+            print(f"✅ 成功載入 {len(self.kol_credentials)} 個KOL憑證")
+            
+        except Exception as e:
+            print(f"❌ 從KOL服務載入憑證失敗: {e}")
+            # 使用預設憑證作為備用
+            self.kol_credentials = {
+                "200": {"email": "forum_200@cmoney.com.tw", "password": "D8k9mN2p", "member_id": "9505546"},
+                "201": {"email": "forum_201@cmoney.com.tw", "password": "D8k9mN2p", "member_id": "9505547"},
+                "202": {"email": "forum_202@cmoney.com.tw", "password": "D8k9mN2p", "member_id": "9505548"},
+                "203": {"email": "forum_203@cmoney.com.tw", "password": "D8k9mN2p", "member_id": "9505549"},
+                "204": {"email": "forum_204@cmoney.com.tw", "password": "D8k9mN2p", "member_id": "9505550"},
+                "205": {"email": "forum_205@cmoney.com.tw", "password": "Z5u6dL9o", "member_id": "9505551"},
+                "206": {"email": "forum_206@cmoney.com.tw", "password": "T1t7kS9j", "member_id": "9505552"},
+                "207": {"email": "forum_207@cmoney.com.tw", "password": "w2B3cF6l", "member_id": "9505553"},
+                "208": {"email": "forum_208@cmoney.com.tw", "password": "q4N8eC7h", "member_id": "9505554"}
+            }
+            print("使用預設KOL憑證配置")
     
     def get_kol_credentials(self, kol_serial: str) -> Optional[Dict[str, str]]:
         """獲取KOL憑證"""
@@ -698,15 +1001,8 @@ class KOLCredentialManager:
             print(f"🔐 開始登入KOL {kol_serial}...")
             
             # 使用CMoney Client登入
-            from serper_integration import serper_service
-            if hasattr(serper_service, 'cmoney_client'):
-                cmoney_client = serper_service.cmoney_client
-            else:
-                # 如果沒有CMoney client，創建一個
-                from src.clients.cmoney.cmoney_client import CMoneyClient, LoginCredentials
-                cmoney_client = CMoneyClient()
-            
-            from src.clients.cmoney.cmoney_client import LoginCredentials
+            from src.clients.cmoney.cmoney_client import CMoneyClient, LoginCredentials
+            cmoney_client = CMoneyClient()
             credentials = LoginCredentials(
                 email=creds['email'],
                 password=creds['password']
@@ -738,7 +1034,7 @@ kol_credential_manager = KOLCredentialManager()
 async def get_all_posts(skip: int = 0, limit: int = 100, status: Optional[str] = None):
     """獲取所有貼文"""
     try:
-        posts = post_record_service.get_all_posts()
+        posts = get_post_record_service().get_all_posts()
         
         # 根據狀態篩選
         if status:
@@ -758,11 +1054,106 @@ async def get_all_posts(skip: int = 0, limit: int = 100, status: Optional[str] =
         print(f"獲取貼文失敗: {e}")
         raise HTTPException(status_code=500, detail=f"獲取貼文失敗: {str(e)}")
 
+@app.get("/posts/history-stats")
+async def get_history_stats():
+    """獲取歷史生成資料統計"""
+    try:
+        all_posts = get_post_record_service().get_all_posts()
+        
+        # 按狀態分組統計
+        status_stats = {}
+        session_stats = {}
+        kol_stats = {}
+        stock_stats = {}
+        
+        for post in all_posts:
+            # 狀態統計
+            status = post.status
+            status_stats[status] = status_stats.get(status, 0) + 1
+            
+            # Session 統計
+            session_id = post.session_id
+            if session_id not in session_stats:
+                session_stats[session_id] = {
+                    'count': 0,
+                    'statuses': {},
+                    'kols': set(),
+                    'stocks': set()
+                }
+            session_stats[session_id]['count'] += 1
+            session_stats[session_id]['statuses'][status] = session_stats[session_id]['statuses'].get(status, 0) + 1
+            session_stats[session_id]['kols'].add(post.kol_serial)
+            session_stats[session_id]['stocks'].add(post.stock_code)
+            
+            # KOL 統計
+            kol_key = f"KOL-{post.kol_serial}"
+            if kol_key not in kol_stats:
+                kol_stats[kol_key] = {
+                    'count': 0,
+                    'persona': post.kol_persona,
+                    'stocks': set(),
+                    'sessions': set()
+                }
+            kol_stats[kol_key]['count'] += 1
+            kol_stats[kol_key]['stocks'].add(post.stock_code)
+            kol_stats[kol_key]['sessions'].add(session_id)
+            
+            # 股票統計
+            stock_key = f"{post.stock_name}({post.stock_code})"
+            if stock_key not in stock_stats:
+                stock_stats[stock_key] = {
+                    'count': 0,
+                    'kols': set(),
+                    'sessions': set()
+                }
+            stock_stats[stock_key]['count'] += 1
+            stock_stats[stock_key]['kols'].add(post.kol_serial)
+            stock_stats[stock_key]['sessions'].add(session_id)
+        
+        # 轉換 set 為 list
+        for session_id, data in session_stats.items():
+            data['kols'] = list(data['kols'])
+            data['stocks'] = list(data['stocks'])
+        
+        for kol_key, data in kol_stats.items():
+            data['stocks'] = list(data['stocks'])
+            data['sessions'] = list(data['sessions'])
+        
+        for stock_key, data in stock_stats.items():
+            data['kols'] = list(data['kols'])
+            data['sessions'] = list(data['sessions'])
+        
+        # 自我學習數據完整性檢查
+        learning_data_stats = {
+            'total_posts': len(all_posts),
+            'with_generation_params': sum(1 for post in all_posts if post.generation_params),
+            'with_technical_analysis': sum(1 for post in all_posts if post.technical_analysis),
+            'with_serper_data': sum(1 for post in all_posts if post.serper_data),
+            'with_quality_scores': sum(1 for post in all_posts if post.quality_score is not None),
+            'reconstruction_ready': sum(1 for post in all_posts 
+                                       if post.generation_params and post.stock_code and post.kol_persona)
+        }
+        
+        return {
+            "success": True,
+            "total_posts": len(all_posts),
+            "status_stats": status_stats,
+            "session_stats": session_stats,
+            "kol_stats": kol_stats,
+            "stock_stats": stock_stats,
+            "learning_data_stats": learning_data_stats,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        print(f"獲取歷史統計失敗: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/posts/pending-review")
 async def get_pending_review_posts():
     """獲取待審核的貼文列表"""
     try:
-        posts = post_record_service.get_pending_review_posts()
+        posts = get_post_record_service().get_pending_review_posts()
         print(f"找到 {len(posts)} 篇待審核貼文")
         for post in posts:
             print(f"  - {post.post_id}: {post.title} (狀態: {post.status})")
@@ -775,6 +1166,59 @@ async def get_pending_review_posts():
         }
     except Exception as e:
         print(f"獲取待審核貼文失敗: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/posts/review-sidebar")
+async def get_review_sidebar_data():
+    """獲取發文審核 sidebar 頁面所需的數據"""
+    try:
+        # 獲取所有待審核貼文
+        pending_posts = get_post_record_service().get_pending_review_posts()
+        
+        # 按 session 分組
+        session_groups = {}
+        for post in pending_posts:
+            session_id = post.session_id
+            if session_id not in session_groups:
+                session_groups[session_id] = []
+            session_groups[session_id].append(post)
+        
+        # 統計數據
+        stats = {
+            "total_pending": len(pending_posts),
+            "sessions_count": len(session_groups),
+            "latest_session": max(session_groups.keys()) if session_groups else None,
+            "oldest_pending": min([post.created_at for post in pending_posts]) if pending_posts else None
+        }
+        
+        # 準備 sidebar 數據
+        sidebar_data = {
+            "sessions": []
+        }
+        
+        for session_id, posts in session_groups.items():
+            session_info = {
+                "session_id": session_id,
+                "posts_count": len(posts),
+                "latest_post": max([post.created_at for post in posts]),
+                "kol_personas": list(set([post.kol_persona for post in posts])),
+                "stock_codes": list(set([post.stock_code for post in posts if post.stock_code])),
+                "posts": posts
+            }
+            sidebar_data["sessions"].append(session_info)
+        
+        # 按最新貼文時間排序
+        sidebar_data["sessions"].sort(key=lambda x: x["latest_post"], reverse=True)
+        
+        return {
+            "success": True,
+            "stats": stats,
+            "sidebar_data": sidebar_data,
+            "timestamp": datetime.now()
+        }
+        
+    except Exception as e:
+        print(f"獲取審核 sidebar 數據失敗: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/serper/test")
@@ -798,7 +1242,7 @@ async def test_serper_api():
         from serper_integration import serper_service
         
         # 測試搜尋功能
-        test_result = serper_service.search_stock_news("2330", "台積電", limit=2)
+        test_result = serper_service.search_stock_news("2330", "台積電", limit=2, time_range="d2")
         
         return {
             "success": True,
@@ -823,7 +1267,7 @@ async def debug_posts():
     """調試端點：檢查所有貼文"""
     try:
         # 獲取所有貼文
-        all_posts = post_record_service.get_all_posts()
+        all_posts = get_post_record_service().get_all_posts()
         print(f"資料庫中共有 {len(all_posts)} 篇貼文")
         
         # 按狀態分組
@@ -918,7 +1362,7 @@ async def debug_data_source_usage():
     """調試數據源實際使用情況"""
     try:
         # 獲取最近的貼文
-        all_posts = post_record_service.get_all_posts()
+        all_posts = get_post_record_service().get_all_posts()
         recent_posts = sorted(all_posts, key=lambda x: x.created_at, reverse=True)[:5]
         
         usage_analysis = []
@@ -975,7 +1419,7 @@ async def get_session_posts(session_id: int, status: Optional[str] = None):
     """獲取會話的所有貼文"""
     try:
         print(f"🔍 獲取會話貼文: session_id={session_id}, status={status}")
-        posts = post_record_service.get_session_posts(session_id, status)
+        posts = get_post_record_service().get_session_posts(session_id, status)
         print(f"✅ 找到 {len(posts)} 篇貼文")
         return {
             "success": True,
@@ -1001,8 +1445,38 @@ async def batch_generate_posts_stream(request: BatchPostRequest):
         
         print(f"📊 批量生成統計: 總數={total_posts}, 成功={successful_posts}, 失敗={failed_posts}")
         
+        # 生成 batch 級別的共享 commodity tags
+        batch_commodity_tags = []
+        
+        # 檢查是否啟用「全貼同群股標」
+        should_use_shared_tags = False
+        
+        # 優先檢查 tags_config 中的 batch_shared_tags 設定
+        if request.tags_config and request.tags_config.get('stock_tags', {}).get('batch_shared_tags', False):
+            should_use_shared_tags = True
+            print("🏷️ 根據前端標籤配置啟用全貼同群股標")
+        # 其次檢查 batch_config 中的 shared_commodity_tags 設定
+        elif request.batch_config.get('shared_commodity_tags', True):
+            should_use_shared_tags = True
+            print("🏷️ 根據批量配置啟用共享標籤")
+        
+        if should_use_shared_tags:
+            print("🏷️ 生成 batch 級別的共享 commodity tags...")
+            unique_stocks = set()
+            for post_data in request.posts:
+                stock_code = post_data.get('stock_code')
+                if stock_code:
+                    unique_stocks.add(stock_code)
+            
+            # 暫時禁用 commodity tag 生成
+            print("⚠️ 批量 commodity tag 生成暫時禁用")
+            
+            print(f"✅ 生成 {len(batch_commodity_tags)} 個共享 commodity tags: {[tag['key'] for tag in batch_commodity_tags]}")
+        else:
+            print("🏷️ 未啟用共享標籤，每個貼文將使用獨立標籤")
+        
         # 發送開始事件
-        yield f"data: {json.dumps({'type': 'batch_start', 'total': total_posts, 'session_id': request.session_id})}\n\n"
+        yield f"data: {json.dumps({'type': 'batch_start', 'total': total_posts, 'session_id': request.session_id, 'shared_tags_count': len(batch_commodity_tags)})}\n\n"
         
         for index, post_data in enumerate(request.posts):
             try:
@@ -1089,7 +1563,9 @@ async def batch_generate_posts_stream(request: BatchPostRequest):
                     session_id=request.session_id,
                     data_sources=hybrid_data_sources,  # 使用混合數據源
                     explainability_config=request.explainability_config,
-                    news_config=request.news_config
+                    news_config=request.news_config,
+                    tags_config=request.tags_config,  # 傳遞標籤配置
+                    shared_commodity_tags=batch_commodity_tags  # 傳遞共享的 commodity tags
                 )
                 
                 print(f"⚙️ 調用單個貼文生成API...")
@@ -1172,11 +1648,11 @@ async def approve_post(post_id: str, request: Request):
         logger.info(f"📝 審核請求詳情 - Post ID: {post_id}")
         
         # 檢查貼文是否存在
-        existing_post = post_record_service.get_post_record(post_id)
+        existing_post = get_post_record_service().get_post_record(post_id)
         if not existing_post:
             logger.error(f"❌ 貼文不存在 - Post ID: {post_id}")
-            logger.info(f"📊 目前資料庫中的貼文數量: {len(post_record_service.db)}")
-            logger.info(f"📋 資料庫中的貼文 ID 列表: {list(post_record_service.db.keys())}")
+            logger.info(f"📊 目前資料庫中的貼文數量: {get_post_record_service().get_posts_count()}")
+            logger.info(f"📋 資料庫中的貼文 ID 列表: 無法獲取（PostgreSQL 模式）")
             raise HTTPException(status_code=404, detail=f"貼文不存在: {post_id}")
         
         logger.info(f"✅ 找到貼文 - Post ID: {post_id}, 當前狀態: {existing_post.status}")
@@ -1189,21 +1665,21 @@ async def approve_post(post_id: str, request: Request):
         logger.info(f"📝 審核參數 - 審核者: {approved_by}, 備註: {reviewer_notes}")
         
         # 創建更新資料
-        update_data = PostRecordUpdate(
-            status="approved",
-            reviewer_notes=reviewer_notes,
-            approved_by=approved_by,
-            approved_at=datetime.now()
-        )
+        update_data = {
+            "status": "approved",
+            "reviewer_notes": reviewer_notes,
+            "approved_by": approved_by,
+            "approved_at": datetime.now()
+        }
         
         logger.info(f"🔄 開始更新貼文狀態 - Post ID: {post_id}")
         
         # 更新貼文記錄
-        post_record = post_record_service.update_post_record(post_id, update_data)
+        post_record = get_post_record_service().update_post_record(post_id, update_data)
         
         if post_record:
             logger.info(f"✅ 貼文審核成功 - Post ID: {post_id}, 新狀態: {post_record.status}")
-            logger.info(f"📊 更新後資料庫狀態 - 總貼文數: {len(post_record_service.db)}")
+            logger.info(f"📊 更新後資料庫狀態 - 總貼文數: {get_post_record_service().get_posts_count()}")
             
             return {
                 "success": True,
@@ -1238,11 +1714,11 @@ async def reject_post(post_id: str, request: Request):
     
     try:
         # 檢查貼文是否存在
-        existing_post = post_record_service.get_post_record(post_id)
+        existing_post = get_post_record_service().get_post_record(post_id)
         if not existing_post:
             logger.error(f"❌ 貼文不存在 - Post ID: {post_id}")
-            logger.info(f"📊 目前資料庫中的貼文數量: {len(post_record_service.db)}")
-            logger.info(f"📋 資料庫中的貼文 ID 列表: {list(post_record_service.db.keys())}")
+            logger.info(f"📊 目前資料庫中的貼文數量: {get_post_record_service().get_posts_count()}")
+            logger.info(f"📋 資料庫中的貼文 ID 列表: 無法獲取（PostgreSQL 模式）")
             raise HTTPException(status_code=404, detail=f"貼文不存在: {post_id}")
         
         logger.info(f"✅ 找到貼文 - Post ID: {post_id}, 當前狀態: {existing_post.status}")
@@ -1254,16 +1730,16 @@ async def reject_post(post_id: str, request: Request):
         logger.info(f"📝 拒絕參數 - 備註: {reviewer_notes}")
         
         # 創建更新資料
-        update_data = PostRecordUpdate(
-            status="rejected",
-            reviewer_notes=reviewer_notes,
-            approved_by="system"
-        )
+        update_data = {
+            "status": "rejected",
+            "reviewer_notes": reviewer_notes,
+            "approved_by": "system"
+        }
         
         logger.info(f"🔄 開始更新貼文狀態為拒絕 - Post ID: {post_id}")
         
         # 更新貼文記錄
-        post_record = post_record_service.update_post_record(post_id, update_data)
+        post_record = get_post_record_service().update_post_record(post_id, update_data)
         
         if post_record:
             logger.info(f"✅ 貼文拒絕成功 - Post ID: {post_id}, 新狀態: {post_record.status}")
@@ -1295,7 +1771,7 @@ async def publish_post_to_cmoney(post_id: str, cmoney_config: Optional[Dict[str,
     """發布貼文到CMoney"""
     try:
         # 獲取貼文記錄
-        post_record = post_record_service.get_post_record(post_id)
+        post_record = get_post_record_service().get_post_record(post_id)
         if not post_record:
             raise HTTPException(status_code=404, detail="貼文不存在")
         
@@ -1307,14 +1783,14 @@ async def publish_post_to_cmoney(post_id: str, cmoney_config: Optional[Dict[str,
         publish_result = await publish_service.publish_post(post_record)
         
         # 更新貼文狀態為published
-        update_data = PostRecordUpdate(
-            status="published",
-            published_at=datetime.now(),
-            cmoney_post_id=publish_result["post_id"],
-            cmoney_post_url=publish_result["post_url"]
-        )
+        update_data = {
+            "status": "published",
+            "published_at": datetime.now(),
+            "cmoney_post_id": publish_result["post_id"],
+            "cmoney_post_url": publish_result["post_url"]
+        }
         
-        updated_post = post_record_service.update_post_record(post_id, update_data)
+        updated_post = get_post_record_service().update_post_record(post_id, update_data)
         
         return publish_result
         
@@ -1335,7 +1811,7 @@ async def get_post(post_id: str):
     logger.info(f"🔍 獲取貼文請求 - Post ID: {post_id}")
     
     try:
-        post_record = post_record_service.get_post_record(post_id)
+        post_record = get_post_record_service().get_post_record(post_id)
         if post_record:
             logger.info(f"✅ 找到貼文 - Post ID: {post_id}, 狀態: {post_record.status}")
             
@@ -1390,6 +1866,124 @@ async def get_post(post_id: str):
         import traceback
         logger.error(f"📋 錯誤堆疊: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"獲取貼文失敗: {str(e)}")
+
+@app.get("/posts/{post_id}/self-learning-data")
+async def get_post_self_learning_data(post_id: str):
+    """獲取貼文的自我學習數據 - 用於重建相同內容"""
+    logger.info(f"🧠 獲取自我學習數據 - Post ID: {post_id}")
+    
+    try:
+        post_record = get_post_record_service().get_post_record(post_id)
+        if not post_record:
+            raise HTTPException(status_code=404, detail=f"貼文不存在: {post_id}")
+        
+        # 準備自我學習數據
+        self_learning_data = {
+            "post_id": post_record.post_id,
+            "session_id": post_record.session_id,
+            "kol_serial": post_record.kol_serial,
+            "kol_nickname": post_record.kol_nickname,
+            "kol_persona": post_record.kol_persona,
+            "stock_code": post_record.stock_code,
+            "stock_name": post_record.stock_name,
+            
+            # 生成參數 - 用於重建相同內容
+            "generation_params": post_record.generation_params.model_dump() if post_record.generation_params else {},
+            
+            # 技術分析數據
+            "technical_analysis": post_record.technical_analysis,
+            
+            # Serper 新聞數據
+            "serper_data": post_record.serper_data,
+            
+            # 商品標籤
+            "commodity_tags": [tag.model_dump() for tag in post_record.commodity_tags] if post_record.commodity_tags else [],
+            
+            # 社群話題
+            "community_topic": post_record.community_topic.model_dump() if post_record.community_topic else None,
+            
+            # 品質評估數據
+            "quality_score": post_record.quality_score,
+            "ai_detection_score": post_record.ai_detection_score,
+            "risk_level": post_record.risk_level,
+            
+            # 時間戳記
+            "created_at": post_record.created_at.isoformat() if post_record.created_at else None,
+            
+            # 重建所需的其他參數
+            "content_length": post_record.generation_params.content_style if post_record.generation_params else "chart_analysis",
+            "target_audience": post_record.generation_params.target_audience if post_record.generation_params else "active_traders",
+            "data_sources": post_record.generation_params.data_sources if post_record.generation_params else [],
+            "technical_indicators": post_record.generation_params.technical_indicators if post_record.generation_params else []
+        }
+        
+        logger.info(f"✅ 自我學習數據準備完成 - Post ID: {post_id}")
+        logger.info(f"📊 數據包含: generation_params={bool(self_learning_data['generation_params'])}, "
+                   f"technical_analysis={bool(self_learning_data['technical_analysis'])}, "
+                   f"serper_data={bool(self_learning_data['serper_data'])}")
+        
+        return {
+            "success": True,
+            "self_learning_data": self_learning_data,
+            "reconstruction_ready": bool(
+                self_learning_data['generation_params'] and 
+                self_learning_data['stock_code'] and 
+                self_learning_data['kol_persona']
+            ),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except HTTPException as e:
+        logger.error(f"❌ HTTP 異常 - Post ID: {post_id}, 狀態碼: {e.status_code}")
+        raise e
+    except Exception as e:
+        logger.error(f"❌ 獲取自我學習數據時發生錯誤 - Post ID: {post_id}, 錯誤: {str(e)}")
+        import traceback
+        logger.error(f"📋 錯誤堆疊: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"獲取自我學習數據失敗: {str(e)}")
+
+@app.post("/test/kol-login/{kol_serial}")
+async def test_kol_login(kol_serial: str):
+    """測試 KOL 登入功能"""
+    logger.info(f"🔐 測試 KOL 登入 - Serial: {kol_serial}")
+    
+    try:
+        # 使用發佈服務測試登入
+        from publish_service import publish_service
+        
+        # 測試登入
+        access_token = await publish_service.login_kol(kol_serial)
+        
+        if access_token:
+            logger.info(f"✅ KOL {kol_serial} 登入測試成功")
+            return {
+                "success": True,
+                "message": f"KOL {kol_serial} 登入成功",
+                "has_token": bool(access_token),
+                "token_preview": access_token[:20] + "..." if access_token else None,
+                "timestamp": datetime.now().isoformat()
+            }
+        else:
+            logger.error(f"❌ KOL {kol_serial} 登入測試失敗")
+            return {
+                "success": False,
+                "message": f"KOL {kol_serial} 登入失敗",
+                "error": "無法獲取 access token",
+                "timestamp": datetime.now().isoformat()
+            }
+            
+    except Exception as e:
+        logger.error(f"❌ KOL 登入測試異常: {e}")
+        import traceback
+        logger.error(f"📋 錯誤堆疊: {traceback.format_exc()}")
+        return {
+            "success": False,
+            "message": f"KOL {kol_serial} 登入測試異常",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+# Delete API 已移至 routes/cmoney_routes.py
 
 # ==================== 新增的內容生成函數 ====================
 
@@ -1500,7 +2094,7 @@ def generate_kol_content_with_serper(stock_id: str, stock_name: str, kol_persona
         content_md = "\n".join(prompt_parts)
         
         # 生成標題 - 純文字格式
-        title = f"{stock_name}({stock_id}) {kol_persona.title()}觀點 - 深度市場解析"
+        title = f"{stock_name} 深度分析"
         
         return {
             "title": title,
@@ -1541,42 +2135,46 @@ def enhance_content_with_serper_data(kol_content: Dict[str, Any],
             
             # 提取新聞摘要和連結
             news_summary = []
-            for i, news in enumerate(news_items[:3]):  # 只取前3則新聞
+            news_sources = []
+            print(f"🔍 處理 {len(news_items)} 則新聞...")
+            for i, news in enumerate(news_items[:5]):  # 取前5則新聞
                 title = news.get('title', '')
                 snippet = news.get('snippet', '')
                 link = news.get('link', '')
+                print(f"  新聞 {i+1}: title='{title[:30]}...', snippet='{snippet[:30]}...', link='{link[:30]}...'")
                 if title and snippet:
+                    # 新聞摘要（簡化版，不包含emoji和markdown）
+                    news_summary.append(f"{title}: {snippet[:100]}...")
+                    # 新聞來源（用於最後的來源列表）
                     if link:
-                        news_summary.append(f"📰 {title}: {snippet[:100]}...\n   [閱讀更多]({link})")
+                        news_sources.append(f"{i+1}. {title}\n   連結: {link}")
+                        print(f"    ✅ 添加新聞來源 {i+1} (有連結): {link}")
                     else:
-                        news_summary.append(f"📰 {title}: {snippet[:100]}...")
+                        news_sources.append(f"{i+1}. {title}")
+                        print(f"    ✅ 添加新聞來源 {i+1} (無連結)")
+                else:
+                    print(f"    ❌ 跳過新聞 {i+1} (標題或摘要為空)")
             
             # 整合新聞到內容中
             original_content = enhanced_content.get('content', '')
             original_content_md = enhanced_content.get('content_md', '')
             
-            # 添加新聞資訊到內容開頭
-            news_section = ""
-            if news_summary:
-                news_section = "📰 **最新消息**\n\n" + "\n".join(news_summary) + "\n\n"
+            # 不添加新聞摘要到內容開頭，只保留原始內容
+            enhanced_content['content'] = original_content
+            enhanced_content['content_md'] = original_content_md
             
-            # 如果有漲停分析，也加入
-            if limit_up_analysis:
-                analysis_section = ""
-                if limit_up_analysis.get('market_sentiment'):
-                    sentiment = limit_up_analysis.get('market_sentiment', 'neutral')
-                    analysis_section += f"📊 **市場情緒**: {sentiment}\n\n"
-                
-                if limit_up_analysis.get('key_factors'):
-                    factors = limit_up_analysis.get('key_factors', [])
-                    if factors:
-                        analysis_section += f"🔍 **關鍵因素**: {', '.join(factors[:3])}\n\n"
-                
-                news_section += analysis_section
+            # 在內容最後添加新聞來源
+            print(f"🔍 新聞來源列表: {len(news_sources)} 個")
+            for i, source in enumerate(news_sources):
+                print(f"   {i+1}. {source[:50]}...")
             
-            # 更新內容
-            enhanced_content['content'] = news_section + original_content
-            enhanced_content['content_md'] = news_section + original_content_md
+            if news_sources:
+                sources_section = "\n\n新聞來源:\n" + "\n".join(news_sources)
+                enhanced_content['content'] += sources_section
+                enhanced_content['content_md'] += sources_section
+                print(f"✅ 新聞來源已添加: {len(sources_section)} 字")
+            else:
+                print("⚠️ 沒有新聞來源可添加")
             
             print(f"✅ 新聞整合完成，內容長度: {len(enhanced_content['content'])} 字")
         
@@ -1604,5 +2202,5 @@ print("🎉 所有模組載入完成！")
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8002)
 

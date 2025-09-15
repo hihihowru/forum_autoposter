@@ -102,7 +102,7 @@ class TagEnhancer:
             enhanced_article = ArticleData(
                 title=article.title,
                 text=article.text,
-                community_topic=community_topic,
+                communityTopic=community_topic,
                 commodity_tags=commodity_tags
             )
             

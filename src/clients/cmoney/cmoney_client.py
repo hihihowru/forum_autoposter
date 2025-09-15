@@ -45,7 +45,7 @@ class ArticleData:
     """文章數據結構"""
     title: str
     text: str
-    community_topic: Optional[Dict[str, str]] = None  # {"id": "topic_id"}
+    communityTopic: Optional[Dict[str, str]] = None  # {"id": "topic_id"}
     commodity_tags: Optional[List[Dict[str, Any]]] = None  # [{"type": "Stock", "key": "2330", "bullOrBear": 0}]
 
 
@@ -328,8 +328,8 @@ class CMoneyClient:
                 "text": article.text
             }
             
-            if article.community_topic:
-                payload["communityTopic"] = article.community_topic
+            if article.communityTopic:
+                payload["communityTopic"] = article.communityTopic
             
             if article.commodity_tags:
                 payload["commodityTags"] = article.commodity_tags
@@ -697,7 +697,7 @@ async def test_cmoney_client():
         print("\n🗃️ 數據結構:")
         print("   - LoginCredentials: email, password")
         print("   - Topic: id, title, name, last_article_create_time")
-        print("   - ArticleData: title, text, community_topic, commodity_tags")
+        print("   - ArticleData: title, text, communityTopic, commodity_tags")
         print("   - PublishResult: success, post_id, post_url, error_message")
         print("   - MemberInfo: member_id, nickname, follower_count, article_count")
         print("   - InteractionData: post_id, likes, comments, shares, views")

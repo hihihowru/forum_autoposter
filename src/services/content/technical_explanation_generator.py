@@ -292,3 +292,11 @@ class TechnicalExplanationGenerator:
 technical_explanation_generator = TechnicalExplanationGenerator()
 
 
+
+
+
+
+
+
+
+

@@ -453,7 +453,7 @@ class KangpeiPostGeneratorV2:
     """康霈生技貼文生成器 V2 - 整合完整個人化系統"""
     
     def __init__(self):
-        self.news_client = SerperNewsClient("59eac2d4f87afca3ae6e252f4214098defdd40fa")
+        self.news_client = SerperNewsClient(os.getenv('SERPER_API_KEY'))
         self.prompt_generator = PersonalizedPromptGenerator()
         
     async def get_kol_credentials(self) -> List[Dict[str, Any]]:

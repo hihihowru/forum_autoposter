@@ -8,6 +8,11 @@ import {
   SettingOutlined,
   UserOutlined,
   ReloadOutlined,
+  EditOutlined,
+  RocketOutlined,
+  CheckCircleOutlined,
+  PlayCircleOutlined,
+  SendOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 // import type { MenuItem } from '../../types';
@@ -65,6 +70,38 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onRefresh }) => {
         {
           key: '/content-management/posts',
           label: '貼文管理',
+        },
+      ],
+    },
+    {
+      key: 'posting-management',
+      label: '發文管理',
+      icon: <EditOutlined />,
+      children: [
+        {
+          key: '/posting-management',
+          label: '發文總覽',
+        },
+        {
+          key: '/posting-management/dashboard',
+          label: '發文儀表板',
+        },
+        {
+          key: '/posting-management/generator',
+          label: '發文生成器',
+        },
+        {
+          key: '/posting-management/review',
+          label: '發文審核',
+        },
+        {
+          key: '/posting-management/published',
+          label: '已發布貼文',
+          icon: <SendOutlined />,
+        },
+        {
+          key: '/posting-management/test-after-hours',
+          label: '盤後漲停測試',
         },
       ],
     },

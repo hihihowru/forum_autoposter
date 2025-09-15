@@ -16,7 +16,7 @@ import sys
 sys.path.append('./src')
 sys.path.append('../../../../src')
 
-from clients.google.sheets_client import GoogleSheetsClient
+# Google Sheets 已棄用，只使用 posting-service 數據
 
 # 配置日誌
 logging.basicConfig(level=logging.INFO)
@@ -40,22 +40,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 全局變量
-sheets_client = None
-
-def get_sheets_client() -> GoogleSheetsClient:
-    """獲取 Google Sheets 客戶端"""
-    global sheets_client
-    if sheets_client is None:
-        try:
-            credentials_file = os.getenv('GOOGLE_CREDENTIALS_FILE', './credentials/google-service-account.json')
-            spreadsheet_id = os.getenv('GOOGLE_SHEETS_ID', '148CUhBxqE-BZDPTKaAmOJG6m52CxB4KrxD9p5LikN2s')
-            sheets_client = GoogleSheetsClient(credentials_file, spreadsheet_id)
-            logger.info("Google Sheets 客戶端初始化成功")
-        except Exception as e:
-            logger.error(f"Google Sheets 客戶端初始化失敗: {e}")
-            raise HTTPException(status_code=500, detail="Google Sheets 連接失敗")
-    return sheets_client
+# Google Sheets 已棄用，創建替換函數避免錯誤
+def get_sheets_client():
+    """Google Sheets 已棄用，返回 None"""
+    logger.warning("⚠️ Google Sheets 已棄用，此功能不再可用")
+    return None
 
 @app.get("/")
 async def root():
@@ -172,60 +161,137 @@ async def get_content_management_data():
     包括 KOL 列表、文章列表、內容生成統計等
     """
     try:
-        client = get_sheets_client()
+        # 從 posting-service 獲取貼文數據
+        import httpx
+        posting_service_url = os.getenv("POSTING_SERVICE_URL", "http://posting-service:8000")
+        post_records = []
         
-        # 獲取 KOL 數據
-        kol_data = client.read_sheet('同學會帳號管理', 'A:AZ')
-        kol_headers = kol_data[0] if kol_data else []
-        kol_records = kol_data[1:] if len(kol_data) > 1 else []
+        try:
+            async with httpx.AsyncClient() as http_client:
+                response = await http_client.get(f"{posting_service_url}/posts/", timeout=30.0)
+                if response.status_code == 200:
+                    posting_data = response.json()
+                    post_records = posting_data.get("posts", [])
+                    logger.info(f"✅ 從 posting-service 獲取到 {len(post_records)} 篇貼文")
+                else:
+                    logger.error(f"❌ posting-service 響應錯誤: {response.status_code}")
+                    post_records = []
+        except Exception as e:
+            logger.error(f"❌ 無法從 posting-service 獲取數據: {e}")
+            post_records = []
         
-        # 獲取貼文數據
-        post_data = client.read_sheet('貼文記錄表', 'A:R')
-        post_headers = post_data[0] if post_data else []
-        post_records = post_data[1:] if len(post_data) > 1 else []
+        # 從 posting-service 獲取 KOL 數據
+        try:
+            async with httpx.AsyncClient() as http_client:
+                response = await http_client.get(f"{posting_service_url}/posts/kol-list", timeout=30.0)
+                if response.status_code == 200:
+                    kol_data = response.json()
+                    kol_records = kol_data if isinstance(kol_data, list) else []
+                    logger.info(f"✅ 從 posting-service 獲取到 {len(kol_records)} 個 KOL")
+                else:
+                    logger.error(f"❌ posting-service KOL 響應錯誤: {response.status_code}")
+                    kol_records = []
+        except Exception as e:
+            logger.error(f"❌ 無法從 posting-service 獲取 KOL 數據: {e}")
+            kol_records = []
         
         # 處理 KOL 數據
         kol_list = []
         for record in kol_records:
-            if len(record) >= 6:  # 確保有足夠的欄位
+            # 從 posting-service 獲取的 KOL 數據格式
+            if isinstance(record, dict):
                 kol_info = {
-                    "serial": record[0] if len(record) > 0 else "",
-                    "nickname": record[1] if len(record) > 1 else "",
-                    "member_id": record[4] if len(record) > 4 else "",
-                    "persona": record[3] if len(record) > 3 else "",
-                    "status": record[9] if len(record) > 9 else "",
-                    "content_type": record[10] if len(record) > 10 else "",
-                    "posting_times": record[11] if len(record) > 11 else "",
-                    "target_audience": record[12] if len(record) > 12 else ""
+                    "serial": record.get("serial", ""),
+                    "nickname": record.get("nickname", ""),
+                    "member_id": record.get("member_id", ""),
+                    "persona": record.get("persona", ""),
+                    "status": record.get("status", "active"),
+                    "content_type": record.get("content_type", ""),
+                    "posting_times": record.get("posting_times", ""),
+                    "target_audience": record.get("target_audience", "")
                 }
                 kol_list.append(kol_info)
+            else:
+                # 兼容舊格式（列表格式）
+                if len(record) >= 6:  # 確保有足夠的欄位
+                    kol_info = {
+                        "serial": record[0] if len(record) > 0 else "",
+                        "nickname": record[1] if len(record) > 1 else "",
+                        "member_id": record[4] if len(record) > 4 else "",
+                        "persona": record[3] if len(record) > 3 else "",
+                        "status": record[9] if len(record) > 9 else "",
+                        "content_type": record[10] if len(record) > 10 else "",
+                        "posting_times": record[11] if len(record) > 11 else "",
+                        "target_audience": record[12] if len(record) > 12 else ""
+                    }
+                    kol_list.append(kol_info)
         
         # 處理貼文數據
         post_list = []
-        for record in post_records:
-            if len(record) >= 12:  # 確保有足夠的欄位
-                post_info = {
-                    "post_id": record[0] if len(record) > 0 else "",
-                    "kol_serial": record[1] if len(record) > 1 else "",
-                    "kol_nickname": record[2] if len(record) > 2 else "",
-                    "kol_id": record[3] if len(record) > 3 else "",
-                    "persona": record[4] if len(record) > 4 else "",
-                    "content_type": record[5] if len(record) > 5 else "",
-                    "topic_id": record[7] if len(record) > 7 else "",
-                    "topic_title": record[8] if len(record) > 8 else "",
-                    "content": record[10] if len(record) > 10 else "",
-                    "status": record[11] if len(record) > 11 else "",
-                    "post_time": record[13] if len(record) > 13 else "",
-                    "platform_post_id": record[15] if len(record) > 15 else "",
-                    "platform_post_url": record[16] if len(record) > 16 else "",
-                    # 新增的 KOL 設定欄位
-                    "post_type": record[18] if len(record) > 18 else "",  # 發文類型
-                    "content_length": record[19] if len(record) > 19 else "",  # 文章長度
-                    "kol_weight_settings": record[20] if len(record) > 20 else "",  # KOL權重設定
-                    "content_generation_time": record[21] if len(record) > 21 else "",  # 內容生成時間
-                    "kol_settings_version": record[22] if len(record) > 22 else ""  # KOL設定版本
-                }
-                post_list.append(post_info)
+        
+        # 檢查數據來源
+        if isinstance(post_records, list) and len(post_records) > 0:
+            # 從 posting-service 獲取的數據（字典格式）
+            if isinstance(post_records[0], dict):
+                for record in post_records:
+                    post_info = {
+                        "post_id": record.get("post_id", ""),
+                        "kol_serial": record.get("kol_serial", ""),
+                        "kol_nickname": record.get("kol_nickname", ""),
+                        "kol_id": record.get("kol_serial", ""),  # 使用 kol_serial 作為 kol_id
+                        "persona": record.get("kol_persona", ""),
+                        "content_type": "",  # posting-service 沒有這個欄位
+                        "topic_id": record.get("topic_id", ""),
+                        "topic_title": record.get("topic_title", ""),
+                        "content": record.get("content", ""),
+                        "status": record.get("status", ""),
+                        "post_time": record.get("created_at", ""),
+                        "platform_post_id": record.get("cmoney_post_id", ""),
+                        "platform_post_url": record.get("cmoney_post_url", ""),
+                        "stock_code": record.get("stock_code", ""),
+                        "stock_name": record.get("stock_name", ""),
+                        "title": record.get("title", ""),
+                        "quality_score": record.get("quality_score"),
+                        "ai_detection_score": record.get("ai_detection_score"),
+                        "risk_level": record.get("risk_level"),
+                        "reviewer_notes": record.get("reviewer_notes", ""),
+                        "approved_by": record.get("approved_by", ""),
+                        "approved_at": record.get("approved_at", ""),
+                        "published_at": record.get("published_at", ""),
+                        "views": record.get("views", 0),
+                        "likes": record.get("likes", 0),
+                        "comments": record.get("comments", 0),
+                        "shares": record.get("shares", 0),
+                        "created_at": record.get("created_at", ""),
+                        "updated_at": record.get("updated_at", "")
+                    }
+                    post_list.append(post_info)
+            else:
+                # 從 Google Sheets 獲取的數據（列表格式）
+                for record in post_records:
+                    if len(record) >= 12:  # 確保有足夠的欄位
+                        post_info = {
+                            "post_id": record[0] if len(record) > 0 else "",
+                            "kol_serial": record[1] if len(record) > 1 else "",
+                            "kol_nickname": record[2] if len(record) > 2 else "",
+                            "kol_id": record[3] if len(record) > 3 else "",
+                            "persona": record[4] if len(record) > 4 else "",
+                            "content_type": record[5] if len(record) > 5 else "",
+                            "topic_id": record[7] if len(record) > 7 else "",
+                            "topic_title": record[8] if len(record) > 8 else "",
+                            "content": record[10] if len(record) > 10 else "",
+                            "status": record[11] if len(record) > 11 else "",
+                            "post_time": record[13] if len(record) > 13 else "",
+                            "platform_post_id": record[15] if len(record) > 15 else "",
+                            "platform_post_url": record[16] if len(record) > 16 else "",
+                            # 新增的 KOL 設定欄位
+                            "post_type": record[18] if len(record) > 18 else "",  # 發文類型
+                            "content_length": record[19] if len(record) > 19 else "",  # 文章長度
+                            "kol_weight_settings": record[20] if len(record) > 20 else "",  # KOL權重設定
+                            "content_generation_time": record[21] if len(record) > 21 else "",  # 內容生成時間
+                            "kol_settings_version": record[22] if len(record) > 22 else ""  # KOL設定版本
+                        }
+                        post_list.append(post_info)
         
         # 統計數據 - 計算過去一週有發文的活躍 KOL
         from datetime import datetime, timedelta
@@ -282,6 +348,102 @@ async def get_content_management_data():
     except Exception as e:
         logger.error(f"獲取內容管理數據失敗: {e}")
         raise HTTPException(status_code=500, detail=f"獲取內容管理數據失敗: {str(e)}")
+
+@app.delete("/api/dashboard/posts/{post_id}/delete")
+async def delete_post(post_id: str):
+    """
+    刪除貼文 - 使用CMoney API從平台刪除貼文
+    """
+    try:
+        client = get_sheets_client()
+        
+        # 讀取貼文記錄表
+        post_data = client.read_sheet('貼文記錄表', 'A:R')
+        if not post_data or len(post_data) < 2:
+            raise HTTPException(status_code=404, detail="找不到貼文記錄表")
+        
+        post_headers = post_data[0]
+        post_records = post_data[1:]
+        
+        # 找到要刪除的貼文
+        target_post = None
+        for record in post_records:
+            if len(record) > 0 and record[0] == post_id:
+                target_post = record
+                break
+        
+        if not target_post:
+            raise HTTPException(status_code=404, detail=f"找不到貼文 ID: {post_id}")
+        
+        # 檢查貼文是否已經發布
+        if len(target_post) < 16 or not target_post[15]:  # platform_post_id
+            raise HTTPException(status_code=400, detail="該貼文尚未發布，無法刪除")
+        
+        # 檢查貼文是否已經被刪除
+        if len(target_post) > 11 and target_post[11] == '已刪除':
+            raise HTTPException(status_code=400, detail="該貼文已經被刪除")
+        
+        # 獲取KOL信息
+        kol_serial = target_post[1] if len(target_post) > 1 else ""
+        platform_post_id = target_post[15] if len(target_post) > 15 else ""
+        
+        if not kol_serial:
+            raise HTTPException(status_code=400, detail="找不到KOL序號")
+        
+        # 使用KOL服務登入並刪除貼文
+        from kol_service import kol_service
+        
+        # 登入KOL
+        access_token = await kol_service.login_kol(kol_serial)
+        if not access_token:
+            raise HTTPException(status_code=500, detail=f"KOL {kol_serial} 登入失敗")
+        
+        # 使用CMoney API刪除貼文
+        from src.clients.cmoney.cmoney_client import CMoneyClient
+        cmoney_client = CMoneyClient()
+        
+        delete_success = await cmoney_client.delete_article(access_token, platform_post_id)
+        
+        if not delete_success:
+            raise HTTPException(status_code=500, detail="從CMoney平台刪除貼文失敗")
+        
+        # 更新貼文狀態為已刪除（僅在我們的記錄中標記）
+        post_row_index = None
+        for i, record in enumerate(post_records):
+            if len(record) > 0 and record[0] == post_id:
+                post_row_index = i + 2  # Google Sheets 行號從1開始，加上標題行
+                break
+        
+        if post_row_index:
+            update_data = [
+                '已刪除',  # 發文狀態 (L欄，索引11)
+                '',        # 上次排程時間 (M欄) - 保持不變
+                '',        # 發文時間戳記 (N欄) - 清空
+                '已刪除 - 管理員從平台刪除',  # 最近錯誤訊息 (O欄)
+                platform_post_id,  # 平台發文ID (P欄) - 保持不變
+                target_post[16] if len(target_post) > 16 else ''  # 平台發文URL (Q欄) - 保持不變
+            ]
+            
+            # 寫入更新到 Google Sheets
+            range_name = f'L{post_row_index}:Q{post_row_index}'
+            client.write_sheet('貼文記錄表', [update_data], range_name)
+        
+        logger.info(f"成功從CMoney平台刪除貼文: {post_id} (平台ID: {platform_post_id})")
+        
+        return {
+            "success": True,
+            "message": "貼文已成功從CMoney平台刪除",
+            "post_id": post_id,
+            "platform_post_id": platform_post_id,
+            "kol_serial": kol_serial,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"刪除貼文失敗 {post_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"刪除貼文失敗: {str(e)}")
 
 # ==================== 互動分析儀表板 ====================
 
@@ -409,7 +571,259 @@ async def get_interaction_analysis_data():
         logger.error(f"獲取互動分析數據失敗: {e}")
         raise HTTPException(status_code=500, detail=f"獲取互動分析數據失敗: {str(e)}")
 
-# ==================== 輔助 API ====================
+# ==================== KOL角色管理API ====================
+
+from pydantic import BaseModel
+from typing import List, Dict, Any, Optional
+
+class KOLUpdateRequest(BaseModel):
+    """KOL更新請求"""
+    serial: Optional[str] = None
+    nickname: Optional[str] = None
+    persona: Optional[str] = None
+    target_audience: Optional[str] = None
+    status: Optional[str] = None
+    interaction_threshold: Optional[float] = None
+    common_terms: Optional[str] = None
+    colloquial_terms: Optional[str] = None
+    tone_style: Optional[str] = None
+    prompt_persona: Optional[str] = None
+    prompt_style: Optional[str] = None
+    prompt_guardrails: Optional[str] = None
+    prompt_skeleton: Optional[str] = None
+    prompt_cta: Optional[str] = None
+    prompt_hashtags: Optional[str] = None
+    signature: Optional[str] = None
+    emoji_pack: Optional[str] = None
+    model_id: Optional[str] = None
+    model_temp: Optional[float] = None
+    max_tokens: Optional[int] = None
+
+class BatchUpdateRequest(BaseModel):
+    """批量更新請求"""
+    selected_kols: List[str]  # member_id列表
+    update_fields: Dict[str, Any]  # 要更新的欄位
+
+@app.put("/api/dashboard/kols/{member_id}")
+async def update_kol(
+    member_id: str,
+    update_request: KOLUpdateRequest
+):
+    """更新單個KOL設定"""
+    try:
+        # 欄位映射
+        field_mapping = {
+            'serial': 0,
+            'nickname': 1,
+            'owner': 2,
+            'persona': 3,
+            'member_id': 4,
+            'email': 6,
+            'password': 7,
+            'whitelist': 8,
+            'notes': 9,
+            'content_types': 10,
+            'post_times': 11,
+            'target_audience': 12,
+            'interaction_threshold': 13,
+            'common_terms': 14,
+            'colloquial_terms': 15,
+            'tone_style': 16,
+            'typing_habit': 17,
+            'backstory': 18,
+            'expertise': 19,
+            'data_source': 20,
+            'prompt_persona': 21,
+            'prompt_style': 22,
+            'prompt_guardrails': 23,
+            'prompt_skeleton': 24,
+            'prompt_cta': 25,
+            'prompt_hashtags': 26,
+            'signature': 27,
+            'emoji_pack': 28,
+            'model_id': 29,
+            'model_temp': 30,
+            'max_tokens': 31
+        }
+        
+        # 獲取當前數據
+        data = sheets_client.read_sheet('同學會帳號管理', 'A:AZ')
+        if len(data) < 2:
+            raise HTTPException(status_code=404, detail="KOL數據不存在")
+        
+        headers = data[0]
+        updated = False
+        
+        # 找到對應的行並更新
+        for i, row in enumerate(data[1:], start=2):  # 從第2行開始
+            if len(row) > 4 and row[4] == member_id:
+                # 更新欄位
+                for field, value in update_request.dict(exclude_unset=True).items():
+                    if field in field_mapping:
+                        col_index = field_mapping[field]
+                        # 確保行有足夠的列
+                        while len(row) <= col_index:
+                            row.append('')
+                        row[col_index] = str(value) if value is not None else ''
+                
+                # 寫回Google Sheets
+                range_name = f'同學會帳號管理!A{i}:AZ{i}'
+                sheets_client.write_sheet('同學會帳號管理', [row], range_name)
+                updated = True
+                break
+        
+        if updated:
+            return {
+                "success": True,
+                "message": "KOL設定已更新",
+                "member_id": member_id,
+                "updated_at": datetime.now().isoformat()
+            }
+        else:
+            raise HTTPException(status_code=404, detail="KOL不存在")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"更新KOL失敗: {e}")
+        raise HTTPException(status_code=500, detail=f"更新失敗: {str(e)}")
+
+@app.post("/api/dashboard/kols/batch-update")
+async def batch_update_kols(
+    request: BatchUpdateRequest,
+):
+    """批量更新KOL設定"""
+    try:
+        success_count = 0
+        failed_count = 0
+        errors = []
+        
+        # 欄位映射
+        field_mapping = {
+            'serial': 0, 'nickname': 1, 'owner': 2, 'persona': 3, 'member_id': 4,
+            'email': 6, 'password': 7, 'whitelist': 8, 'notes': 9, 'content_types': 10,
+            'post_times': 11, 'target_audience': 12, 'interaction_threshold': 13,
+            'common_terms': 14, 'colloquial_terms': 15, 'tone_style': 16,
+            'typing_habit': 17, 'backstory': 18, 'expertise': 19, 'data_source': 20,
+            'prompt_persona': 21, 'prompt_style': 22, 'prompt_guardrails': 23,
+            'prompt_skeleton': 24, 'prompt_cta': 25, 'prompt_hashtags': 26,
+            'signature': 27, 'emoji_pack': 28, 'model_id': 29, 'model_temp': 30,
+            'max_tokens': 31
+        }
+        
+        # 獲取當前數據
+        data = sheets_client.read_sheet('同學會帳號管理', 'A:AZ')
+        if len(data) < 2:
+            raise HTTPException(status_code=404, detail="KOL數據不存在")
+        
+        headers = data[0]
+        
+        for member_id in request.selected_kols:
+            try:
+                # 找到對應的行並更新
+                for i, row in enumerate(data[1:], start=2):
+                    if len(row) > 4 and row[4] == member_id:
+                        # 更新欄位
+                        for field, value in request.update_fields.items():
+                            if field in field_mapping:
+                                col_index = field_mapping[field]
+                                while len(row) <= col_index:
+                                    row.append('')
+                                row[col_index] = str(value) if value is not None else ''
+                        
+                        # 寫回Google Sheets
+                        range_name = f'同學會帳號管理!A{i}:AZ{i}'
+                        sheets_client.write_sheet('同學會帳號管理', [row], range_name)
+                        success_count += 1
+                        break
+                else:
+                    failed_count += 1
+                    errors.append(f"KOL {member_id} 不存在")
+                    
+            except Exception as e:
+                failed_count += 1
+                error_msg = f"KOL {member_id} 更新異常: {str(e)}"
+                errors.append(error_msg)
+                logger.error(error_msg)
+        
+        return {
+            "success": failed_count == 0,
+            "message": f"批量更新完成: 成功 {success_count} 個，失敗 {failed_count} 個",
+            "updated_count": success_count,
+            "failed_count": failed_count,
+            "errors": errors
+        }
+        
+    except Exception as e:
+        logger.error(f"批量更新失敗: {e}")
+        raise HTTPException(status_code=500, detail=f"批量更新失敗: {str(e)}")
+
+@app.get("/api/dashboard/kols/{member_id}/settings")
+async def get_kol_settings(
+    member_id: str,
+):
+    """獲取KOL完整設定"""
+    try:
+        # 獲取KOL基本資訊
+        kol_data = sheets_client.read_sheet('同學會帳號管理', 'A:AZ')
+        kol_records = kol_data[1:] if len(kol_data) > 1 else []
+        
+        # 查找特定KOL
+        kol_info = None
+        for record in kol_records:
+            if len(record) > 4 and record[4] == member_id:
+                kol_info = {
+                    "serial": record[0] if len(record) > 0 else "",
+                    "nickname": record[1] if len(record) > 1 else "",
+                    "member_id": record[4] if len(record) > 4 else "",
+                    "persona": record[3] if len(record) > 3 else "",
+                    "status": record[9] if len(record) > 9 else "",
+                    "owner": record[2] if len(record) > 2 else "",
+                    "email": record[6] if len(record) > 6 else "",
+                    "password": record[7] if len(record) > 7 else "",
+                    "whitelist": record[8] == "TRUE" if len(record) > 8 else False,
+                    "notes": record[9] if len(record) > 9 else "",
+                    "post_times": record[11] if len(record) > 11 else "",
+                    "target_audience": record[12] if len(record) > 12 else "",
+                    "interaction_threshold": float(record[13]) if len(record) > 13 and record[13].replace('.', '').isdigit() else 0.0,
+                    "content_types": record[10].split(',') if len(record) > 10 and record[10] else [],
+                    "common_terms": record[14] if len(record) > 14 else "",
+                    "colloquial_terms": record[15] if len(record) > 15 else "",
+                    "tone_style": record[16] if len(record) > 16 else "",
+                    "typing_habit": record[17] if len(record) > 17 else "",
+                    "backstory": record[18] if len(record) > 18 else "",
+                    "expertise": record[19] if len(record) > 19 else "",
+                    "data_source": record[20] if len(record) > 20 else "",
+                    "prompt_persona": record[21] if len(record) > 21 else "",
+                    "prompt_style": record[22] if len(record) > 22 else "",
+                    "prompt_guardrails": record[23] if len(record) > 23 else "",
+                    "prompt_skeleton": record[24] if len(record) > 24 else "",
+                    "prompt_cta": record[25] if len(record) > 25 else "",
+                    "prompt_hashtags": record[26] if len(record) > 26 else "",
+                    "signature": record[27] if len(record) > 27 else "",
+                    "emoji_pack": record[28] if len(record) > 28 else "",
+                    "model_id": record[29] if len(record) > 29 else "",
+                    "model_temp": float(record[30]) if len(record) > 30 and record[30].replace('.', '').isdigit() else 0.0,
+                    "max_tokens": int(record[31]) if len(record) > 31 and record[31].isdigit() else 0,
+                    "created_time": datetime.now().isoformat(),
+                    "last_updated": datetime.now().isoformat()
+                }
+                break
+        
+        if kol_info:
+            return {
+                "success": True,
+                "data": kol_info,
+                "member_id": member_id
+            }
+        else:
+            raise HTTPException(status_code=404, detail="KOL不存在")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"獲取KOL設定失敗: {e}")
+        raise HTTPException(status_code=500, detail=f"獲取設定失敗: {str(e)}")
 
 # ==================== KOL 詳情 API ====================
 
@@ -626,7 +1040,7 @@ async def get_kol_interactions(member_id: str, timeframe: str = "7days", start_d
 
 # ==================== 輔助函數 ====================
 
-async def get_kol_interaction_stats(member_id: str, client: GoogleSheetsClient):
+async def get_kol_interaction_stats(member_id: str):
     """獲取 KOL 互動統計數據"""
     try:
         # 讀取 7 天互動數據
@@ -695,7 +1109,7 @@ async def get_kol_interaction_stats(member_id: str, client: GoogleSheetsClient):
             "avg_comments_per_post": 0
         }
 
-async def get_post_interactions(post_id: str, client: GoogleSheetsClient):
+async def get_post_interactions(post_id: str):
     """獲取特定貼文的互動數據"""
     interactions = {
         "1hr": {"likes_count": 0, "comments_count": 0, "total_interactions": 0, "engagement_rate": 0.0, "growth_rate": 0.0},
@@ -726,7 +1140,7 @@ async def get_post_interactions(post_id: str, client: GoogleSheetsClient):
     
     return interactions
 
-async def get_kol_interaction_trend(member_id: str, client: GoogleSheetsClient, timeframe: str = "7days"):
+async def get_kol_interaction_trend(member_id: str, timeframe: str = "7days"):
     """獲取 KOL 互動趨勢數據"""
     # 這裡可以實現更複雜的趨勢分析
     # 暫時返回簡單的模擬數據
@@ -749,7 +1163,7 @@ async def get_kol_interaction_trend(member_id: str, client: GoogleSheetsClient, 
         }
     ]
 
-async def get_kol_topic_performance(member_id: str, client: GoogleSheetsClient):
+async def get_kol_topic_performance(member_id: str):
     """獲取 KOL 按話題的表現數據"""
     # 這裡可以實現按話題的表現分析
     # 暫時返回簡單的模擬數據
@@ -770,7 +1184,7 @@ async def get_kol_topic_performance(member_id: str, client: GoogleSheetsClient):
         }
     ]
 
-async def get_kol_monthly_stats(member_id: str, client: GoogleSheetsClient):
+async def get_kol_monthly_stats(member_id: str):
     """獲取 KOL 月度統計數據"""
     try:
         # 讀取貼文記錄表，按月份統計
@@ -823,7 +1237,7 @@ async def get_kol_monthly_stats(member_id: str, client: GoogleSheetsClient):
         logger.error(f"獲取 KOL 月度統計失敗: {e}")
         return []
 
-async def get_kol_weekly_stats(member_id: str, client: GoogleSheetsClient):
+async def get_kol_weekly_stats(member_id: str):
     """獲取 KOL 週度統計數據"""
     try:
         # 讀取貼文記錄表，按週統計
@@ -876,7 +1290,7 @@ async def get_kol_weekly_stats(member_id: str, client: GoogleSheetsClient):
         logger.error(f"獲取 KOL 週度統計失敗: {e}")
         return []
 
-async def get_kol_daily_stats(member_id: str, client: GoogleSheetsClient):
+async def get_kol_daily_stats(member_id: str):
     """獲取 KOL 日度統計數據"""
     try:
         # 讀取貼文記錄表，按日統計

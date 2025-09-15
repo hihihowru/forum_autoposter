@@ -49,7 +49,7 @@ def generate_improved_kol_content(stock_id: str, stock_name: str, kol_persona: s
         content_parts.append("")
         
         # 風險提醒（簡化）
-        risk_warning = "⚠️ 投資有風險，請謹慎評估"
+        risk_warning = "投資有風險，請謹慎評估"
         content_parts.append(risk_warning)
         
         # 添加風險分析
@@ -85,39 +85,39 @@ def generate_diverse_title(stock_name: str, stock_id: str, kol_persona: str, mar
     # 根據KOL人設和市場情緒選擇不同的標題模板
     if kol_persona == 'technical':
         templates = [
-            f"{stock_name}({stock_id}) 技術面突破！",
-            f"【技術分析】{stock_name} 強勢上漲訊號",
-            f"{stock_name} 技術指標全解析",
-            f"為什麼{stock_name}今天這麼強？技術面告訴你",
-            f"{stock_name}({stock_id}) 技術突破確認"
+            f"{stock_name} 技術突破",
+            f"{stock_name} 強勢上漲",
+            f"{stock_name} 多頭訊號",
+            f"{stock_name} 突破確認",
+            f"{stock_name} 技術面強勢"
         ]
     elif kol_persona == 'fundamental':
         templates = [
-            f"【基本面分析】{stock_name} 投資價值",
-            f"{stock_name} 基本面改善，股價反映價值",
-            f"【深度分析】{stock_name} 財務數據解讀",
-            f"{stock_name}({stock_id}) 基本面支撐股價",
-            f"為什麼投資{stock_name}？基本面分析"
+            f"{stock_name} 基本面改善",
+            f"{stock_name} 投資價值",
+            f"{stock_name} 財務亮眼",
+            f"{stock_name} 業績成長",
+            f"{stock_name} 基本面支撐"
         ]
     else:
         templates = [
-            f"【市場觀察】{stock_name} 漲停背後",
-            f"{stock_name} 強勢上漲背後的關鍵因素",
-            f"【投資觀點】{stock_name} 後市展望",
-            f"{stock_name}({stock_id}) 投資機會分析",
-            f"市場熱點：{stock_name} 為什麼這麼火？"
+            f"{stock_name} 市場熱點",
+            f"{stock_name} 強勢上漲",
+            f"{stock_name} 投資機會",
+            f"{stock_name} 後市看好",
+            f"{stock_name} 題材發酵"
         ]
     
     # 根據市場情緒調整
     if market_sentiment == 'positive':
         templates.extend([
-            f"{stock_name} 多頭行情啟動！",
-            f"【強勢股】{stock_name} 上漲動能強勁"
+            f"{stock_name} 多頭啟動",
+            f"{stock_name} 上漲動能"
         ])
     elif market_sentiment == 'negative':
         templates.extend([
-            f"{stock_name} 技術面強勢，但需謹慎",
-            f"【風險提醒】{stock_name} 投資需注意"
+            f"{stock_name} 技術強勢",
+            f"{stock_name} 需謹慎"
         ])
     
     return random.choice(templates)
@@ -201,7 +201,7 @@ def generate_data_source_analysis(data_sources: List[str], stock_name: str) -> s
     
     # 檢查智能分配的數據源
     if 'ohlc_api' in data_sources or 'summary_api' in data_sources:
-        analysis_parts.append("📊 技術指標分析：")
+        analysis_parts.append("技術指標分析：")
         analysis_parts.append("• 股價突破MA20均線，確認多頭趨勢")
         analysis_parts.append("• RSI指標顯示超買但仍有動能")
         analysis_parts.append("• 成交量放大，資金進場積極")
@@ -219,7 +219,7 @@ def generate_data_source_analysis(data_sources: List[str], stock_name: str) -> s
         analysis_parts.append("• 產業前景看好")
     
     if 'serper_api' in data_sources:
-        analysis_parts.append("📰 市場動態：")
+        analysis_parts.append("市場動態：")
         analysis_parts.append("• 最新市場資訊顯示正面發展")
         analysis_parts.append("• 相關新聞報導增加市場關注度")
     
@@ -245,7 +245,7 @@ def generate_investment_advice(market_sentiment: str, kol_persona: str) -> str:
 def generate_risk_analysis(market_sentiment: str, stock_name: str) -> str:
     """生成風險分析（平衡觀點）"""
     
-    risk_parts = ["⚠️ 風險與注意點："]
+    risk_parts = ["風險與注意點："]
     
     # 根據市場情緒調整風險提醒
     if market_sentiment == 'positive':

@@ -178,8 +178,10 @@ class PublishService:
             existing_data = self.sheets_client.read_sheet('貼文記錄表', 'A:R')
             
             # 找到對應的記錄
+            found_record = False
             for i, row in enumerate(existing_data[1:], start=2):  # 跳過標題行
                 if len(row) > 0 and row[0] == result['post_id']:  # 第一列是 post_id
+                    found_record = True
                     # 更新發文狀態和 article ID
                     update_data = [
                         result['post_id'],  # 貼文ID
@@ -206,8 +208,12 @@ class PublishService:
                     range_name = f'A{i}:R{i}'
                     self.sheets_client.write_sheet('貼文記錄表', [update_data], range_name)
                     
-                    logger.info(f"更新貼文記錄 {result['post_id']}: 狀態={update_data[11]}, Article ID={result['article_id']}")
+                    logger.info(f"✅ 更新貼文記錄 {result['post_id']}: 狀態={update_data[11]}, Article ID={result['article_id']}")
                     break
+            
+            if not found_record:
+                logger.error(f"❌ 找不到貼文記錄 {result['post_id']}，無法更新發文結果")
+                logger.error(f"   可用的 post_id 列表: {[row[0] for row in existing_data[1:] if len(row) > 0]}")
                     
         except Exception as e:
             logger.error(f"更新貼文結果失敗: {e}")

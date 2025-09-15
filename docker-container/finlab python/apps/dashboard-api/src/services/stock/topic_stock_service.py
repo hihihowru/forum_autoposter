@@ -196,7 +196,45 @@ class TopicStockService:
         Returns:
             股票名稱
         """
-        # 常見股票名稱對照表
+        # 使用動態 API 獲取股票名稱
+        try:
+            from .company_info_service import get_company_info_service
+            import asyncio
+            
+            # 同步調用異步函數
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # 如果已經在事件循環中，使用 create_task
+                task = asyncio.create_task(self._get_stock_name_async(stock_id))
+                # 這裡需要等待任務完成，但在同步函數中無法直接等待
+                # 所以我們先使用備用方案
+                return self._get_stock_name_fallback(stock_id)
+            else:
+                return loop.run_until_complete(self._get_stock_name_async(stock_id))
+                
+        except Exception as e:
+            logger.warning(f"動態獲取股票名稱失敗: {e}")
+            return self._get_stock_name_fallback(stock_id)
+    
+    async def _get_stock_name_async(self, stock_id: str) -> str:
+        """異步獲取股票名稱"""
+        try:
+            from .company_info_service import get_company_info_service
+            service = get_company_info_service()
+            company = await service.get_company_by_code(stock_id)
+            
+            if company:
+                return company.company_name
+            else:
+                return self._get_stock_name_fallback(stock_id)
+                
+        except Exception as e:
+            logger.warning(f"異步獲取股票名稱失敗: {e}")
+            return self._get_stock_name_fallback(stock_id)
+    
+    def _get_stock_name_fallback(self, stock_id: str) -> str:
+        """備用股票名稱對照表"""
+        # 常見股票名稱對照表（作為備用）
         stock_names = {
             "2330": "台積電",
             "2454": "聯發科", 

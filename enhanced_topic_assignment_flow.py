@@ -475,26 +475,8 @@ class EnhancedTopicAssignmentFlow:
     
     def _get_stock_name(self, stock_symbol: str) -> str:
         """將股票代號轉換為公司名稱"""
-        stock_name_mapping = {
-            '2330': '台積電',
-            '2317': '鴻海',
-            '2454': '聯發科',
-            '2308': '台達電',
-            '2412': '中華電',
-            '2882': '國泰金',
-            '2881': '富邦金',
-            '2603': '長榮',
-            '2609': '陽明',
-            '2634': '漢翔',
-            '8033': '雷虎',
-            '1303': '南亞',
-            '2359': '所羅門',
-            '1504': '東元',
-            '8927': '富邦媒',
-            '8932': '智邦',
-            'TWA00': '台股指數'
-        }
-        return stock_name_mapping.get(stock_symbol, stock_symbol)
+        from src.utils.stock_mapping import get_stock_name
+        return get_stock_name(stock_symbol)
     
     async def _generate_enhanced_content(self, assignments_with_tags):
         """步驟 6: 增強版內容生成"""
@@ -891,7 +873,7 @@ class EnhancedTopicAssignmentFlow:
                 article_data = ArticleData(
                     title=post.title,
                     text=post.content,
-                    community_topic=community_topic,
+                    communityTopic=community_topic,
                     commodity_tags=commodity_tags
                 )
                 

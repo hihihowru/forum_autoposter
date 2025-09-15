@@ -173,6 +173,47 @@ class ContentGenerator:
     
     def _extract_stock_codes(self, keywords: str) -> str:
         """從關鍵詞中提取股票代號"""
+        # 使用動態 API 獲取股票代號
+        try:
+            from ..stock.company_info_service import get_company_info_service
+            import asyncio
+            
+            # 同步調用異步函數
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # 如果已經在事件循環中，使用備用方案
+                return self._extract_stock_codes_fallback(keywords)
+            else:
+                return loop.run_until_complete(self._extract_stock_codes_async(keywords))
+                
+        except Exception as e:
+            logger.warning(f"動態提取股票代號失敗: {e}")
+            return self._extract_stock_codes_fallback(keywords)
+    
+    async def _extract_stock_codes_async(self, keywords: str) -> str:
+        """異步提取股票代號"""
+        try:
+            from ..stock.company_info_service import get_company_info_service
+            service = get_company_info_service()
+            
+            found_codes = []
+            
+            # 分割關鍵詞並搜尋
+            words = keywords.split()
+            for word in words:
+                if len(word) >= 2:  # 只搜尋長度大於等於2的詞
+                    results = await service.search_company_by_name(word, fuzzy=True)
+                    for company in results:
+                        found_codes.append(f"{company.company_name}({company.stock_code})")
+            
+            return ", ".join(found_codes) if found_codes else "無"
+            
+        except Exception as e:
+            logger.warning(f"異步提取股票代號失敗: {e}")
+            return self._extract_stock_codes_fallback(keywords)
+    
+    def _extract_stock_codes_fallback(self, keywords: str) -> str:
+        """備用股票代號提取"""
         stock_mapping = {
             "台積電": "2330",
             "聯發科": "2454", 
@@ -195,6 +236,49 @@ class ContentGenerator:
     
     def _get_stock_info(self, topic_title: str, topic_keywords: str) -> str:
         """獲取股票詳細資訊"""
+        # 使用動態 API 獲取股票資訊
+        try:
+            from ..stock.company_info_service import get_company_info_service
+            import asyncio
+            
+            # 同步調用異步函數
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # 如果已經在事件循環中，使用備用方案
+                return self._get_stock_info_fallback(topic_title, topic_keywords)
+            else:
+                return loop.run_until_complete(self._get_stock_info_async(topic_title, topic_keywords))
+                
+        except Exception as e:
+            logger.warning(f"動態獲取股票資訊失敗: {e}")
+            return self._get_stock_info_fallback(topic_title, topic_keywords)
+    
+    async def _get_stock_info_async(self, topic_title: str, topic_keywords: str) -> str:
+        """異步獲取股票資訊"""
+        try:
+            from ..stock.company_info_service import get_company_info_service
+            service = get_company_info_service()
+            
+            # 從話題標題和關鍵詞中尋找股票
+            search_text = f"{topic_title} {topic_keywords}"
+            words = search_text.split()
+            
+            for word in words:
+                if len(word) >= 2:  # 只搜尋長度大於等於2的詞
+                    results = await service.search_company_by_name(word, fuzzy=True)
+                    if results:
+                        # 取第一個結果
+                        company = results[0]
+                        return f"{company.company_name}({company.stock_code}) - {company.industry}產業"
+            
+            return "無特定股票資訊"
+            
+        except Exception as e:
+            logger.warning(f"異步獲取股票資訊失敗: {e}")
+            return self._get_stock_info_fallback(topic_title, topic_keywords)
+    
+    def _get_stock_info_fallback(self, topic_title: str, topic_keywords: str) -> str:
+        """備用股票資訊獲取"""
         stock_mapping = {
             "台積電": {
                 "code": "2330",

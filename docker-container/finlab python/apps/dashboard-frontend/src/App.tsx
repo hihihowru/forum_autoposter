@@ -14,7 +14,21 @@ import InteractionAnalysis from './components/Dashboard/InteractionAnalysis';
 import KOLDetail from './components/KOL/KOLDetail';
 import PostDetail from './components/Dashboard/PostDetail';
 
+import SimpleTest from './SimpleTest';
 import { useDashboardStore } from './stores/dashboardStore';
+
+// 發文管理組件
+import PostingManagement from './components/PostingManagement/PostingManagement';
+import PostingGenerator from './components/PostingManagement/PostingGenerator/PostingGenerator';
+import PostingReview from './components/PostingManagement/PostingReview/PostingReview';
+import PostingDashboard from './components/PostingManagement/PostingDashboard';
+import AfterHoursLimitUpTest from './components/PostingManagement/AfterHoursLimitUpTest';
+import PublishSuccessPage from './components/PostingManagement/PublishSuccess/PublishSuccessPage';
+import PublishedPostsPage from './pages/PublishedPostsPage';
+
+// 系統設置和用戶管理組件
+import SettingsPage from './components/Settings/SettingsPage';
+import UserManagement from './components/UserManagement/UserManagement';
 
 // 設置 dayjs 語言
 dayjs.locale('zh-tw');
@@ -24,20 +38,30 @@ const { Content } = Layout;
 const App: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
   
-  const {
-    systemMonitoringData,
-    contentManagementData,
-    interactionAnalysisData,
-    loading,
-    errors,
-    lastUpdated,
-    refreshAllData,
-  } = useDashboardStore();
+  // 暫時註釋store調用，使用模擬數據
+  // const {
+  //   systemMonitoringData,
+  //   contentManagementData,
+  //   interactionAnalysisData,
+  //   loading,
+  //   errors,
+  //   lastUpdated,
+  //   refreshAllData,
+  // } = useDashboardStore();
+
+  // 模擬數據
+  const systemMonitoringData = null;
+  const contentManagementData = null;
+  const interactionAnalysisData = null;
+  const loading = { systemMonitoring: false, contentManagement: false, interactionAnalysis: false };
+  const errors = { systemMonitoring: null, contentManagement: null, interactionAnalysis: null };
+  const lastUpdated = { systemMonitoring: null, contentManagement: null, interactionAnalysis: null };
+  const refreshAllData = () => Promise.resolve();
 
   // 組件掛載時載入數據
-  useEffect(() => {
-    refreshAllData();
-  }, [refreshAllData]);
+  // useEffect(() => {
+  //   refreshAllData();
+  // }, [refreshAllData]);
 
   // 處理刷新
   const handleRefresh = () => {
@@ -83,17 +107,30 @@ const App: React.FC = () => {
               <Routes>
                 <Route
                   path="/"
+                  element={<SimpleTest />}
+                />
+                <Route
+                  path="/system-monitoring"
                   element={
-                    <DashboardOverview
-                      systemData={systemMonitoringData}
-                      interactionData={interactionAnalysisData}
-                      onRefresh={handleRefresh}
-                      loading={isLoading}
+                    <SystemMonitoring
+                      data={systemMonitoringData}
+                      loading={loading.systemMonitoring}
+                      error={errors.systemMonitoring}
                     />
                   }
                 />
                 <Route
-                  path="/system-monitoring"
+                  path="/system-monitoring/services"
+                  element={
+                    <SystemMonitoring
+                      data={systemMonitoringData}
+                      loading={loading.systemMonitoring}
+                      error={errors.systemMonitoring}
+                    />
+                  }
+                />
+                <Route
+                  path="/system-monitoring/tasks"
                   element={
                     <SystemMonitoring
                       data={systemMonitoringData}
@@ -113,6 +150,26 @@ const App: React.FC = () => {
                   }
                 />
                 <Route
+                  path="/content-management/kols"
+                  element={
+                    <ContentManagement
+                      data={contentManagementData}
+                      loading={loading.contentManagement}
+                      error={errors.contentManagement}
+                    />
+                  }
+                />
+                <Route
+                  path="/content-management/posts"
+                  element={
+                    <ContentManagement
+                      data={contentManagementData}
+                      loading={loading.contentManagement}
+                      error={errors.contentManagement}
+                    />
+                  }
+                />
+                <Route
                   path="/interaction-analysis"
                   element={
                     <InteractionAnalysis
@@ -123,6 +180,67 @@ const App: React.FC = () => {
                   }
                 />
                 <Route
+                  path="/interaction-analysis/1hr"
+                  element={
+                    <InteractionAnalysis
+                      data={interactionAnalysisData}
+                      loading={loading.interactionAnalysis}
+                      error={errors.interactionAnalysis}
+                    />
+                  }
+                />
+                <Route
+                  path="/interaction-analysis/1day"
+                  element={
+                    <InteractionAnalysis
+                      data={interactionAnalysisData}
+                      loading={loading.interactionAnalysis}
+                      error={errors.interactionAnalysis}
+                    />
+                  }
+                />
+                <Route
+                  path="/interaction-analysis/7days"
+                  element={
+                    <InteractionAnalysis
+                      data={interactionAnalysisData}
+                      loading={loading.interactionAnalysis}
+                      error={errors.interactionAnalysis}
+                    />
+                  }
+                />
+                
+                {/* 發文管理路由 */}
+                <Route
+                  path="/posting-management"
+                  element={<PostingManagement />}
+                />
+                <Route
+                  path="/posting-management/dashboard"
+                  element={<PostingDashboard />}
+                />
+                <Route
+                  path="/posting-management/generator"
+                  element={<PostingGenerator />}
+                />
+                <Route
+                  path="/posting-management/review"
+                  element={<PostingReview />}
+                />
+                <Route
+                  path="/posting-management/published"
+                  element={<PublishedPostsPage />}
+                />
+                <Route
+                  path="/posting-management/test-after-hours"
+                  element={<AfterHoursLimitUpTest />}
+                />
+                <Route
+                  path="/posting-management/publish-success"
+                  element={<PublishSuccessPage />}
+                />
+                
+                <Route
                   path="/content-management/kols/:memberId"
                   element={<KOLDetail />}
                 />
@@ -130,6 +248,31 @@ const App: React.FC = () => {
                   path="/content-management/posts/:postId"
                   element={<PostDetail />}
                 />
+                
+                {/* 系統設置路由 */}
+                <Route
+                  path="/settings"
+                  element={<SettingsPage />}
+                />
+                <Route
+                  path="/settings/api"
+                  element={<SettingsPage />}
+                />
+                <Route
+                  path="/settings/data"
+                  element={<SettingsPage />}
+                />
+                
+                {/* 用戶管理路由 */}
+                <Route
+                  path="/users"
+                  element={<UserManagement />}
+                />
+                <Route
+                  path="/users/roles"
+                  element={<UserManagement />}
+                />
+                
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </Content>

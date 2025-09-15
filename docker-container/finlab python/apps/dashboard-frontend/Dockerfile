@@ -15,4 +15,4 @@ COPY . .
 EXPOSE 3000
 
 # 啟動開發服務器
-CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3000"]

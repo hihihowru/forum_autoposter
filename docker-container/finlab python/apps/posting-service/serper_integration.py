@@ -23,7 +23,8 @@ class SerperNewsService:
             logger.warning("SERPER_API_KEY 未設定，將使用模擬數據")
     
     def search_stock_news(self, stock_code: str, stock_name: str, limit: int = 5, 
-                          search_keywords: Optional[List[Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
+                          search_keywords: Optional[List[Dict[str, Any]]] = None,
+                          time_range: str = "d1") -> List[Dict[str, Any]]:
         """搜尋股票相關新聞"""
         try:
             if not self.api_key:
@@ -62,7 +63,8 @@ class SerperNewsService:
                 "num": limit,
                 "type": "search",
                 "gl": "tw",  # 台灣地區
-                "hl": "zh-tw"  # 繁體中文
+                "hl": "zh-tw",  # 繁體中文
+                "tbs": self._get_time_range_filter(time_range)  # 時間範圍過濾器
             }
             
             response = requests.post(self.base_url, headers=headers, json=payload, timeout=10)
@@ -90,7 +92,8 @@ class SerperNewsService:
             return self._get_mock_news(stock_code, stock_name)
     
     def analyze_limit_up_reason(self, stock_code: str, stock_name: str, 
-                               search_keywords: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+                               search_keywords: Optional[List[Dict[str, Any]]] = None,
+                               time_range: str = "d1") -> Dict[str, Any]:
         """分析漲停原因"""
         try:
             if not self.api_key:
@@ -129,7 +132,8 @@ class SerperNewsService:
                 "num": 3,
                 "type": "search",
                 "gl": "tw",
-                "hl": "zh-tw"
+                "hl": "zh-tw",
+                "tbs": self._get_time_range_filter(time_range)  # 時間範圍過濾器
             }
             
             response = requests.post(self.base_url, headers=headers, json=payload, timeout=10)
@@ -194,12 +198,13 @@ class SerperNewsService:
             return self._get_mock_limit_up_analysis(stock_code, stock_name)
     
     def get_comprehensive_stock_analysis(self, stock_code: str, stock_name: str, 
-                                        search_keywords: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+                                        search_keywords: Optional[List[Dict[str, Any]]] = None,
+                                        time_range: str = "d1") -> Dict[str, Any]:
         """獲取股票綜合分析資料"""
         try:
             # 並行獲取新聞和漲停分析
-            news_items = self.search_stock_news(stock_code, stock_name, limit=5, search_keywords=search_keywords)
-            limit_up_analysis = self.analyze_limit_up_reason(stock_code, stock_name, search_keywords=search_keywords)
+            news_items = self.search_stock_news(stock_code, stock_name, limit=5, search_keywords=search_keywords, time_range=time_range)
+            limit_up_analysis = self.analyze_limit_up_reason(stock_code, stock_name, search_keywords=search_keywords, time_range=time_range)
             
             return {
                 'stock_code': stock_code,
@@ -213,6 +218,32 @@ class SerperNewsService:
         except Exception as e:
             logger.error(f"獲取 {stock_name}({stock_code}) 綜合分析失敗: {e}")
             return self._get_mock_comprehensive_analysis(stock_code, stock_name)
+    
+    def _get_time_range_filter(self, time_range: str) -> str:
+        """獲取時間範圍過濾器
+        
+        Args:
+            time_range: 時間範圍選項
+                - "h1": 過去1小時
+                - "d1": 過去1天 (預設)
+                - "d2": 過去2天
+                - "w1": 過去1週
+                - "m1": 過去1個月
+                - "y1": 過去1年
+        
+        Returns:
+            Google 搜尋時間過濾器字串
+        """
+        time_filters = {
+            "h1": "qdr:h",      # 過去1小時
+            "d1": "qdr:d",      # 過去1天
+            "d2": "qdr:d2",     # 過去2天
+            "w1": "qdr:w",      # 過去1週
+            "m1": "qdr:m",      # 過去1個月
+            "y1": "qdr:y"       # 過去1年
+        }
+        
+        return time_filters.get(time_range, "qdr:d")  # 預設為過去1天
     
     def _extract_source(self, url: str) -> str:
         """從URL提取新聞來源"""

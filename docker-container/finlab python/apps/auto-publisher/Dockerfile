@@ -13,8 +13,8 @@ COPY requirements.txt .
 # 安裝 Python 依賴
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 複製應用程式碼
-COPY . .
+# 複製整個專案（包含src目錄）
+COPY ../../../.. /app
 
 # 設置環境變數
 ENV PYTHONPATH=/app:/app/src

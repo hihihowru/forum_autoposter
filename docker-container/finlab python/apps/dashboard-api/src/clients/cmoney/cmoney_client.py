@@ -45,7 +45,7 @@ class ArticleData:
     """文章數據結構"""
     title: str
     text: str
-    community_topic: Optional[Dict[str, str]] = None  # {"id": "topic_id"}
+    communityTopic: Optional[Dict[str, str]] = None  # {"id": "topic_id"}
     commodity_tags: Optional[List[Dict[str, Any]]] = None  # [{"type": "Stock", "key": "2330", "bullOrBear": 0}]
 
 
@@ -312,8 +312,8 @@ class CMoneyClient:
                 "text": article.text
             }
             
-            if article.community_topic:
-                payload["communityTopic"] = article.community_topic
+            if article.communityTopic:
+                payload["communityTopic"] = article.communityTopic
             
             if article.commodity_tags:
                 payload["commodityTags"] = article.commodity_tags

@@ -40,38 +40,8 @@ class TagEnhancer:
         self.stock_pattern = re.compile(r'(\d{4,5})|([A-Z]{2,4})')
         
         # 常見股票名稱映射
-        self.stock_name_mapping = {
-            '台積電': '2330',
-            '鴻海': '2317',
-            '聯發科': '2454',
-            '台達電': '2308',
-            '聯電': '2303',
-            '中華電': '2412',
-            '南亞': '1303',
-            '台塑': '1301',
-            '國泰金': '2882',
-            '富邦金': '2881',
-            '中信金': '2891',
-            '元大金': '2885',
-            '兆豐金': '2886',
-            '玉山金': '2884',
-            '第一金': '2892',
-            '華南金': '2880',
-            '開發金': '2883',
-            '永豐金': '2890',
-            '新光金': '2888',
-            '台新金': '2887',
-            '長榮': '2603',
-            '陽明': '2609',
-            '萬海': '2615',
-            '中鋼': '2002',
-            '台泥': '1101',
-            '亞泥': '1102',
-            '統一': '1216',
-            '康師傅': '910322',
-            '味全': '1201',
-            '黑松': '1234'
-        }
+        from ...utils.stock_mapping import STOCK_NAME_TO_CODE
+        self.stock_name_mapping = STOCK_NAME_TO_CODE
         
         logger.info("標籤增強器初始化完成")
     
@@ -102,7 +72,7 @@ class TagEnhancer:
             enhanced_article = ArticleData(
                 title=article.title,
                 text=article.text,
-                community_topic=community_topic,
+                communityTopic=community_topic,
                 commodity_tags=commodity_tags
             )
             

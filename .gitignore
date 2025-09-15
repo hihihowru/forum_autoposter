@@ -178,3 +178,7 @@ test_*.py
 # Generated files
 generated_*.json
 generated_*.py
+
+# Environment backup files
+.env.backup*
+.env.broken

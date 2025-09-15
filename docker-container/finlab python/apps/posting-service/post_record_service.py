@@ -5,6 +5,9 @@ from typing import List, Optional, Dict
 from datetime import datetime
 import uuid
 import logging
+import json
+import os
+import psycopg2
 
 # 配置日誌
 logger = logging.getLogger(__name__)
@@ -146,7 +149,101 @@ class PostRecordService:
     貼文記錄服務，負責與數據庫（目前為內存模擬）交互
     """
     def __init__(self):
-        self.db: Dict[str, PostRecordInDB] = {} # 模擬數據庫
+        self.db_file = "/app/post_records/post_records.json"
+        self.db: Dict[str, PostRecordInDB] = self.load_from_file()
+    
+    def load_from_file(self) -> Dict[str, PostRecordInDB]:
+        """從文件載入數據"""
+        try:
+            if os.path.exists(self.db_file):
+                with open(self.db_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    # 轉換回 PostRecordInDB 對象
+                    result = {}
+                    for post_id, post_data in data.items():
+                        # 重建對象
+                        post_record = PostRecordInDB(
+                            post_id=post_id,
+                            created_at=datetime.fromisoformat(post_data['created_at']),
+                            updated_at=datetime.fromisoformat(post_data['updated_at']),
+                            session_id=post_data.get('session_id'),
+                            kol_serial=post_data.get('kol_serial'),
+                            kol_nickname=post_data.get('kol_nickname'),
+                            kol_persona=post_data.get('kol_persona'),
+                            stock_code=post_data.get('stock_code'),
+                            stock_name=post_data.get('stock_name'),
+                            title=post_data.get('title'),
+                            content=post_data.get('content'),
+                            content_md=post_data.get('content_md'),
+                            status=post_data.get('status', 'pending_review'),
+                            reviewer_notes=post_data.get('reviewer_notes'),
+                            approved_by=post_data.get('approved_by'),
+                            approved_at=datetime.fromisoformat(post_data['approved_at']) if post_data.get('approved_at') else None,
+                            published_at=datetime.fromisoformat(post_data['published_at']) if post_data.get('published_at') else None,
+                            cmoney_post_id=post_data.get('cmoney_post_id'),
+                            cmoney_post_url=post_data.get('cmoney_post_url'),
+                            views=post_data.get('views', 0),
+                            likes=post_data.get('likes', 0),
+                            comments=post_data.get('comments', 0),
+                            shares=post_data.get('shares', 0),
+                            topic_id=post_data.get('topic_id'),
+                            topic_title=post_data.get('topic_title'),
+                            technical_analysis=post_data.get('technical_analysis'),
+                            serper_data=post_data.get('serper_data'),
+                            quality_score=post_data.get('quality_score'),
+                            ai_detection_score=post_data.get('ai_detection_score'),
+                            risk_level=post_data.get('risk_level')
+                        )
+                        result[post_id] = post_record
+                    logger.info(f"📁 從文件載入 {len(result)} 筆貼文記錄")
+                    return result
+        except Exception as e:
+            logger.error(f"❌ 載入文件失敗: {e}")
+        return {}
+    
+    def save_to_file(self):
+        """保存數據到文件"""
+        try:
+            data = {}
+            for post_id, post_record in self.db.items():
+                data[post_id] = {
+                    'post_id': post_record.post_id,
+                    'created_at': post_record.created_at.isoformat(),
+                    'updated_at': post_record.updated_at.isoformat(),
+                    'session_id': post_record.session_id,
+                    'kol_serial': post_record.kol_serial,
+                    'kol_nickname': post_record.kol_nickname,
+                    'kol_persona': post_record.kol_persona,
+                    'stock_code': post_record.stock_code,
+                    'stock_name': post_record.stock_name,
+                    'title': post_record.title,
+                    'content': post_record.content,
+                    'content_md': post_record.content_md,
+                    'status': post_record.status,
+                    'reviewer_notes': post_record.reviewer_notes,
+                    'approved_by': post_record.approved_by,
+                    'approved_at': post_record.approved_at.isoformat() if post_record.approved_at else None,
+                    'published_at': post_record.published_at.isoformat() if post_record.published_at else None,
+                    'cmoney_post_id': post_record.cmoney_post_id,
+                    'cmoney_post_url': post_record.cmoney_post_url,
+                    'views': post_record.views,
+                    'likes': post_record.likes,
+                    'comments': post_record.comments,
+                    'shares': post_record.shares,
+                    'topic_id': post_record.topic_id,
+                    'topic_title': post_record.topic_title,
+                    'technical_analysis': post_record.technical_analysis,
+                    'serper_data': post_record.serper_data,
+                    'quality_score': post_record.quality_score,
+                    'ai_detection_score': post_record.ai_detection_score,
+                    'risk_level': post_record.risk_level
+                }
+            
+            with open(self.db_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            logger.info(f"💾 保存 {len(self.db)} 筆貼文記錄到文件")
+        except Exception as e:
+            logger.error(f"❌ 保存文件失敗: {e}")
 
     def create_post_record(self, post_data: PostRecordCreate) -> PostRecordInDB:
         post_id = str(uuid.uuid4())
@@ -166,7 +263,19 @@ class PostRecordService:
         # 調試：檢查創建後的記錄
         print(f"🔍 PostRecordInDB status: {getattr(post_record, 'status', 'NOT_FOUND')}")
         
+        # 1. 保存到內存
         self.db[post_id] = post_record
+        
+        # 2. 立即保存到 PostgreSQL 數據庫
+        try:
+            self.save_to_postgresql(post_record)
+            logger.info(f"✅ 貼文記錄已保存到 PostgreSQL 數據庫 - Post ID: {post_id}")
+        except Exception as e:
+            logger.error(f"❌ 保存到 PostgreSQL 失敗: {e}")
+            # 即使 PostgreSQL 失敗，也要保存到文件作為備份
+            self.save_to_file()
+        
+        logger.info(f"✅ 貼文記錄創建並保存成功 - Post ID: {post_id}")
         return post_record
 
     def get_post_record(self, post_id: str) -> Optional[PostRecordInDB]:
@@ -216,7 +325,9 @@ class PostRecordService:
             
             post_record.updated_at = datetime.now()
             self.db[post_id] = post_record
-            logger.info(f"✅ 貼文記錄更新成功 - Post ID: {post_id}, 新狀態: {post_record.status}")
+            # 保存到文件
+            self.save_to_file()
+            logger.info(f"✅ 貼文記錄更新並保存成功 - Post ID: {post_id}, 新狀態: {post_record.status}")
             return post_record
         else:
             logger.error(f"❌ 找不到要更新的貼文記錄 - Post ID: {post_id}")
@@ -235,6 +346,75 @@ class PostRecordService:
     def get_all_posts(self) -> List[PostRecordInDB]:
         """獲取所有貼文"""
         return list(self.db.values())
+
+    def save_to_postgresql(self, post_record: PostRecordInDB):
+        """保存貼文記錄到 PostgreSQL 數據庫"""
+        try:
+            conn = psycopg2.connect(
+                host='postgres-db',
+                port=5432,
+                database='posting_management',
+                user='postgres',
+                password='password'
+            )
+            cursor = conn.cursor()
+            
+            # 插入數據到 PostgreSQL (使用正確的表名 post_records)
+            cursor.execute('''
+                INSERT INTO post_records (
+                    session_id, title, content, status, kol_serial, kol_nickname, kol_persona,
+                    stock_codes, stock_names, topic_id, topic_title, cmoney_post_id, cmoney_url,
+                    views, likes, comments, shares, reviewer_notes, approved_by, quality_score,
+                    ai_detection_score, risk_level, publish_error, technical_analysis, serper_data,
+                    generation_params, commodity_tags, created_at, updated_at, approved_at,
+                    scheduled_at, published_at
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                )
+            ''', (
+                post_record.session_id,
+                post_record.title,
+                post_record.content,
+                post_record.status,
+                post_record.kol_serial,
+                post_record.kol_nickname,
+                post_record.kol_persona,
+                json.dumps([post_record.stock_code]) if post_record.stock_code else None,
+                json.dumps([post_record.stock_name]) if post_record.stock_name else None,
+                post_record.topic_id,
+                post_record.topic_title,
+                post_record.cmoney_post_id,
+                post_record.cmoney_post_url,
+                post_record.views,
+                post_record.likes,
+                post_record.comments,
+                post_record.shares,
+                post_record.reviewer_notes,
+                post_record.approved_by,
+                post_record.quality_score,
+                post_record.ai_detection_score,
+                post_record.risk_level,
+                post_record.publish_error,
+                json.dumps(post_record.technical_analysis) if post_record.technical_analysis else None,
+                json.dumps(post_record.serper_data) if post_record.serper_data else None,
+                post_record.generation_params if isinstance(post_record.generation_params, str) else json.dumps(post_record.generation_params),
+                json.dumps(post_record.commodity_tags) if post_record.commodity_tags else None,
+                post_record.created_at,
+                post_record.updated_at,
+                post_record.approved_at,
+                post_record.scheduled_at,
+                post_record.published_at
+            ))
+            
+            conn.commit()
+            cursor.close()
+            conn.close()
+            
+            logger.info(f"✅ 貼文記錄已保存到 PostgreSQL - Post ID: {post_record.post_id}")
+            
+        except Exception as e:
+            logger.error(f"❌ 保存到 PostgreSQL 失敗: {e}")
+            raise e
 
     def delete_post_record(self, post_id: str) -> bool:
         if post_id in self.db:

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Row, Col, Table, Tag, Statistic, Space, Button, Typography, Descriptions, Divider, Alert } from 'antd';
+import { Card, Row, Col, Table, Tag, Statistic, Space, Button, Typography, Descriptions, Divider, Alert, Modal, message } from 'antd';
 import { 
   ArrowLeftOutlined,
   LikeOutlined, 
@@ -8,7 +8,10 @@ import {
   EyeOutlined,
   LinkOutlined,
   CalendarOutlined,
-  UserOutlined
+  UserOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  ReloadOutlined
 } from '@ant-design/icons';
 import { Column } from '@ant-design/charts';
 
@@ -57,6 +60,8 @@ const PostDetail: React.FC = () => {
   const [postData, setPostData] = useState<PostDetailData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     const fetchPostDetail = async () => {
@@ -104,6 +109,43 @@ const PostDetail: React.FC = () => {
       fetchPostDetail();
     }
   }, [postId]);
+
+  // 刪除貼文函數
+  const handleDeletePost = async () => {
+    if (!postData) return;
+    
+    try {
+      setDeleting(true);
+      
+      // 調用刪除API
+      const response = await fetch(`/api/dashboard/posts/${postData.post_id}/delete`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (response.ok) {
+        message.success('貼文已成功刪除');
+        setDeleteModalVisible(false);
+        // 返回貼文管理頁面
+        navigate('/content-management');
+      } else {
+        const errorData = await response.json();
+        message.error(errorData.message || '刪除貼文失敗');
+      }
+    } catch (error) {
+      console.error('刪除貼文錯誤:', error);
+      message.error('刪除貼文時發生錯誤');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  // 顯示刪除確認對話框
+  const showDeleteModal = () => {
+    setDeleteModalVisible(true);
+  };
 
   if (loading) {
     return (
@@ -162,15 +204,40 @@ const PostDetail: React.FC = () => {
 
   return (
     <div style={{ padding: '24px' }}>
-      {/* 返回按鈕 */}
+      {/* 返回按鈕和操作按鈕 */}
       <Row style={{ marginBottom: '16px' }}>
-        <Col span={24}>
+        <Col span={12}>
           <Button 
             icon={<ArrowLeftOutlined />} 
             onClick={() => navigate('/content-management')}
           >
             返回貼文管理
           </Button>
+        </Col>
+        <Col span={12} style={{ textAlign: 'right' }}>
+          <Space>
+            <Button 
+              icon={<EditOutlined />}
+              onClick={() => message.info('編輯功能開發中')}
+            >
+              編輯
+            </Button>
+            <Button 
+              icon={<ReloadOutlined />}
+              onClick={() => message.info('重新生成功能開發中')}
+            >
+              重新生成
+            </Button>
+            <Button 
+              type="primary"
+              danger
+              icon={<DeleteOutlined />}
+              onClick={showDeleteModal}
+              disabled={postData?.status === '已刪除' || postData?.status !== '已發布' || !postData?.platform_post_id}
+            >
+              刪除貼文
+            </Button>
+          </Space>
         </Col>
       </Row>
 
@@ -192,24 +259,65 @@ const PostDetail: React.FC = () => {
               <Descriptions.Item label="發文時間">
                 {postData.post_time ? new Date(postData.post_time).toLocaleString('zh-TW') : '-'}
               </Descriptions.Item>
-              <Descriptions.Item label="平台貼文 ID">
-                <Space>
-                  <span>{postData.platform_post_id}</span>
-                  {postData.platform_post_url && (
-                    <Button
-                      type="link"
-                      size="small"
-                      icon={<LinkOutlined />}
-                      onClick={() => window.open(postData.platform_post_url, '_blank')}
-                    >
-                      查看原文
-                    </Button>
-                  )}
-                </Space>
+              <Descriptions.Item label="平台狀態">
+                {postData.platform_post_id ? (
+                  <Tag color="green" icon={<LinkOutlined />}>
+                    已發布到CMoney
+                  </Tag>
+                ) : (
+                  <Tag color="orange">未發布</Tag>
+                )}
               </Descriptions.Item>
             </Descriptions>
           </Card>
         </Col>
+
+        {/* CMoney平台資訊 */}
+        {postData.platform_post_id && (
+          <Col span={24}>
+            <Card title="CMoney平台資訊" size="small">
+              <Row gutter={[16, 16]}>
+                <Col span={12}>
+                  <div style={{ marginBottom: '12px' }}>
+                    <Text strong>文章 ID:</Text>
+                    <div style={{ marginTop: '4px' }}>
+                      <Text code style={{ fontSize: '16px', backgroundColor: '#f5f5f5', padding: '4px 8px', borderRadius: '4px' }}>
+                        {postData.platform_post_id}
+                      </Text>
+                    </div>
+                  </div>
+                </Col>
+                <Col span={12}>
+                  <div style={{ marginBottom: '12px' }}>
+                    <Text strong>文章連結:</Text>
+                    <div style={{ marginTop: '4px' }}>
+                      {postData.platform_post_url ? (
+                        <Button
+                          type="primary"
+                          icon={<LinkOutlined />}
+                          onClick={() => window.open(postData.platform_post_url, '_blank')}
+                          style={{ width: '100%' }}
+                        >
+                          查看CMoney文章
+                        </Button>
+                      ) : (
+                        <Text type="secondary">無連結</Text>
+                      )}
+                    </div>
+                  </div>
+                </Col>
+              </Row>
+              {postData.platform_post_url && (
+                <div style={{ marginTop: '12px', padding: '8px', backgroundColor: '#f9f9f9', borderRadius: '4px' }}>
+                  <Text type="secondary" style={{ fontSize: '12px' }}>
+                    <LinkOutlined style={{ marginRight: '4px' }} />
+                    {postData.platform_post_url}
+                  </Text>
+                </div>
+              )}
+            </Card>
+          </Col>
+        )}
 
         {/* 話題資訊 */}
         <Col span={24}>
@@ -338,6 +446,30 @@ const PostDetail: React.FC = () => {
           </Card>
         </Col>
       </Row>
+
+      {/* 刪除確認對話框 */}
+      <Modal
+        title="確認刪除貼文"
+        open={deleteModalVisible}
+        onOk={handleDeletePost}
+        onCancel={() => setDeleteModalVisible(false)}
+        confirmLoading={deleting}
+        okText="確認刪除"
+        cancelText="取消"
+        okButtonProps={{ danger: true }}
+      >
+        <p>您確定要刪除這篇貼文嗎？</p>
+        <p><strong>貼文 ID:</strong> {postData?.post_id}</p>
+        <p><strong>KOL:</strong> {postData?.kol_nickname}</p>
+        <p><strong>話題標題:</strong> {postData?.topic_title}</p>
+        <Alert
+          message="警告"
+          description="此操作將從CMoney平台實際刪除貼文，並在我們的系統中標記為已刪除。此操作不可逆轉！"
+          type="warning"
+          showIcon
+          style={{ marginTop: '16px' }}
+        />
+      </Modal>
     </div>
   );
 };

@@ -10,15 +10,18 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0"
   },
   "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "antd": "^5.12.8",
     "@ant-design/charts": "^2.0.1",
-    "zustand": "^4.4.7",
+    "@ant-design/icons": "^5.2.6",
+    "@types/react-dnd": "^2.0.36",
+    "antd": "^5.12.8",
     "axios": "^1.6.2",
     "dayjs": "^1.11.10",
+    "react": "^18.2.0",
+    "react-dnd": "^16.0.1",
+    "react-dnd-html5-backend": "^16.0.1",
+    "react-dom": "^18.2.0",
     "react-router-dom": "^6.20.1",
-    "@ant-design/icons": "^5.2.6"
+    "zustand": "^4.4.7"
   },
   "devDependencies": {
     "@types/react": "^18.2.43",

@@ -5,8 +5,9 @@
 
 import os
 import openai
-from typing import Dict, List, Any, Optional
+import requests
 import json
+from typing import Dict, List, Any, Optional
 import logging
 from datetime import datetime
 from dotenv import load_dotenv
@@ -28,6 +29,11 @@ class NewsAnalysisAgent:
         print(f"🔑 新聞分析Agent初始化: API Key={'有' if self.api_key else '無'}, 模型={self.model}")
         
         if self.api_key:
+            # 清除可能的代理設置
+            for key in list(os.environ.keys()):
+                if 'proxy' in key.lower():
+                    del os.environ[key]
+            
             openai.api_key = self.api_key
             logger.info(f"新聞分析Agent初始化完成，使用模型: {self.model}")
         else:
@@ -54,31 +60,63 @@ class NewsAnalysisAgent:
                 stock_code, stock_name, news_items, kol_persona, content_length, max_words
             )
             
+            # 清除可能的代理設置
+            import os
+            for key in list(os.environ.keys()):
+                if 'proxy' in key.lower():
+                    del os.environ[key]
+            
+            print(f"🔍 準備調用GPT API，API Key: {'有' if self.api_key else '無'}")
+            print(f"🔍 環境變量檢查: {[k for k in os.environ.keys() if 'proxy' in k.lower()]}")
+            
             # 調用GPT API進行深度分析
-            response = openai.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": """你是一位專業的股票分析師，擅長從多個角度分析新聞事件對股票的影響。
-                        
+            try:
+                # 使用 requests 直接調用 OpenAI API
+                headers = {
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json"
+                }
+                
+                data = {
+                    "model": self.model,
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": """你是一位專業的股票分析師，擅長從多個角度分析新聞事件對股票的影響。
+                            
 你的分析特點：
 1. 多維度分析：從題材面、基本面、技術面、籌碼面等角度分析
 2. 新聞整合：將多個新聞來源的資訊整合成有條理的見解
 3. 建設性觀點：提供具體的投資建議和風險提醒
 4. 平衡觀點：既分析利多也指出風險
 5. 數據支撐：基於具體的新聞內容給出分析"""
-                    },
-                    {
-                        "role": "user", 
-                        "content": prompt
-                    }
-                ],
-                max_tokens=2000,
-                temperature=0.7
-            )
+                        },
+                        {
+                            "role": "user", 
+                            "content": prompt
+                        }
+                    ],
+                    "max_tokens": 2000,
+                    "temperature": 0.7
+                }
+                
+                response = requests.post(
+                    "https://api.openai.com/v1/chat/completions",
+                    headers=headers,
+                    json=data,
+                    timeout=30
+                )
+                
+                if response.status_code != 200:
+                    raise Exception(f"OpenAI API 錯誤: {response.status_code} - {response.text}")
+                
+                response_data = response.json()
+                analysis_content = response_data["choices"][0]["message"]["content"]
+                
+            except Exception as e:
+                print(f"🔍 GPT API 調用詳細錯誤: {type(e).__name__}: {str(e)}")
+                raise e
             
-            analysis_content = response.choices[0].message.content
             print(f"✅ GPT分析完成，內容長度: {len(analysis_content)} 字")
             
             # 解析分析結果
@@ -121,9 +159,7 @@ class NewsAnalysisAgent:
 
 {analysis_focus}
 
-請按照以下結構提供精華分析：
-
-漲停原因分析
+請按照以下結構提供精華分析（不要包含標題，直接開始分析內容）：
 
 題材面
 - 簡要分析主要題材和影響
@@ -141,9 +177,6 @@ class NewsAnalysisAgent:
 - 進場點位和停損停利
 - 風險提醒
 
-新聞來源
-- 列出相關新聞來源連結
-
 要求：
 1. 基於實際新聞內容，簡潔有力
 2. 提供具體數據支撐
@@ -153,6 +186,7 @@ class NewsAnalysisAgent:
 6. 不要使用Markdown格式（##、**等）
 7. 不要使用emoji表情符號
 8. 必須達到最低{max_words}字要求，內容要詳細完整
+9. 不要生成任何標題，直接開始分析內容
 
 請直接輸出分析內容，不要包含額外的說明文字。
 """
@@ -202,16 +236,8 @@ class NewsAnalysisAgent:
                             news_items: List[Dict[str, Any]]) -> Dict[str, Any]:
         """解析新聞分析結果"""
         
-        # 提取標題
-        lines = analysis_content.split('\n')
-        title = ""
-        for line in lines:
-            if line.strip() and not line.startswith(' '):
-                title = line.strip()
-                break
-        
-        if not title:
-            title = f"{stock_name}({stock_code}) 深度新聞分析"
+        # 生成精簡標題
+        title = f"{stock_name} 分析"
         
         return {
             "title": title,

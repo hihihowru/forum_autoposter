@@ -188,3 +188,11 @@ class PersonalizedTitleGenerator:
 personalized_title_generator = PersonalizedTitleGenerator()
 
 
+
+
+
+
+
+
+
+

@@ -35,3 +35,11 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 
 # 默認命令
 CMD ["python", "batch_post_publisher.py"]
+
+
+
+
+
+
+
+
