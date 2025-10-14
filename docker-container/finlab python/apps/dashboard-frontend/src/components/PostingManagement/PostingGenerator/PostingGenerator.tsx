@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, Row, Col, Steps, Button, Space, message, Spin } from 'antd';
 import { 
   ArrowLeftOutlined, 
@@ -24,6 +24,7 @@ import BatchModeSettings from './BatchModeSettings';
 import AfterHoursLimitUpDisplay from './AfterHoursLimitUpDisplay';
 import TrendingTopicsDisplay from './TrendingTopicsDisplay';
 import KOLPromptTuner from './KOLPromptTuner';
+import StockFilterDisplay from './StockFilterDisplay';
 
 interface GenerationConfig {
   triggers: any;
@@ -95,16 +96,18 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
         },
         {
           id: '2',
-          keyword: '漲停',
+          keyword: '股價變化',
           type: 'trigger_keyword',
-          description: '觸發關鍵字'
+          description: '觸發關鍵字 (股價變化)'
         }
       ],
       use_realtime_news_api: true,
-      search_templates: []
+      search_templates: [],
+      time_range: 'd2',  // 預設過去2天
+      enable_news_links: true  // 預設啟用新聞連結
     },
     kol: {
-      assignment_mode: 'fixed',
+      assignment_mode: 'random',
       selected_kols: [],
       dynamic_criteria: {
         style_preference: 'balanced',
@@ -119,10 +122,15 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
       content_length: 'medium',
       max_stocks_per_post: 1,
       content_style: 'professional',
-      include_analysis_depth: true,
-      max_words: 1000,
+      include_analysis_depth: 'detailed',
+      max_words: 200,
       include_charts: false,
-      include_risk_warning: true
+      include_risk_warning: true,
+      // 新增：發文類型設定
+      posting_type: 'analysis',
+      include_questions: false,
+      include_emoji: false,
+      include_hashtag: true
     },
     tags: {
       tag_mode: 'stock_tags',
@@ -149,7 +157,9 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
       publish_delay_minutes: 5,
       quality_check_enabled: true,
       ai_detection_enabled: true,
-      shared_commodity_tags: true  // 啟用同 batch 共享股票標籤
+      shared_commodity_tags: true,  // 啟用同 batch 共享股票標籤
+      generation_mode: 'high_quality',
+      posting_type: 'analysis'  // 新增：發文類型
     }
   });
 
@@ -189,6 +199,71 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
       message.error(`配置更新失敗: ${stepKey}`);
     }
   };
+
+  // 監聽觸發器變化，自動更新新聞搜尋關鍵字
+  useEffect(() => {
+    const triggerConfig = generationConfig.triggers?.triggerConfig;
+    if (triggerConfig?.triggerKey) {
+      let triggerKeyword = '';
+      
+      // 根據觸發器類型決定多個關鍵字
+      let triggerKeywords: string[] = [];
+      switch (triggerConfig.triggerKey) {
+        case 'limit_up_after_hours':
+        case 'limit_up_after_hours_high_volume':
+        case 'limit_up_after_hours_low_volume':
+        case 'intraday_limit_up':
+        case 'intraday_limit_up_by_amount':
+        case 'intraday_limit_up_by_volume':
+          triggerKeywords = ['漲停', '上漲', '突破', '強勢', '利多'];
+          break;
+        case 'limit_down_after_hours':
+        case 'intraday_limit_down':
+        case 'intraday_limit_down_by_amount':
+        case 'intraday_limit_down_by_volume':
+          triggerKeywords = ['跌停', '下跌', '重挫', '弱勢', '利空'];
+          break;
+        case 'intraday_volume_leaders':
+        case 'intraday_volume_surge':
+          triggerKeywords = ['爆量', '成交量', '量價', '異常量', '大量'];
+          break;
+        case 'intraday_price_breakthrough':
+          triggerKeywords = ['突破', '創高', '新高', '技術突破', '價位突破'];
+          break;
+        default:
+          triggerKeywords = ['股價變化', '表現', '走勢', '分析', '消息']; // 中性關鍵字
+          break;
+      }
+      
+      // 更新新聞搜尋關鍵字，添加多個觸發關鍵字
+      setGenerationConfig(prev => {
+        const currentKeywords = prev.news.search_keywords || [];
+        
+        // 移除舊的觸發關鍵字
+        const filteredKeywords = currentKeywords.filter(keyword => keyword.type !== 'trigger_keyword');
+        
+        // 添加新的多個觸發關鍵字
+        const newTriggerKeywords = triggerKeywords.map((keyword, index) => ({
+          id: `trigger_${index + 1}`,
+          keyword: keyword,
+          type: 'trigger_keyword' as const,
+          description: `觸發關鍵字 (${keyword})`
+        }));
+        
+        const updatedKeywords = [...filteredKeywords, ...newTriggerKeywords];
+        
+        return {
+          ...prev,
+          news: {
+            ...prev.news,
+            search_keywords: updatedKeywords
+          }
+        };
+      });
+      
+      console.log(`觸發器變化: ${triggerConfig.triggerKey} -> 關鍵字: [${triggerKeywords.join(', ')}]`);
+    }
+  }, [generationConfig.triggers?.triggerConfig?.triggerKey]);
 
   const handleGenerate = async () => {
     try {
@@ -233,9 +308,17 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
         });
       }
       
-      if (!generationConfig.kol?.selected_kols || generationConfig.kol.selected_kols.length === 0) {
+      // 檢查 KOL 配置
+      const isRandomMode = generationConfig.kol?.assignment_mode === 'random';
+      const hasSelectedKOLs = generationConfig.kol?.selected_kols && generationConfig.kol.selected_kols.length > 0;
+      
+      if (!hasSelectedKOLs) {
         message.destroy();
-        message.error('請先選擇 KOL');
+        if (isRandomMode) {
+          message.error('請先點擊「生成隨機 KOL」按鈕來分配 KOL');
+        } else {
+          message.error('請先選擇 KOL');
+        }
         console.error('KOL驗證失敗:', generationConfig.kol);
         return;
       }
@@ -278,6 +361,10 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
         typeof kol === 'object' ? kol.serial || kol.kol_serial : kol
       ).filter(serial => serial != null);
       
+      // 檢查是否為隨機派發模式
+      const isRandomAssignment = generationConfig.kol?.assignment_mode === 'random' && 
+                                 generationConfig.kol?.random_assignment?.enabled;
+      
       console.log('處理後的KOL序號:', kolSerials);
       
       if (isTrendingTopicTrigger) {
@@ -299,10 +386,15 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
             // 有股票的話題：為每個股票生成一篇貼文
             for (const stockId of topic.stock_ids) {
               const stockName = stockId === 'TWA00' ? '台指期' : `股票${stockId}`;
+              // 隨機派發模式：為每個貼文隨機分配 KOL
+              const randomKolSerial = isRandomAssignment && kolSerials.length > 0 
+                ? kolSerials[Math.floor(Math.random() * kolSerials.length)]
+                : kolSerials[0] || '201';
+              
               const postData = {
                 stock_code: stockId,
                 stock_name: stockName,
-                kol_serial: kolSerials[0] || '201', // 使用第一個KOL或默認KOL
+                kol_serial: randomKolSerial,
                 session_id: session.id,
                 topic_id: topic.id,
                 topic_title: topic.title
@@ -312,10 +404,15 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
             }
           } else {
             // 純話題：生成一篇貼文
+            // 隨機派發模式：為每個貼文隨機分配 KOL
+            const randomKolSerial = isRandomAssignment && kolSerials.length > 0 
+              ? kolSerials[Math.floor(Math.random() * kolSerials.length)]
+              : kolSerials[0] || '201';
+            
             const postData = {
               stock_code: `TOPIC_${topic.id}`,
               stock_name: topic.title,
-              kol_serial: kolSerials[0] || '201',
+              kol_serial: randomKolSerial,
               session_id: session.id,
               topic_id: topic.id,
               topic_title: topic.title
@@ -332,13 +429,27 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
           stockNames
         });
         
-        // 如果只有一個KOL，為每個股票生成一篇貼文，都使用同一個KOL
-        if (kolSerials.length === 1) {
+        // 隨機派發模式：為每個貼文隨機分配 KOL
+        if (isRandomAssignment) {
+          console.log('🎲 隨機派發模式：為每個貼文隨機分配 KOL');
+          for (const stockCode of stockCodes) {
+            const randomKolSerial = kolSerials[Math.floor(Math.random() * kolSerials.length)];
+            const postData = {
+              stock_code: stockCode,
+              stock_name: stockNames[stockCodes.indexOf(stockCode)] || await PostingManagementAPI.getStockName(stockCode),
+              kol_serial: randomKolSerial,
+              session_id: session.id
+            };
+            console.log('➕ 添加隨機派發貼文:', postData);
+            postsToGenerate.push(postData);
+          }
+        } else if (kolSerials.length === 1) {
+          // 如果只有一個KOL，為每個股票生成一篇貼文，都使用同一個KOL
           console.log('📝 單KOL多股票模式');
           for (const stockCode of stockCodes) {
             const postData = {
               stock_code: stockCode,
-              stock_name: stockNames[stockCodes.indexOf(stockCode)] || `股票${stockCode}`,
+              stock_name: stockNames[stockCodes.indexOf(stockCode)] || await PostingManagementAPI.getStockName(stockCode),
               kol_serial: kolSerials[0], // 使用唯一的KOL
               session_id: session.id
             };
@@ -352,7 +463,7 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
           for (let i = 0; i < minLength; i++) {
             const postData = {
               stock_code: stockCodes[i],
-              stock_name: stockNames[i] || `股票${stockCodes[i]}`,
+              stock_name: stockNames[i] || await PostingManagementAPI.getStockName(stockCodes[i]),
               kol_serial: kolSerials[i],
               session_id: session.id
             };
@@ -374,7 +485,7 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
           for (const kolSerial of kolSerials) {
             postsToGenerate.push({
               stock_code: stockCodes[0],
-              stock_name: stockNames[0] || `股票${stockCodes[0]}`,
+              stock_name: stockNames[0] || await PostingManagementAPI.getStockName(stockCodes[0]),
               kol_serial: kolSerial,
               session_id: session.id
             });
@@ -385,7 +496,7 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
           for (const stockCode of stockCodes) {
             const postData = {
               stock_code: stockCode,
-              stock_name: stockNames[stockCodes.indexOf(stockCode)] || `股票${stockCode}`,
+              stock_name: stockNames[stockCodes.indexOf(stockCode)] || await PostingManagementAPI.getStockName(stockCode),
               kol_serial: kolSerials[0], // 使用第一個KOL
               session_id: session.id
             };
@@ -400,7 +511,7 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
           for (const kolSerial of kolSerials) {
             postsToGenerate.push({
               stock_code: stockCodes[0],
-              stock_name: stockNames[0] || `股票${stockCodes[0]}`,
+              stock_name: stockNames[0] || await PostingManagementAPI.getStockName(stockCodes[0]),
               kol_serial: kolSerial,
               session_id: session.id
             });
@@ -411,7 +522,7 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
             const kolIndex = i % kolSerials.length;
             postsToGenerate.push({
               stock_code: stockCodes[i],
-              stock_name: stockNames[i] || `股票${stockCodes[i]}`,
+              stock_name: stockNames[i] || await PostingManagementAPI.getStockName(stockCodes[i]),
               kol_serial: kolSerials[kolIndex],
               session_id: session.id
             });
@@ -442,9 +553,10 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
       console.log('  - trigger_key:', generationConfig.triggers?.triggerConfig?.triggerKey);
       console.log('  - full_triggers_config:', generationConfig.triggers);
       
-      // 根據觸發器類型設置 topic_id
+      // 根據觸發器類型設置 topic_id 和 posting_type
       const batchConfigWithTopic = {
         ...batchMode,
+        posting_type: generationConfig.settings.posting_type || 'analysis', // 🔥 新增：確保 posting_type 正確傳遞
         topic_id: generationConfig.triggers?.triggerConfig?.triggerKey === 'trending_topics' ? 'auto_fetch' : null,
         topic_title: generationConfig.triggers?.triggerConfig?.triggerKey === 'trending_topics' ? '自動獲取熱門話題' : null
       };
@@ -458,7 +570,46 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
         data_sources: generationConfig.dataSources,
         explainability_config: generationConfig.explainability,
         news_config: generationConfig.news,
-        tags_config: generationConfig.tags  // 新增：傳送標籤配置
+        tags_config: generationConfig.tags,  // 新增：傳送標籤配置
+        
+        // 新增：所有步驟的配置
+        // 步驟一：股票篩選配置
+        stock_count_limit: generationConfig.triggers?.stockCountLimit,
+        stock_filter_criteria: generationConfig.triggers?.stockFilterCriteria,
+        
+        // 步驟二：數據源配置
+        data_source_config: generationConfig.dataSources,
+        
+        // 步驟四：新聞連結配置（使用 enable_news_links 和 max_links）
+        enable_links: generationConfig.news?.enable_news_links !== false, // 使用新聞連結開關
+        link_count: generationConfig.news?.enable_news_links !== false ? (generationConfig.news?.max_links || 5) : 0, // 只有啟用時才設定數量
+        
+        // 步驟五：KOL 選擇和派發策略
+        kol_selection_method: generationConfig.kol?.assignment_mode || 'fixed',
+        kol_assignment_strategy: generationConfig.kol?.kol_assignment_strategy || 'one_to_one',
+        
+        // 步驟七：生成設定
+        post_mode: generationConfig.settings?.post_mode || 'one_to_one',  // 新增：貼文模式
+        max_stocks_per_post: generationConfig.settings?.max_stocks_per_post || 1,  // 新增：每篇貼文最大股票數
+        max_words: generationConfig.settings?.max_words || 1000,  // 新增：最大字數
+        content_length: generationConfig.settings?.content_length || 'medium',
+        custom_word_count: generationConfig.settings?.custom_word_count,
+        content_style: generationConfig.settings?.content_style || 'technical',
+        analysis_depth: generationConfig.settings?.include_analysis_depth || 'basic',
+        include_chart_description: generationConfig.settings?.include_charts || false,
+        include_risk_warning: generationConfig.settings?.include_risk_warning || true,
+        
+        // 步驟九：生成模式
+        generation_mode: generationConfig.batchMode?.generation_mode || 'simple',
+        
+        // 標籤模式
+        has_stock_tags: generationConfig.tags?.tag_mode === 'stock_tags' || generationConfig.tags?.tag_mode === 'both',
+        has_topic_tags: generationConfig.tags?.tag_mode === 'topic_tags' || generationConfig.tags?.tag_mode === 'both',
+        
+        // 觸發器相關
+        trigger_type: generationConfig.triggers?.triggerConfig?.triggerKey,
+        trigger_data: generationConfig.triggers?.triggerConfig,
+        generation_config: generationConfig.settings
       }).then(result => {
         message.destroy();
         
@@ -637,6 +788,32 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
                         console.error('話題貼文生成失敗:', error);
                         message.error(`話題貼文生成失敗: ${error.message}`);
                       });
+                  }}
+                />
+              </div>
+            )}
+            
+            {/* 股票篩選列表顯示 */}
+            {generationConfig.triggers.stock_codes && generationConfig.triggers.stock_codes.length > 0 && (
+              <div style={{ marginTop: '24px' }}>
+                <StockFilterDisplay
+                  stockCodes={generationConfig.triggers.stock_codes}
+                  onStockRemove={(stockCode) => {
+                    const newStocks = (generationConfig.triggers.stock_codes || []).filter(code => code !== stockCode);
+                    const newStockNames = (generationConfig.triggers.stock_names || []).filter((_, index) => 
+                      (generationConfig.triggers.stock_codes || [])[index] !== stockCode
+                    );
+                    
+                    handleConfigChange('triggers', {
+                      ...generationConfig.triggers,
+                      stock_codes: newStocks,
+                      stock_names: newStockNames
+                    });
+                  }}
+                  onStockView={(stockCode) => {
+                    // 可以打開股票詳情頁面
+                    console.log('查看股票:', stockCode);
+                    message.info(`查看股票 ${stockCode} 詳情`);
                   }}
                 />
               </div>

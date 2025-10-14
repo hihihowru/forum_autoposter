@@ -72,6 +72,7 @@ class PostRecord(Base):
     risk_level = Column(String, nullable=True)
     generation_params = Column(JSON, nullable=True)
     commodity_tags = Column(JSON, nullable=True)
+    alternative_versions = Column(JSON, nullable=True)  # 存儲其他4個版本
 
 def create_tables():
     """創建數據庫表"""

@@ -22,6 +22,10 @@ interface BatchModeConfig {
   publish_delay_minutes: number;
   quality_check_enabled: boolean;
   ai_detection_enabled: boolean;
+  // 新增：生成模式
+  generation_mode: 'simple' | 'trash' | 'high_quality';
+  // 新增：發文類型
+  posting_type: 'interaction' | 'analysis';
 }
 
 interface BatchModeSettingsProps {
@@ -91,6 +95,20 @@ const BatchModeSettings: React.FC<BatchModeSettingsProps> = ({
     onChange({
       ...value,
       ai_detection_enabled: enabled
+    });
+  };
+
+  const handleGenerationModeChange = (mode: 'simple' | 'trash' | 'high_quality') => {
+    onChange({
+      ...value,
+      generation_mode: mode
+    });
+  };
+
+  const handlePostingTypeChange = (postingType: 'interaction' | 'analysis') => {
+    onChange({
+      ...value,
+      posting_type: postingType
     });
   };
 
@@ -212,6 +230,43 @@ const BatchModeSettings: React.FC<BatchModeSettingsProps> = ({
                     <Text strong>自動發布</Text>
                     <Text type="secondary" style={{ fontSize: '12px' }}>
                       {getBatchTypeDescription('auto_publish')}
+                    </Text>
+                  </Space>
+                </Space>
+              </Radio>
+            </Space>
+          </Radio.Group>
+        </div>
+
+        <Divider />
+
+        {/* 發文類型設定 */}
+        <div>
+          <Title level={5}>發文類型</Title>
+          <Radio.Group
+            value={value.posting_type}
+            onChange={(e) => handlePostingTypeChange(e.target.value)}
+            style={{ width: '100%' }}
+          >
+            <Space direction="vertical" style={{ width: '100%' }}>
+              <Radio value="analysis" style={{ width: '100%' }}>
+                <Space>
+                  <FileTextOutlined />
+                  <Space direction="vertical" size={0}>
+                    <Text strong>發表分析</Text>
+                    <Text type="secondary" style={{ fontSize: '12px' }}>
+                      專業分析內容，詳細解讀市場動態和技術指標
+                    </Text>
+                  </Space>
+                </Space>
+              </Radio>
+              <Radio value="interaction" style={{ width: '100%' }}>
+                <Space>
+                  <ClockCircleOutlined />
+                  <Space direction="vertical" size={0}>
+                    <Text strong>互動發問</Text>
+                    <Text type="secondary" style={{ fontSize: '12px' }}>
+                      簡短疑問句內容，促進用戶互動和參與（跳過個人化模組）
                     </Text>
                   </Space>
                 </Space>
@@ -348,6 +403,45 @@ const BatchModeSettings: React.FC<BatchModeSettingsProps> = ({
           </div>
         )}
 
+        {/* 生成模式設定 */}
+        <div>
+          <Title level={5}>生成模式</Title>
+          <Radio.Group
+            value={value.generation_mode || 'simple'}
+            onChange={(e) => handleGenerationModeChange(e.target.value)}
+            style={{ width: '100%' }}
+          >
+            <Space direction="vertical" style={{ width: '100%' }}>
+              <Radio value="simple" style={{ width: '100%' }}>
+                <Space direction="vertical" size={0}>
+                  <Text strong>簡易模式</Text>
+                  <Text type="secondary" style={{ fontSize: '12px' }}>
+                    快速生成，內容簡潔，適合日常發文
+                  </Text>
+                </Space>
+              </Radio>
+              <Radio value="trash" style={{ width: '100%' }}>
+                <Space direction="vertical" size={0}>
+                  <Text strong>廢文模式</Text>
+                  <Text type="secondary" style={{ fontSize: '12px' }}>
+                    輕鬆幽默，增加互動，適合社群媒體
+                  </Text>
+                </Space>
+              </Radio>
+              <Radio value="high_quality" style={{ width: '100%' }}>
+                <Space direction="vertical" size={0}>
+                  <Text strong>高品質模式</Text>
+                  <Text type="secondary" style={{ fontSize: '12px' }}>
+                    深度分析，專業內容，適合投資建議
+                  </Text>
+                </Space>
+              </Radio>
+            </Space>
+          </Radio.Group>
+        </div>
+
+        <Divider />
+
         {/* 品質控制設定 */}
         <div>
           <Title level={5}>品質控制</Title>
@@ -398,6 +492,10 @@ const BatchModeSettings: React.FC<BatchModeSettingsProps> = ({
             <Text type="secondary">
               • 生成策略：{value.generation_strategy === 'one_kol_one_stock' ? '1 KOL → 1 股票' :
                 value.generation_strategy === 'one_kol_all_stocks' ? '1 KOL → 所有股票' : '混合模式'}
+            </Text>
+            <Text type="secondary">
+              • 生成模式：{value.generation_mode === 'simple' ? '簡易模式' :
+                value.generation_mode === 'trash' ? '廢文模式' : '高品質模式'}
             </Text>
             <Text type="secondary">
               • 每批最大貼文數：{value.max_posts_per_batch}篇

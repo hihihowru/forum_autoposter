@@ -182,3 +182,8 @@ generated_*.py
 # Environment backup files
 .env.backup*
 .env.broken
+# Google Service Account credentials
+credentials/
+google-service-account.json
+crested-timer-*.json
+*-service-account*.json

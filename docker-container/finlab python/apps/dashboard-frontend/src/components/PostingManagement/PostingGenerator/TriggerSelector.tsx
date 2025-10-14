@@ -20,6 +20,7 @@ import {
 import StockCodeListInput from './StockCodeListInput';
 import CustomStockInput from './CustomStockInput';
 import TrendingTopicsDisplay from './TrendingTopicsDisplay';
+import IntradayTriggerDisplay from './IntradayTriggerDisplay';
 import { PostingManagementAPI } from '../../../services/postingManagementAPI';
 import companyInfoService, { CompanySearchResult } from '../../../services/companyInfoService';
 
@@ -38,7 +39,7 @@ const INDUSTRY_OPTIONS = [
 
 // 新的觸發器配置接口
 interface TriggerConfig {
-  triggerType: 'individual' | 'sector' | 'macro' | 'news';
+  triggerType: 'individual' | 'sector' | 'macro' | 'news' | 'intraday' | 'volume' | 'custom';
   triggerKey: string;
   stockFilter: string;
   volumeFilter?: string;
@@ -46,6 +47,10 @@ interface TriggerConfig {
   macroFilter?: string;
   newsFilter?: string;
   customFilters?: Record<string, any>;
+  apiConfig?: {
+    endpoint: string;
+    processing: any[];
+  };
 }
 
 interface TriggerSelection {
@@ -86,14 +91,18 @@ interface TriggerSelection {
   };
   stock_codes?: string[];
   stock_names?: string[];
+  // 新增：股票篇數限制和篩選依據
+  stockCountLimit?: number;
+  stockFilterCriteria?: string[];
 }
 
 interface TriggerSelectorProps {
   value: TriggerSelection;
   onChange: (value: TriggerSelection) => void;
+  onNewsConfigChange?: (newsKeywords: string[]) => void;
 }
 
-const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange }) => {
+const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNewsConfigChange }) => {
   const [stockCountLoading, setStockCountLoading] = useState(false);
   const [stockCountResult, setStockCountResult] = useState<any>(null);
   const [showFilters, setShowFilters] = useState(false);
@@ -192,7 +201,7 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange }) =>
     },
     {
       key: 'individual',
-      label: '個股',
+      label: '個股觸發器',
       icon: <StockOutlined />,
       color: '#1890ff',
       triggers: [
@@ -202,43 +211,163 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange }) =>
           icon: <ArrowUpOutlined />,
           description: '收盤上漲股票分析',
           stockFilter: 'limit_up_stocks',
-          volumeFilter: 'high/low/normal'
+          newsKeywords: ['上漲', '漲停', '突破', '強勢']
         },
         {
           key: 'limit_down_after_hours',
           label: '盤後跌',
           icon: <FallOutlined />,
           description: '收盤下跌股票分析',
-          stockFilter: 'limit_down_stocks'
+          stockFilter: 'limit_down_stocks',
+          newsKeywords: ['下跌', '跌停', '弱勢', '回檔']
         },
         {
-          key: 'volume_surge',
-          label: '成交量暴增',
+          key: 'volume_amount_high',
+          label: '成交金額高',
           icon: <BarChartOutlined />,
-          description: '成交量異常放大',
-          stockFilter: 'volume_surge_stocks'
+          description: '成交金額絕對值排序（由大到小）',
+          stockFilter: 'volume_amount_high_stocks',
+          newsKeywords: ['成交量', '爆量', '大量', '活躍']
         },
         {
-          key: 'price_breakthrough',
-          label: '技術突破',
+          key: 'volume_amount_low',
+          label: '成交金額低',
+          icon: <BarChartOutlined />,
+          description: '成交金額絕對值排序（由小到大）',
+          stockFilter: 'volume_amount_low_stocks',
+          newsKeywords: ['量縮', '清淡', '觀望']
+        },
+        {
+          key: 'volume_change_rate_high',
+          label: '成交金額變化率高',
           icon: <RiseOutlined />,
-          description: '價格突破重要位',
-          stockFilter: 'breakthrough_stocks'
+          description: '成交金額變化率排序（由大到小）',
+          stockFilter: 'volume_change_rate_high_stocks',
+          newsKeywords: ['放量', '增量', '活躍']
         },
         {
-          key: 'earnings_surprise',
-          label: '財報驚喜',
-          icon: <FileTextOutlined />,
-          description: '財報超預期',
-          stockFilter: 'earnings_surprise_stocks'
+          key: 'volume_change_rate_low',
+          label: '成交金額變化率低',
+          icon: <FallOutlined />,
+          description: '成交金額變化率排序（由小到大）',
+          stockFilter: 'volume_change_rate_low_stocks',
+          newsKeywords: ['縮量', '量縮', '觀望']
+        }
+      ]
+    },
+    {
+      key: 'intraday',
+      label: '盤中觸發器',
+      icon: <ThunderboltOutlined />,
+      color: '#fa8c16',
+      triggers: [
+        {
+          key: 'intraday_gainers_by_amount',
+          label: '漲幅排序+成交額',
+          icon: <RiseOutlined />,
+          description: '按成交額排序的漲幅股票',
+          triggerType: 'intraday',
+          apiConfig: {
+            endpoint: 'https://asterisk-chipsapi.cmoney.tw/AdditionInformationRevisit/api/GetAll/StockCalculation',
+            processing: [
+              {"ParameterJson":"{ \"TargetPropertyNamePath\" : [ \"TotalTransactionAmount\"]}","ProcessType":"DescOrder"},
+              {"ProcessType":"EqualValueFilter","ParameterJson":"{\"TargetPropertyNamePath\": [\"Commodity\", \"IsChipsKPopularStocksSortSubject\"], \"Value\": true}"},
+              {"ProcessType":"LessThanColumnsFilter","ParameterJson":"{\"TargetPropertyNamePath\": [\"StrikePrice\"], \"ComparePropertyNamePath\": [\"Commodity\" , \"LimitUp\"]}"},
+              {"ProcessType":"MoreThanValueFilter","ParameterJson":"{\"TargetPropertyNamePath\": [\"ChangeRange\"], \"Value\": 0 }"},
+              {"ParameterJson":"{\"TargetPropertyNamePath\": [\"ChangeRange\"]}","ProcessType":"DescOrder"},
+              {"ProcessType":"ThenDescOrder","ParameterJson":"{\"TargetPropertyNamePath\": [\"TotalVolume\"]}"},
+              {"ParameterJson":"{\"TargetPropertyNamePath\": [\"CommKey\"]}","ProcessType":"ThenAscOrder"},
+              {"ProcessType":"TakeCount","ParameterJson":"{\"Count\":20}"}
+            ]
+          }
         },
         {
-          key: 'custom_stocks',
-          label: '自定義股票',
-          icon: <EditOutlined />,
-          description: '手動輸入股票代號',
-          stockFilter: 'custom_stocks',
-          customInput: true
+          key: 'intraday_volume_leaders',
+          label: '成交量排序',
+          icon: <BarChartOutlined />,
+          description: '按成交量排序的熱門股票',
+          triggerType: 'intraday',
+          apiConfig: {
+            endpoint: 'https://asterisk-chipsapi.cmoney.tw/AdditionInformationRevisit/api/GetAll/StockCalculation',
+            processing: [
+              {"ProcessType":"EqualValueFilter","ParameterJson":"{\"TargetPropertyNamePath\": [\"Commodity\", \"IsChipsKPopularStocksSortSubject\"], \"Value\": true}"},
+              {"ProcessType":"DescOrder","ParameterJson":"{\"TargetPropertyNamePath\" :[\"TotalVolume\"]}"},
+              {"ProcessType":"ThenDescOrder","ParameterJson":"{\"TargetPropertyNamePath\" :[\"ChangeRange\"]}"},
+              {"ParameterJson":"{\"TargetPropertyNamePath\" :[\"CommKey\"]}","ProcessType":"ThenAscOrder"},
+              {"ParameterJson":"{\"Count\":20}","ProcessType":"TakeCount"}
+            ]
+          }
+        },
+        {
+          key: 'intraday_amount_leaders',
+          label: '成交額排序',
+          icon: <GlobalOutlined />,
+          description: '按成交額排序的熱門股票',
+          triggerType: 'intraday',
+          apiConfig: {
+            endpoint: 'https://asterisk-chipsapi.cmoney.tw/AdditionInformationRevisit/api/GetAll/StockCalculation',
+            processing: [
+              {"ProcessType":"EqualValueFilter","ParameterJson":"{\"TargetPropertyNamePath\":[\"Commodity\", \"IsChipsKPopularStocksSortSubject\"], \"Value\": true}"},
+              {"ProcessType":"DescOrder","ParameterJson":"{\"TargetPropertyNamePath\":[\"TotalTransactionAmount\"]}"},
+              {"ParameterJson":"{\"TargetPropertyNamePath\":[\"TotalVolume\" ]}","ProcessType":"ThenDescOrder"},
+              {"ProcessType":"ThenDescOrder","ParameterJson":"{\"TargetPropertyNamePath\":[\"ChangeRange\"]}"},
+              {"ProcessType":"TakeCount","ParameterJson":"{\"Count\":20}"}
+            ]
+          }
+        },
+        {
+          key: 'intraday_limit_down',
+          label: '跌停篩選',
+          icon: <FallOutlined />,
+          description: '篩選跌停股票',
+          triggerType: 'intraday',
+          apiConfig: {
+            endpoint: 'https://asterisk-chipsapi.cmoney.tw/AdditionInformationRevisit/api/GetAll/StockCalculation',
+            processing: [
+              {"ProcessType":"EqualValueFilter","ParameterJson":"{\"TargetPropertyNamePath\": [\"Commodity\", \"IsChipsKPopularStocksSortSubject\"], \"Value\": true}"},
+              {"ParameterJson":"{\"TargetPropertyNamePath\": [\"StrikePrice\"], \"ComparePropertyNamePath\": [\"Commodity\", \"LimitDown\"]}","ProcessType":"EqualColumnsFilter"},
+              {"ProcessType":"AscOrder","ParameterJson":"{\"TargetPropertyNamePath\":[\"ChangeRange\"]}"},
+              {"ProcessType":"ThenDescOrder","ParameterJson":"{\"TargetPropertyNamePath\":[\"TotalVolume\"]}"},
+              {"ParameterJson":"{\"Count\":20}","ProcessType":"TakeCount"}
+            ]
+          }
+        },
+        {
+          key: 'intraday_limit_up',
+          label: '漲停篩選',
+          icon: <ArrowUpOutlined />,
+          description: '篩選漲停股票',
+          triggerType: 'intraday',
+          apiConfig: {
+            endpoint: 'https://asterisk-chipsapi.cmoney.tw/AdditionInformationRevisit/api/GetAll/StockCalculation',
+            processing: [
+              {"ParameterJson":"{\"TargetPropertyNamePath\": [\"Commodity\", \"IsChipsKPopularStocksSortSubject\"], \"Value\": true}","ProcessType":"EqualValueFilter"},
+              {"ProcessType":"EqualColumnsFilter","ParameterJson":"{\"TargetPropertyNamePath\": [\"StrikePrice\"], \"ComparePropertyNamePath\": [\"Commodity\", \"LimitUp\"]}"},
+              {"ProcessType":"DescOrder","ParameterJson":"{\"TargetPropertyNamePath\": [\"ChangeRange\"]}"},
+              {"ParameterJson":"{\"TargetPropertyNamePath\": [\"TotalVolume\"]}","ProcessType":"ThenDescOrder"},
+              {"ProcessType":"TakeCount","ParameterJson":"{\"Count\":20}"}
+            ]
+          }
+        },
+        {
+          key: 'intraday_limit_down_by_amount',
+          label: '跌停篩選+成交額',
+          icon: <FallOutlined />,
+          description: '按成交額排序的跌停股票',
+          triggerType: 'intraday',
+          apiConfig: {
+            endpoint: 'https://asterisk-chipsapi.cmoney.tw/AdditionInformationRevisit/api/GetAll/StockCalculation',
+            processing: [
+              {"ParameterJson":"{ \"TargetPropertyNamePath\" : [ \"TotalTransactionAmount\"]}","ProcessType":"DescOrder"},
+              {"ParameterJson":"{\"TargetPropertyNamePath\":[\"Commodity\", \"IsChipsKPopularStocksSortSubject\" ], \"Value\": true}","ProcessType":"EqualValueFilter"},
+              {"ParameterJson":"{\"TargetPropertyNamePath\": [\"StrikePrice\"], \"ComparePropertyNamePath\": [\"Commodity\", \"LimitDown\"]}","ProcessType":"MoreThanColumnsFilter"},
+              {"ProcessType":"LessThanValueFilter","ParameterJson":"{\"TargetPropertyNamePath\": [\"ChangeRange\"], \"Value\": 0 }"},
+              {"ParameterJson":"{\"TargetPropertyNamePath\": [\"ChangeRange\"]}","ProcessType":"AscOrder"},
+              {"ProcessType":"ThenDescOrder","ParameterJson":"{\"TargetPropertyNamePath\": [\"TotalVolume\"]}"},
+              {"ProcessType":"ThenAscOrder","ParameterJson":"{\"TargetPropertyNamePath\": [\"CommKey\"]}"},
+              {"ParameterJson":"{\"Count\":20}","ProcessType":"TakeCount"}
+            ]
+          }
         }
       ]
     },
@@ -364,6 +493,15 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange }) =>
     }
   ];
 
+  // 自定義股票獨立區塊
+  const customStockSection = {
+    key: 'custom',
+    label: '自定義股票',
+    icon: <EditOutlined />,
+    color: '#722ed1',
+    description: '手動輸入股票代號，包含股票搜尋功能'
+  };
+
   // 處理觸發器選擇
   const handleTriggerSelect = (categoryKey: string, triggerKey: string) => {
     const category = triggerCategories.find(c => c.key === categoryKey);
@@ -377,16 +515,40 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange }) =>
         volumeFilter: trigger.volumeFilter,
         sectorFilter: trigger.sectorFilter,
         macroFilter: trigger.macroFilter,
-        newsFilter: trigger.newsFilter
+        newsFilter: trigger.newsFilter,
+        apiConfig: trigger.apiConfig // 添加 apiConfig 支援
       };
       
+      // 更新觸發器配置
       onChange({
         ...value,
         triggerConfig,
         threshold: value.threshold || DEFAULT_THRESHOLD,
         filters: value.filters || FILTER_DEFAULTS
       });
+      
+      // 智能更新新聞搜尋關鍵字
+      if (trigger.newsKeywords && onNewsConfigChange) {
+        onNewsConfigChange(trigger.newsKeywords);
+        console.log(`🎯 觸發器 "${trigger.label}" 已選擇，自動更新新聞搜尋關鍵字:`, trigger.newsKeywords);
+      }
     }
+  };
+
+  // 處理自定義股票選擇
+  const handleCustomStockSelect = () => {
+    const triggerConfig: TriggerConfig = {
+      triggerType: 'custom',
+      triggerKey: 'custom_stocks',
+      stockFilter: 'custom_stocks'
+    };
+    
+    onChange({
+      ...value,
+      triggerConfig,
+      threshold: value.threshold || DEFAULT_THRESHOLD,
+      filters: value.filters || FILTER_DEFAULTS
+    });
   };
 
   // 處理閾值變更
@@ -455,47 +617,229 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange }) =>
     setCompanySearchResults([]);
   };
 
-  // 處理股票選擇（用於批量生成）- 自動更新配置
+  // 獲取篩選條件標籤
+  const getCriterionLabel = (criterion: string): string => {
+    const labels: Record<string, string> = {
+      'five_day_gain': '五日漲幅篩選',
+      'five_day_loss': '五日跌幅篩選',
+      'daily_gain': '單日漲幅篩選',
+      'daily_loss': '單日跌幅篩選',
+      'volume': '成交量篩選',
+      'volume_amount': '成交金額篩選',
+      'market_cap': '市值篩選',
+      'pe_ratio': '本益比篩選',
+      'pb_ratio': '股價淨值比篩選',
+      'roe': 'ROE篩選',
+      'technical_indicators': '技術指標篩選',
+      'news_heat': '新聞熱度篩選',
+      'discussion_heat': '討論熱度篩選'
+    };
+    return labels[criterion] || criterion;
+  };
+
+  // 渲染篩選條件
+  const renderCriterionFilter = (criterion: string) => {
+    switch (criterion) {
+      case 'five_day_gain':
+      case 'five_day_loss':
+      case 'daily_gain':
+      case 'daily_loss':
+        return (
+          <Space>
+            <Text>最小漲跌幅：</Text>
+            <InputNumber
+              min={0}
+              max={20}
+              step={0.1}
+              placeholder="0"
+              style={{ width: 100 }}
+            />
+            <Text>%</Text>
+            <Text type="secondary">(篩選漲跌幅超過此值的股票)</Text>
+          </Space>
+        );
+      
+      case 'volume':
+      case 'volume_amount':
+        return (
+          <Space direction="vertical" style={{ width: '100%' }}>
+            <Space>
+              <Text>最小成交量：</Text>
+              <InputNumber
+                min={0}
+                placeholder="1000000"
+                style={{ width: 120 }}
+              />
+              <Text>股</Text>
+            </Space>
+            <Space>
+              <Text>成交量百分位：</Text>
+              <InputNumber
+                min={0}
+                max={100}
+                placeholder="50"
+                style={{ width: 100 }}
+              />
+              <Text>%</Text>
+            </Space>
+          </Space>
+        );
+      
+      case 'market_cap':
+        return (
+          <Space>
+            <Text>最小市值：</Text>
+            <InputNumber
+              min={0}
+              placeholder="1000000000"
+              style={{ width: 150 }}
+            />
+            <Text>元</Text>
+          </Space>
+        );
+      
+      case 'pe_ratio':
+        return (
+          <Space>
+            <Text>本益比範圍：</Text>
+            <InputNumber
+              min={0}
+              placeholder="10"
+              style={{ width: 80 }}
+            />
+            <Text>~</Text>
+            <InputNumber
+              min={0}
+              placeholder="50"
+              style={{ width: 80 }}
+            />
+          </Space>
+        );
+      
+      case 'pb_ratio':
+        return (
+          <Space>
+            <Text>股價淨值比範圍：</Text>
+            <InputNumber
+              min={0}
+              placeholder="1"
+              style={{ width: 80 }}
+            />
+            <Text>~</Text>
+            <InputNumber
+              min={0}
+              placeholder="5"
+              style={{ width: 80 }}
+            />
+          </Space>
+        );
+      
+      case 'roe':
+        return (
+          <Space>
+            <Text>最小ROE：</Text>
+            <InputNumber
+              min={0}
+              max={100}
+              placeholder="10"
+              style={{ width: 80 }}
+            />
+            <Text>%</Text>
+          </Space>
+        );
+      
+      case 'technical_indicators':
+        return (
+          <Space direction="vertical" style={{ width: '100%' }}>
+            <Space>
+              <Text>RSI範圍：</Text>
+              <InputNumber
+                min={0}
+                max={100}
+                placeholder="30"
+                style={{ width: 80 }}
+              />
+              <Text>~</Text>
+              <InputNumber
+                min={0}
+                max={100}
+                placeholder="70"
+                style={{ width: 80 }}
+              />
+            </Space>
+            <Space>
+              <Text>MACD：</Text>
+              <Select placeholder="選擇" style={{ width: 100 }}>
+                <Option value="bullish">看多</Option>
+                <Option value="bearish">看空</Option>
+              </Select>
+            </Space>
+          </Space>
+        );
+      
+      case 'news_heat':
+        return (
+          <Space>
+            <Text>最小新聞數量：</Text>
+            <InputNumber
+              min={0}
+              placeholder="3"
+              style={{ width: 80 }}
+            />
+            <Text>篇</Text>
+          </Space>
+        );
+      
+      case 'discussion_heat':
+        return (
+          <Space>
+            <Text>最小討論次數：</Text>
+            <InputNumber
+              min={0}
+              placeholder="10"
+              style={{ width: 80 }}
+            />
+            <Text>次</Text>
+          </Space>
+        );
+      
+      default:
+        return <Text type="secondary">暫無詳細設定</Text>;
+    }
+  };
+
+  // 單個股票選擇
   const handleStockSelection = (stockCode: string, isSelected: boolean) => {
+    const currentStocks = value.stock_codes || [];
     let newSelectedStocks: string[];
     
     if (isSelected) {
-      newSelectedStocks = [...selectedStocksForBatch, stockCode];
-    } else {
-      newSelectedStocks = selectedStocksForBatch.filter(code => code !== stockCode);
-    }
-    
-    setSelectedStocksForBatch(newSelectedStocks);
-    
-    // 自動更新配置
-    if (newSelectedStocks.length > 0) {
-      const selectedStockNames = newSelectedStocks.map(code => 
-        companyNameMapping[code] || `股票${code}`
-      );
+      // 檢查是否已達到最大選擇數量
+      const maxSelection = value.stockCountLimit || 10;
+      if (currentStocks.length >= maxSelection) {
+        message.warning(`最多只能選擇 ${maxSelection} 支股票`);
+        return;
+      }
       
-      const newValue = {
-        ...value,
-        stock_codes: newSelectedStocks,
-        stock_names: selectedStockNames
-      };
-      
-      onChange(newValue);
-      
-      if (isSelected) {
-        message.success(`已選擇 ${companyNameMapping[stockCode] || stockCode}`);
+      // 添加股票
+      if (!currentStocks.includes(stockCode)) {
+        newSelectedStocks = [...currentStocks, stockCode];
+        message.success(`已選擇: ${stockCode}`);
       } else {
-        message.info(`已取消選擇 ${companyNameMapping[stockCode] || stockCode}`);
+        newSelectedStocks = currentStocks;
+        message.info(`股票 ${stockCode} 已經被選擇`);
       }
     } else {
-      // 如果沒有選中任何股票，清空配置
-      const newValue = {
-        ...value,
-        stock_codes: [],
-        stock_names: []
-      };
-      onChange(newValue);
-      message.info('已清空所有選擇');
+      // 移除股票
+      newSelectedStocks = currentStocks.filter(code => code !== stockCode);
+      message.info(`已取消選擇: ${stockCode}`);
     }
+    
+    // 更新配置
+    onChange({
+      ...value,
+      stock_codes: newSelectedStocks
+    });
   };
 
   // 批量選擇股票 - 自動更新配置
@@ -714,23 +1058,18 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange }) =>
         queryParams.selectedIndustries = value.industrySelection.selectedIndustries;
       }
 
-      // 調用真實的 API
-      const result = await PostingManagementAPI.getAfterHoursLimitUpStocks(queryParams);
+      // 調用真實的 API - 根據觸發器類型選擇不同的端點
+      let result;
+      if (value.triggerConfig?.triggerKey === 'limit_down_after_hours') {
+        result = await PostingManagementAPI.getAfterHoursLimitDownStocks(queryParams);
+      } else {
+        result = await PostingManagementAPI.getAfterHoursLimitUpStocks(queryParams);
+      }
       
       setStockCountResult(result);
       
-      // 獲取公司名稱對應表
+      // 獲取公司名稱對應表（僅用於顯示，不自動選取）
       if (result.stocks && result.stocks.length > 0) {
-        const stockCodes = result.stocks.map((stock: any) => stock.stock_code);
-        const stockNames = result.stocks.map((stock: any) => stock.stock_name);
-        
-        // 更新股票代號和名稱到配置中
-        onChange({
-          ...value,
-          stock_codes: stockCodes,
-          stock_names: stockNames
-        });
-        
         loadCompanyNameMapping(result.stocks);
       }
       
@@ -753,29 +1092,61 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange }) =>
     
     setStockCountLoading(true);
     try {
-      const result = await PostingManagementAPI.getAfterHoursLimitUpStocks({
+      // 準備 API 參數，包含股票數量限制和篩選依據
+      const apiParams = {
         ...value.triggerConfig,
         threshold: value.threshold,
-        filters: value.filters
-      });
+        filters: value.filters,
+        // 新增：股票數量限制和篩選依據
+        stockCountLimit: value.stockCountLimit || 10,
+        stockFilterCriteria: value.stockFilterCriteria || []
+      };
+      
+      console.log('應用篩選參數:', apiParams);
+      
+      // 根據觸發器類型選擇不同的端點
+      let result;
+      if (value.triggerConfig?.triggerKey === 'limit_down_after_hours') {
+        result = await PostingManagementAPI.getAfterHoursLimitDownStocks(apiParams);
+      } else {
+        result = await PostingManagementAPI.getAfterHoursLimitUpStocks(apiParams);
+      }
       
       setStockCountResult(result);
       
-      // 更新篩選後的股票代號和名稱
-      if (result.stocks && result.stocks.length > 0) {
-        const stockCodes = result.stocks.map((stock: any) => stock.stock_code);
-        const stockNames = result.stocks.map((stock: any) => stock.stock_name);
+      // 根據股票數量限制截取結果
+      let stocksToUse = result.stocks || [];
+      if (value.stockCountLimit && stocksToUse.length > value.stockCountLimit) {
+        stocksToUse = stocksToUse.slice(0, value.stockCountLimit);
+        console.log(`根據限制截取前 ${value.stockCountLimit} 檔股票`);
+      }
+      
+      // 更新篩選後的股票代號和名稱，並自動選取
+      if (stocksToUse.length > 0) {
+        const stockCodes = stocksToUse.map((stock: any) => stock.stock_code);
+        const stockNames = stocksToUse.map((stock: any) => stock.stock_name);
         
+        // 自動選取所有篩選出的股票
         onChange({
           ...value,
           stock_codes: stockCodes,
           stock_names: stockNames
         });
         
-        loadCompanyNameMapping(result.stocks);
+        loadCompanyNameMapping(stocksToUse);
+        
+        // 顯示自動選取的信息
+        message.success(`已自動選取 ${stockCodes.length} 檔股票`);
       }
       
-      message.success(`篩選後找到 ${result.filtered_count || result.total_count} 檔股票`);
+      const finalCount = stocksToUse.length;
+      const totalCount = result.stocks?.length || 0;
+      
+      if (value.stockCountLimit && totalCount > value.stockCountLimit) {
+        message.success(`篩選後找到 ${totalCount} 檔股票，已選擇前 ${finalCount} 檔`);
+      } else {
+        message.success(`篩選後找到 ${finalCount} 檔股票`);
+      }
     } catch (error) {
       message.error('篩選失敗，請稍後再試');
       console.error('Apply filters error:', error);
@@ -836,6 +1207,30 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange }) =>
       
       {/* 觸發器分類 */}
       {triggerCategories.map(renderTriggerCategory)}
+      
+      {/* 自定義股票獨立區塊 */}
+      <Card
+        title={
+          <Space>
+            <span style={{ color: customStockSection.color }}>{customStockSection.icon}</span>
+            <span>{customStockSection.label}</span>
+          </Space>
+        }
+        size="small"
+        style={{ marginBottom: 16 }}
+      >
+        <Space direction="vertical" style={{ width: '100%' }}>
+          <Text type="secondary">{customStockSection.description}</Text>
+          <Button
+            type={value.triggerConfig?.triggerKey === 'custom_stocks' ? 'primary' : 'default'}
+            icon={customStockSection.icon}
+            onClick={handleCustomStockSelect}
+            style={{ width: '100%' }}
+          >
+            啟用自定義股票
+          </Button>
+        </Space>
+      </Card>
       
       {/* 篩選設定 */}
       <Card title="篩選設定" size="small" style={{ marginTop: 16 }}>
@@ -904,51 +1299,86 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange }) =>
           </Row>
         )}
         
-        {/* 產業類別選擇 */}
+        {/* 股票篇數限制和篩選依據 */}
         <Row gutter={16} style={{ marginTop: 16 }}>
           <Col span={24}>
             <Divider orientation="left" plain>
-              <Text strong>產業類別篩選</Text>
+              <Text strong>股票篇數限制與篩選依據</Text>
             </Divider>
           </Col>
-          <Col span={24}>
+          <Col span={12}>
             <Space direction="vertical" style={{ width: '100%' }}>
               <div>
-                <Text strong>選擇產業類別：</Text>
+                <Text strong>股票篇數限制：</Text>
+                <InputNumber
+                  min={1}
+                  max={50}
+                  value={value.stockCountLimit || 10}
+                  onChange={(val) => onChange({
+                    ...value,
+                    stockCountLimit: val || 10
+                  })}
+                  addonAfter="篇"
+                  style={{ width: 120, marginTop: 8 }}
+                />
+                <Text type="secondary" style={{ marginLeft: 8 }}>
+                  (限制最多生成的股票分析篇數)
+                </Text>
+              </div>
+            </Space>
+          </Col>
+          <Col span={12}>
+            <Space direction="vertical" style={{ width: '100%' }}>
+              <div>
+                <Text strong>篩選依據：</Text>
                 <Select
                   mode="multiple"
-                  placeholder="請選擇產業類別"
+                  placeholder="選擇篩選條件"
                   style={{ width: '100%', marginTop: 8 }}
-                  value={value.industrySelection?.selectedIndustries || []}
-                  onChange={(industries) => onChange({
+                  value={value.stockFilterCriteria || []}
+                  onChange={(criteria) => onChange({
                     ...value,
-                    industrySelection: {
-                      enabled: industries.length > 0,
-                      selectedIndustries: industries
-                    }
+                    stockFilterCriteria: criteria
                   })}
-                  options={INDUSTRY_OPTIONS.map(industry => ({
-                    label: industry,
-                    value: industry
-                  }))}
-                  showSearch
-                  filterOption={(input, option) =>
-                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-                  }
+                  options={[
+                    { label: '五日漲幅', value: 'five_day_gain' },
+                    { label: '五日跌幅', value: 'five_day_loss' },
+                    { label: '單日漲幅', value: 'daily_gain' },
+                    { label: '單日跌幅', value: 'daily_loss' },
+                    { label: '成交量', value: 'volume' },
+                    { label: '成交金額', value: 'volume_amount' },
+                    { label: '市值', value: 'market_cap' },
+                    { label: '本益比', value: 'pe_ratio' },
+                    { label: '股價淨值比', value: 'pb_ratio' },
+                    { label: 'ROE', value: 'roe' },
+                    { label: '技術指標', value: 'technical_indicators' },
+                    { label: '新聞熱度', value: 'news_heat' },
+                    { label: '討論熱度', value: 'discussion_heat' }
+                  ]}
                 />
               </div>
-              {value.industrySelection?.selectedIndustries && value.industrySelection.selectedIndustries.length > 0 && (
-                <div>
-                  <Text type="secondary">
-                    已選擇 {value.industrySelection.selectedIndustries.length} 個產業：
-                    {value.industrySelection.selectedIndustries.join('、')}
-                  </Text>
-                </div>
-              )}
             </Space>
           </Col>
         </Row>
         
+        {/* 詳細篩選條件 */}
+        {value.stockFilterCriteria && value.stockFilterCriteria.length > 0 && (
+          <Row gutter={16} style={{ marginTop: 16 }}>
+            <Col span={24}>
+              <Divider orientation="left" plain>
+                <Text strong>詳細篩選條件</Text>
+              </Divider>
+            </Col>
+            {value.stockFilterCriteria.map((criterion: string) => (
+              <Col span={24} key={criterion} style={{ marginBottom: 16 }}>
+                <Card size="small" title={getCriterionLabel(criterion)}>
+                  {renderCriterionFilter(criterion)}
+                </Card>
+              </Col>
+            ))}
+          </Row>
+        )}
+
         {/* 產業選擇設定 */}
         {shouldShowSectorSelection() && (
           <Row gutter={16} style={{ marginTop: 16 }}>
@@ -1512,7 +1942,7 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange }) =>
                 rowClassName={(record, index) => {
                   // 根據篩選結果添加 highlight 樣式
                   const isHighlighted = index < (value.threshold || DEFAULT_THRESHOLD);
-                  const isSelected = selectedStocksForBatch.includes(record.stock_code);
+                  const isSelected = (value.stock_codes || []).includes(record.stock_code);
                   
                   if (isSelected) {
                     return 'selected-row';
@@ -1646,7 +2076,7 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange }) =>
                     width: 120,
                     render: (_, record, index) => {
                       const isHighlighted = index < (value.threshold || DEFAULT_THRESHOLD);
-                      const isSelected = selectedStocksForBatch.includes(record.stock_code);
+                      const isSelected = (value.stock_codes || []).includes(record.stock_code);
                       const companyName = companyNameMapping[record.stock_code];
                       
                       return (
@@ -1690,7 +2120,7 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange }) =>
               <Text strong>公司名稱搜尋：</Text>
               <AutoComplete
                 value={companySearchValue}
-                onChange={handleCompanySearchChange}
+                onChange={handleCompanySearch}
                 placeholder="輸入公司名稱或股票代號"
                 style={{ width: '100%', marginTop: 8 }}
                 loading={companySearchLoading}
@@ -1763,6 +2193,37 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange }) =>
         </Card>
       )}
       
+      {/* 盤中觸發器顯示 */}
+      {value.triggerConfig?.triggerType === 'intraday' && value.triggerConfig?.apiConfig && (
+        <div style={{ marginTop: '16px' }}>
+          <IntradayTriggerDisplay
+            triggerConfig={value.triggerConfig.apiConfig}
+            onStockSelect={(stocks, stockNames) => {
+              // 自動將獲取的股票添加到篩選列表
+              const existingStocks = value.stock_codes || [];
+              const existingStockNames = value.stock_names || [];
+              const newStocks = [...new Set([...existingStocks, ...stocks])];
+              
+              // 合併股票名稱，優先使用傳入的 stockNames
+              const newStockNames = newStocks.map(code => {
+                const index = stocks.indexOf(code);
+                if (index >= 0 && stockNames && stockNames[index]) {
+                  return stockNames[index];
+                }
+                return companyNameMapping[code] || `股票${code}`;
+              });
+              
+              onChange({
+                ...value,
+                stock_codes: newStocks,
+                stock_names: newStockNames
+              });
+            }}
+            selectedStocks={value.stock_codes || []}
+          />
+        </div>
+      )}
+
       {/* 股票代號列表輸入 */}
       {value.triggerConfig?.triggerKey === 'stock_code_list' && (
         <Card title="股票代號列表" size="small" style={{ marginTop: 16 }}>

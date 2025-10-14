@@ -132,6 +132,7 @@ async def get_session_posts(session_id: int, status: Optional[str] = None):
                 "shares": post.shares,
                 "topic_id": post.topic_id,
                 "topic_title": post.topic_title,
+                "alternative_versions": post.alternative_versions,  # 新增：其他版本
                 "created_at": post.created_at.isoformat() if post.created_at else None,
                 "updated_at": post.updated_at.isoformat() if post.updated_at else None
             }
@@ -205,6 +206,114 @@ async def get_kols():
     except Exception as e:
         logger.error(f"❌ 獲取 KOL 列表失敗: {str(e)}")
         raise HTTPException(status_code=500, detail=f"獲取 KOL 列表失敗: {str(e)}")
+
+def _get_trigger_type_from_params(generation_params):
+    """從 generation_params 中提取 trigger_type"""
+    if not generation_params:
+        return None
+    
+    try:
+        # 如果是字符串，嘗試解析為 JSON
+        if isinstance(generation_params, str):
+            import json
+            params = json.loads(generation_params)
+        else:
+            params = generation_params
+        
+        return params.get('trigger_type') if isinstance(params, dict) else None
+    except (json.JSONDecodeError, TypeError):
+        return None
+
+@router.get("/history-stats")
+async def get_history_stats():
+    """獲取歷史生成資料統計"""
+    try:
+        all_posts = get_post_record_service().get_all_posts()
+        
+        # 按狀態分組統計
+        status_stats = {}
+        session_stats = {}
+        kol_stats = {}
+        stock_stats = {}
+        
+        for post in all_posts:
+            # 狀態統計
+            status = post.status
+            status_stats[status] = status_stats.get(status, 0) + 1
+            
+            # Session 統計
+            session_id = post.session_id
+            if session_id not in session_stats:
+                session_stats[session_id] = {
+                    'count': 0,
+                    'statuses': {},
+                    'kols': set(),
+                    'stocks': set()
+                }
+            session_stats[session_id]['count'] += 1
+            session_stats[session_id]['statuses'][status] = session_stats[session_id]['statuses'].get(status, 0) + 1
+            session_stats[session_id]['kols'].add(post.kol_serial)
+            session_stats[session_id]['stocks'].add(post.stock_code)
+            
+            # KOL 統計
+            kol_serial = post.kol_serial
+            if kol_serial not in kol_stats:
+                kol_stats[kol_serial] = {
+                    'count': 0,
+                    'statuses': {},
+                    'sessions': set()
+                }
+            kol_stats[kol_serial]['count'] += 1
+            kol_stats[kol_serial]['statuses'][status] = kol_stats[kol_serial]['statuses'].get(status, 0) + 1
+            kol_stats[kol_serial]['sessions'].add(session_id)
+            
+            # 股票統計
+            stock_code = post.stock_code
+            if stock_code not in stock_stats:
+                stock_stats[stock_code] = {
+                    'count': 0,
+                    'statuses': {},
+                    'sessions': set()
+                }
+            stock_stats[stock_code]['count'] += 1
+            stock_stats[stock_code]['statuses'][status] = stock_stats[stock_code]['statuses'].get(status, 0) + 1
+            stock_stats[stock_code]['sessions'].add(session_id)
+        
+        # 轉換 set 為 list 以便 JSON 序列化
+        for session_id in session_stats:
+            session_stats[session_id]['kols'] = list(session_stats[session_id]['kols'])
+            session_stats[session_id]['stocks'] = list(session_stats[session_id]['stocks'])
+        
+        for kol_serial in kol_stats:
+            kol_stats[kol_serial]['sessions'] = list(kol_stats[kol_serial]['sessions'])
+        
+        for stock_code in stock_stats:
+            stock_stats[stock_code]['sessions'] = list(stock_stats[stock_code]['sessions'])
+        
+        return {
+            "success": True,
+            "status_stats": status_stats,
+            "session_stats": session_stats,
+            "kol_stats": kol_stats,
+            "stock_stats": stock_stats,
+            "all_posts": [
+                {
+                    "post_id": post.post_id,
+                    "session_id": post.session_id,
+                    "kol_serial": post.kol_serial,
+                    "stock_code": post.stock_code,
+                    "title": post.title,
+                    "status": post.status,
+                    "created_at": post.created_at.isoformat() if post.created_at else None,
+                    "trigger_type": _get_trigger_type_from_params(post.generation_params)
+                }
+                for post in all_posts
+            ],
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"獲取歷史統計失敗: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/{post_id}")
 async def get_post(post_id: str):

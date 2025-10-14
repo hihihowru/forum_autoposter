@@ -15,8 +15,8 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 
-from src.clients.cmoney.cmoney_client import CMoneyClient, LoginCredentials
-from src.clients.google.sheets_client import GoogleSheetsClient
+# from src.clients.cmoney.cmoney_client import CMoneyClient, LoginCredentials  # 暫時註解
+# from src.clients.google.sheets_client import GoogleSheetsClient  # Google Sheets 已棄用
 
 logger = logging.getLogger(__name__)
 
@@ -43,11 +43,10 @@ class InteractionRefreshService:
     """互動數據刷新服務"""
     
     def __init__(self):
-        self.cmoney_client = CMoneyClient()
-        self.sheets_client = GoogleSheetsClient(
-            credentials_file="./credentials/google-service-account.json",
-            spreadsheet_id="148CUhBxqE-BZDPTKaAmOJG6m52CxB4KrxD9p5LikN2s"
-        )
+        # self.cmoney_client = CMoneyClient()  # 暫時註解
+        # self.sheets_client = GoogleSheetsClient(...)  # Google Sheets 已棄用
+        self.cmoney_client = None
+        self.sheets_client = None
         self.refresh_tasks = {}  # 存儲刷新任務狀態
     
     async def get_all_article_ids(self) -> List[str]:
@@ -89,7 +88,7 @@ class InteractionRefreshService:
             logger.error(f"獲取Article ID失敗: {e}")
             return []
     
-    async def refresh_article_interaction(self, article_id: str, kol_credentials: LoginCredentials) -> Dict[str, Any]:
+    async def refresh_article_interaction(self, article_id: str, kol_credentials: Any) -> Dict[str, Any]:
         """刷新單個Article的互動數據"""
         try:
             # 登入獲取token
@@ -390,6 +389,20 @@ async def get_article_list():
     except Exception as e:
         logger.error(f"獲取Article列表失敗: {e}")
         raise HTTPException(status_code=500, detail=f"獲取Article列表失敗: {str(e)}")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

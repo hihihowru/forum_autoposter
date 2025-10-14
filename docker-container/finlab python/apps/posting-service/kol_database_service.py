@@ -158,7 +158,9 @@ class KOLDatabaseService:
         """根據序號獲取 KOL"""
         try:
             db = self.get_db()
-            kol = db.query(KOLProfile).filter(KOLProfile.serial == serial).first()
+            # 確保 serial 是字符串類型，避免類型不匹配錯誤
+            serial_str = str(serial)
+            kol = db.query(KOLProfile).filter(KOLProfile.serial == serial_str).first()
             return kol
         except Exception as e:
             logger.error(f"❌ 獲取 KOL {serial} 失敗: {e}")

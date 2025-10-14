@@ -13,6 +13,7 @@ import {
   CheckCircleOutlined,
   PlayCircleOutlined,
   SendOutlined,
+  TrophyOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 // import type { MenuItem } from '../../types';
@@ -103,6 +104,36 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onRefresh }) => {
           key: '/posting-management/test-after-hours',
           label: '盤後漲停測試',
         },
+        {
+          key: '/posting-management/batch-history',
+          label: '批次歷史',
+          icon: <CheckCircleOutlined />,
+        },
+        {
+          key: '/posting-management/schedule',
+          label: '排程管理',
+          icon: <PlayCircleOutlined />,
+        },
+        {
+          key: '/posting-management/self-learning',
+          label: '自我學習',
+          icon: <RocketOutlined />,
+        },
+        {
+          key: '/posting-management/interaction-analysis',
+          label: '互動分析',
+          icon: <BarChartOutlined />,
+        },
+        {
+          key: '/posting-management/performance-analysis',
+          label: '成效分析',
+          icon: <TrophyOutlined />,
+        },
+        {
+          key: '/posting-management/manual-posting',
+          label: '手動發文',
+          icon: <EditOutlined />,
+        },
       ],
     },
     {
@@ -113,6 +144,10 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onRefresh }) => {
         {
           key: '/interaction-analysis',
           label: '互動總覽',
+        },
+        {
+          key: '/interaction-analysis/features',
+          label: '內容特徵分析',
         },
         {
           key: '/interaction-analysis/1hr',
@@ -161,7 +196,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onRefresh }) => {
           label: '角色權限',
         },
       ],
-    },
+    }
   ];
 
   const handleMenuClick = ({ key }: { key: string }) => {

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, Typography, InputNumber, Input, Space, Button, Tag, Divider, Row, Col, Tooltip, Select } from 'antd';
+import { Card, Typography, InputNumber, Input, Space, Button, Tag, Divider, Row, Col, Tooltip, Select, Switch } from 'antd';
 import { PlusOutlined, DeleteOutlined, DragOutlined, LinkOutlined, SearchOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -20,6 +20,7 @@ interface NewsConfig {
   use_realtime_news_api: boolean;
   search_templates: string[];
   time_range: string;  // 新增時間範圍設定
+  enable_news_links: boolean;  // 新增新聞連結開關
 }
 
 interface NewsConfigProps {
@@ -118,6 +119,13 @@ const NewsConfig: React.FC<NewsConfigProps> = ({ value, onChange }) => {
     onChange({
       ...value,
       time_range: timeRange
+    });
+  };
+
+  const handleEnableNewsLinksChange = (enable: boolean) => {
+    onChange({
+      ...value,
+      enable_news_links: enable
     });
   };
 
@@ -255,23 +263,39 @@ const NewsConfig: React.FC<NewsConfigProps> = ({ value, onChange }) => {
             </Space>
           </Card>
 
-          {/* 新聞連結數量控制 */}
+          {/* 新聞連結開關控制 */}
           <div>
-            <Title level={5}>新聞連結數量</Title>
-            <Space>
-              <Text>最多顯示</Text>
-              <InputNumber
-                min={1}
-                max={10}
-                value={value.max_links}
-                onChange={handleMaxLinksChange}
-                style={{ width: '80px' }}
-              />
-              <Text>個新聞連結</Text>
+            <Title level={5}>新聞連結設定</Title>
+            <Space direction="vertical" style={{ width: '100%' }}>
+              <Space>
+                <Text>啟用新聞連結：</Text>
+                <Switch
+                  checked={value.enable_news_links !== false}
+                  onChange={handleEnableNewsLinksChange}
+                  checkedChildren="開啟"
+                  unCheckedChildren="關閉"
+                />
+              </Space>
+              {value.enable_news_links !== false && (
+                <Space>
+                  <Text>最多顯示</Text>
+                  <InputNumber
+                    min={1}
+                    max={10}
+                    value={value.max_links}
+                    onChange={handleMaxLinksChange}
+                    style={{ width: '80px' }}
+                  />
+                  <Text>個新聞連結</Text>
+                </Space>
+              )}
+              <Text type="secondary" style={{ fontSize: '12px', display: 'block', marginTop: '4px' }}>
+                {value.enable_news_links !== false 
+                  ? '建議設定3-5個連結，避免內容過於冗長'
+                  : '關閉後將不會在貼文中包含新聞連結'
+                }
+              </Text>
             </Space>
-            <Text type="secondary" style={{ fontSize: '12px', display: 'block', marginTop: '4px' }}>
-              建議設定3-5個連結，避免內容過於冗長
-            </Text>
           </div>
 
           <Divider />

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Layout, ConfigProvider } from 'antd';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import zhTW from 'antd/locale/zh_TW';
@@ -7,7 +7,7 @@ import 'dayjs/locale/zh-tw';
 
 import Sidebar from './components/Layout/Sidebar';
 import Header from './components/Layout/Header';
-import DashboardOverview from './components/Dashboard/DashboardOverview';
+// import DashboardOverview from './components/Dashboard/DashboardOverview';
 import SystemMonitoring from './components/Dashboard/SystemMonitoring';
 import ContentManagement from './components/Dashboard/ContentManagement';
 import InteractionAnalysis from './components/Dashboard/InteractionAnalysis';
@@ -15,7 +15,7 @@ import KOLDetail from './components/KOL/KOLDetail';
 import PostDetail from './components/Dashboard/PostDetail';
 
 import SimpleTest from './SimpleTest';
-import { useDashboardStore } from './stores/dashboardStore';
+// import { useDashboardStore } from './stores/dashboardStore';
 
 // 發文管理組件
 import PostingManagement from './components/PostingManagement/PostingManagement';
@@ -25,6 +25,16 @@ import PostingDashboard from './components/PostingManagement/PostingDashboard';
 import AfterHoursLimitUpTest from './components/PostingManagement/AfterHoursLimitUpTest';
 import PublishSuccessPage from './components/PostingManagement/PublishSuccess/PublishSuccessPage';
 import PublishedPostsPage from './pages/PublishedPostsPage';
+import KOLManagementPage from './components/KOL/KOLManagementPage';
+import KOLDetailPage from './components/KOL/KOLDetail';
+
+// 新增的發文管理組件
+import BatchHistoryPage from './components/PostingManagement/BatchHistory/BatchHistoryPage';
+import ScheduleManagementPage from './components/PostingManagement/ScheduleManagement/ScheduleManagementPage';
+import SelfLearningPage from './pages/SelfLearningPage';
+import InteractionAnalysisPage from './pages/InteractionAnalysisPage';
+import PerformanceAnalysisPage from './pages/PerformanceAnalysisPage';
+import ManualPostingPage from './components/PostingManagement/ManualPostingPage';
 
 // 系統設置和用戶管理組件
 import SettingsPage from './components/Settings/SettingsPage';
@@ -151,13 +161,11 @@ const App: React.FC = () => {
                 />
                 <Route
                   path="/content-management/kols"
-                  element={
-                    <ContentManagement
-                      data={contentManagementData}
-                      loading={loading.contentManagement}
-                      error={errors.contentManagement}
-                    />
-                  }
+                  element={<KOLManagementPage />}
+                />
+                <Route
+                  path="/content-management/kols/:serial"
+                  element={<KOLDetailPage />}
                 />
                 <Route
                   path="/content-management/posts"
@@ -171,6 +179,16 @@ const App: React.FC = () => {
                 />
                 <Route
                   path="/interaction-analysis"
+                  element={
+                    <InteractionAnalysis
+                      data={interactionAnalysisData}
+                      loading={loading.interactionAnalysis}
+                      error={errors.interactionAnalysis}
+                    />
+                  }
+                />
+                <Route
+                  path="/interaction-analysis/features"
                   element={
                     <InteractionAnalysis
                       data={interactionAnalysisData}
@@ -238,6 +256,32 @@ const App: React.FC = () => {
                 <Route
                   path="/posting-management/publish-success"
                   element={<PublishSuccessPage />}
+                />
+                
+                {/* 新增的發文管理路由 */}
+                <Route
+                  path="/posting-management/batch-history"
+                  element={<BatchHistoryPage />}
+                />
+                <Route
+                  path="/posting-management/schedule"
+                  element={<ScheduleManagementPage />}
+                />
+                <Route
+                  path="/posting-management/self-learning"
+                  element={<SelfLearningPage />}
+                />
+                <Route
+                  path="/posting-management/interaction-analysis"
+                  element={<InteractionAnalysisPage />}
+                />
+                <Route
+                  path="/posting-management/performance-analysis"
+                  element={<PerformanceAnalysisPage />}
+                />
+                <Route
+                  path="/posting-management/manual-posting"
+                  element={<ManualPostingPage />}
                 />
                 
                 <Route

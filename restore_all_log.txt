@@ -1,0 +1,8 @@
+[0;34m[01:22:06][0m 開始還原 8:59 git restore 影響的所有檔案
+[0;34m[01:22:06][0m 專案目錄: /Users/williamchen/Documents/n8n-migration-project
+[0;34m[01:22:06][0m 歷史目錄: /Users/williamchen/Library/Application Support/Cursor/User/History
+[0;34m[01:22:06][0m 備份目錄: /Users/williamchen/Documents/n8n-migration-project/RESTORE_BACKUP_20251014_012206
+[0;34m[01:22:06][0m 掃描 Local History 檔案...
+[0;34m[01:22:06][0m 開始執行還原...
+[0;34m[01:22:07][0m 還原完成!
+[0;32m✅ 詳細日誌: /Users/williamchen/Documents/n8n-migration-project/restore_all_log.txt[0m

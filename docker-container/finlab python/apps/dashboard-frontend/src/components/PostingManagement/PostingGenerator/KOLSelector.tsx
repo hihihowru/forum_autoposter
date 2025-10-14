@@ -7,7 +7,7 @@ const { Title, Text } = Typography;
 const { Option } = Select;
 
 interface KOLConfig {
-  assignment_mode: 'fixed' | 'dynamic';
+  assignment_mode: 'fixed' | 'dynamic' | 'random';
   selected_kols: number[];
   dynamic_criteria: {
     style_preference: string[];
@@ -15,6 +15,7 @@ interface KOLConfig {
     activity_level: string;
   };
   max_kols_per_post: number;
+  random_pool?: boolean; // 標記是否為隨機池模式
 }
 
 interface KOLSelectorProps {
@@ -61,11 +62,11 @@ const KOLSelector: React.FC<KOLSelectorProps> = ({ value, onChange }) => {
     }
   };
 
-  const handleAssignmentModeChange = (mode: 'fixed' | 'dynamic') => {
+  const handleAssignmentModeChange = (mode: 'fixed' | 'dynamic' | 'random') => {
     onChange({
       ...value,
       assignment_mode: mode,
-      selected_kols: mode === 'dynamic' ? [] : value.selected_kols,
+      selected_kols: mode === 'dynamic' || mode === 'random' ? [] : value.selected_kols,
       dynamic_criteria: mode === 'fixed' ? value.dynamic_criteria : {
         style_preference: [],
         expertise_match: true,
@@ -125,11 +126,12 @@ const KOLSelector: React.FC<KOLSelectorProps> = ({ value, onChange }) => {
         <div>
           <Title level={5}>指派模式</Title>
           <Radio.Group
-            value={value?.assignment_mode || 'dynamic'}
+            value={value?.assignment_mode || 'random'}
             onChange={(e) => handleAssignmentModeChange(e.target.value)}
           >
             <Radio value="fixed">固定指派</Radio>
             <Radio value="dynamic">動態派發</Radio>
+            <Radio value="random">隨機模式</Radio>
           </Radio.Group>
         </div>
 
@@ -258,6 +260,100 @@ const KOLSelector: React.FC<KOLSelectorProps> = ({ value, onChange }) => {
           </div>
         )}
 
+        {value?.assignment_mode === 'random' && (
+          <div>
+            <Title level={5}>隨機模式設定</Title>
+            <Space direction="vertical" style={{ width: '100%' }} size="middle">
+              <div style={{ backgroundColor: '#f6ffed', padding: '12px', borderRadius: '6px', border: '1px solid #b7eb8f' }}>
+                <Text type="secondary">
+                  🎲 隨機模式會從所有可用的KOL中隨機選擇，確保發文的多樣性和公平性
+                </Text>
+              </div>
+              <div>
+                <Text>可用KOL數量: {availableKOLs.length}</Text>
+              </div>
+              <div>
+                <Button 
+                  type="primary" 
+                  icon={<ReloadOutlined />}
+                  onClick={() => {
+                    if (availableKOLs.length === 0) {
+                      message.warning('沒有可用的KOL，請先載入KOL資料');
+                      return;
+                    }
+                    
+                    // 創建隨機池子：選擇所有可用的KOL作為隨機分配池，並打亂順序
+                    const allKOLSerials = availableKOLs.map(kol => kol.serial);
+                    // 使用 Fisher-Yates 洗牌算法打亂順序
+                    for (let i = allKOLSerials.length - 1; i > 0; i--) {
+                      const j = Math.floor(Math.random() * (i + 1));
+                      [allKOLSerials[i], allKOLSerials[j]] = [allKOLSerials[j], allKOLSerials[i]];
+                    }
+                    
+                    onChange({
+                      ...value,
+                      selected_kols: allKOLSerials, // 所有KOL都加入隨機池
+                      random_pool: true // 標記為隨機池模式
+                    });
+                    
+                    message.success(`已創建隨機池子，包含 ${allKOLSerials.length} 個KOL，系統將隨機分配給不同貼文`);
+                  }}
+                  disabled={availableKOLs.length === 0}
+                >
+                  創建隨機池子
+                </Button>
+              </div>
+              
+              {/* 顯示隨機池中的KOL */}
+              {value?.selected_kols && value.selected_kols.length > 0 && (
+                <div>
+                  <Text strong>
+                    {value?.random_pool ? '隨機池中的KOL:' : '已選擇的隨機KOL:'}
+                  </Text>
+                  {value?.random_pool && (
+                    <div style={{ marginTop: '8px', marginBottom: '8px' }}>
+                      <Text type="secondary" style={{ fontSize: '12px' }}>
+                        💡 系統將從這個池子中隨機選擇不同的KOL分配給同一批次中的不同貼文
+                      </Text>
+                    </div>
+                  )}
+                  <Space wrap style={{ marginTop: '8px' }}>
+                    {value.selected_kols.map((kolSerial) => {
+                      const kol = availableKOLs.find(k => k.serial === kolSerial);
+                      if (!kol) return null;
+                      
+                      return (
+                        <Card key={kol.serial} size="small" style={{ width: '300px' }}>
+                          <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <Space>
+                                <Avatar size="small" icon={<UserOutlined />} />
+                                <Text strong>{kol.nickname}</Text>
+                                <Tag color={getPersonaColor(kol.persona)}>
+                                  {kol.persona}
+                                </Tag>
+                              </Space>
+                              <Text type="secondary">#{kol.serial}</Text>
+                            </div>
+                            <Text type="secondary" style={{ fontSize: '12px' }}>
+                              {kol.tone_style} • {kol.target_audience}
+                            </Text>
+                            <div>
+                              <Text type="secondary" style={{ fontSize: '12px' }}>
+                                專長: {kol.content_types.join(', ')}
+                              </Text>
+                            </div>
+                          </Space>
+                        </Card>
+                      );
+                    })}
+                  </Space>
+                </div>
+              )}
+            </Space>
+          </div>
+        )}
+
         <Divider />
 
         <div>
@@ -281,7 +377,7 @@ const KOLSelector: React.FC<KOLSelectorProps> = ({ value, onChange }) => {
 
         <div style={{ backgroundColor: '#f5f5f5', padding: '12px', borderRadius: '6px' }}>
           <Text type="secondary">
-            <SettingOutlined /> 提示：固定指派模式會使用指定的KOL，動態派發模式會根據條件自動選擇最適合的KOL
+            <SettingOutlined /> 提示：固定指派模式會使用指定的KOL，動態派發模式會根據條件自動選擇最適合的KOL，隨機模式會隨機分配KOL
           </Text>
         </div>
       </Space>

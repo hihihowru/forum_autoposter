@@ -89,9 +89,12 @@ const ReviewSidebar: React.FC<ReviewSidebarProps> = ({
   // 定時刷新
   useEffect(() => {
     const interval = setInterval(() => {
-      loadSidebarData();
-    }, 10000); // 每10秒刷新一次
-
+      // 只在頁面可見時才進行輪詢
+      if (!document.hidden) {
+        loadSidebarData();
+      }
+    }, 60000); // 每60秒刷新一次（減少數據庫負載）
+    
     return () => clearInterval(interval);
   }, []);
 

@@ -1,0 +1,167 @@
+version: '3.8'
+
+services:
+  # ==================== 核心服務 ====================
+  posting-service:
+    build: "./docker-container/finlab python/apps/posting-service"
+    ports:
+      - "8001:8000"
+    env_file:
+      - .env
+    environment:
+      - TRENDING_API_URL=http://trending-api:8004
+      - OHLC_API_URL=http://ohlc-api:8005
+      - ANALYZE_API_URL=http://analyze-api:8002
+      - FINANCIAL_API_URL=http://financial-api:8006
+      - SUMMARY_API_URL=http://summary-api:8003
+      - DATABASE_URL=postgresql://postgres:password@postgres-db:5432/posting_management
+    volumes:
+      - ./src:/app/src
+      - posting_data:/app/data  # 持久化貼文數據
+    depends_on:
+      - trending-api
+      - ohlc-api
+      - analyze-api
+      - financial-api
+      - summary-api
+      - postgres-db
+    restart: unless-stopped
+
+  # ==================== 數據服務 ====================
+  ohlc-api:
+    build: "./docker-container/finlab python/apps/ohlc-api"
+    ports:
+      - "8005:8000"
+    env_file:
+      - .env
+    restart: unless-stopped
+
+  financial-api:
+    build: "./docker-container/finlab python/apps/financial-api"
+    ports:
+      - "8006:8000"
+    env_file:
+      - .env
+    restart: unless-stopped
+
+  revenue-api:
+    build: "./docker-container/finlab python/apps/revenue-api"
+    ports:
+      - "8008:8000"
+    env_file:
+      - .env
+    restart: unless-stopped
+
+  monthly-revenue-api:
+    build: "./docker-container/finlab python/apps/monthly-revenue-api"
+    ports:
+      - "8009:8000"
+    env_file:
+      - .env
+    restart: unless-stopped
+
+  # ==================== 分析服務 ====================
+  analyze-api:
+    build: "./docker-container/finlab python/apps/analyze-api"
+    ports:
+      - "8002:8000"
+    restart: unless-stopped
+
+  summary-api:
+    build: "./docker-container/finlab python/apps/summary-api"
+    ports:
+      - "8003:8000"
+    environment:
+      - OHLC_API_URL=http://ohlc-api:8005
+      - ANALYZE_API_URL=http://analyze-api:8002
+    depends_on:
+      - ohlc-api
+      - analyze-api
+    restart: unless-stopped
+
+  fundamental-analyzer:
+    build: "./docker-container/finlab python/apps/fundamental-analyzer"
+    ports:
+      - "8010:8000"
+    env_file:
+      - .env
+    restart: unless-stopped
+
+  # ==================== 內容服務 ====================
+  trending-api:
+    build: "./docker-container/finlab python/apps/trending-api"
+    ports:
+      - "8004:8004"
+    restart: unless-stopped
+
+  # auto-publisher:
+  #   build: "./docker-container/finlab python/apps/auto-publisher"
+  #   ports:
+  #     - "8011:8000"
+  #   env_file:
+  #     - .env
+  #   depends_on:
+  #     - posting-service
+  #   restart: unless-stopped
+
+  # ==================== 儀表板服務 ====================
+  dashboard-api:
+    build: "./docker-container/finlab python/apps/dashboard-api"
+    ports:
+      - "8007:8007"
+    env_file:
+      - .env
+    restart: unless-stopped
+
+  dashboard-backend:
+    build: "./docker-container/finlab python/apps/dashboard-backend"
+    ports:
+      - "8012:8000"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@postgres-db:5432/posting_management
+    depends_on:
+      - postgres-db
+    restart: unless-stopped
+
+  postgres-db:
+    image: postgres:15
+    environment:
+      - POSTGRES_DB=posting_management
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+
+  dashboard-frontend:
+    build: "./docker-container/finlab python/apps/dashboard-frontend"
+    ports:
+      - "3000:3000"
+    volumes:
+      - "./docker-container/finlab python/apps/dashboard-frontend/src:/app/src"
+      - "./docker-container/finlab python/apps/dashboard-frontend/public:/app/public"
+    environment:
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+    restart: unless-stopped
+
+  # ==================== 訓練服務 ====================
+  # trainer:
+  #   build: "./docker-container/finlab python/apps/trainer"
+  #   ports:
+  #     - "8013:8000"
+  #   env_file:
+  #     - .env
+  #   restart: unless-stopped
+
+volumes:
+  postgres_data:
+  posting_data:  # 持久化貼文數據
+
+networks:
+  default:
+    name: finlab-network

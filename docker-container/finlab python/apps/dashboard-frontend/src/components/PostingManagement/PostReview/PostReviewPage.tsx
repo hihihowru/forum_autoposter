@@ -33,7 +33,8 @@ import {
   FileTextOutlined,
   SaveOutlined,
   CancelOutlined,
-  DeleteOutlined
+  DeleteOutlined,
+  BranchesOutlined
 } from '@ant-design/icons';
 import PostingManagementAPI from '../../../services/postingManagementAPI';
 import { Post } from '../../../types/posting';
@@ -57,10 +58,13 @@ const PostReviewPage: React.FC<PostReviewPageProps> = ({ sessionId, onBack }) =>
   const [bodyMessageVisible, setBodyMessageVisible] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editingPost, setEditingPost] = useState<Post | null>(null);
-  const [editedTitle, setEditedTitle] = useState('');
-  const [editedContent, setEditedContent] = useState('');
   const [form] = Form.useForm();
   const [error, setError] = useState<string | null>(null);
+  
+  // 版本預覽相關狀態
+  const [versionModalVisible, setVersionModalVisible] = useState(false);
+  const [selectedPostForVersions, setSelectedPostForVersions] = useState<Post | null>(null);
+  const [alternativeVersions, setAlternativeVersions] = useState<any[]>([]);
 
   // 錯誤處理
   const handleError = (error: any) => {
@@ -99,18 +103,46 @@ const PostReviewPage: React.FC<PostReviewPageProps> = ({ sessionId, onBack }) =>
       if (sessionId) {
         // 載入特定session的貼文（包含所有狀態）
         console.log('📡 調用 getSessionPosts API...');
-        response = await PostingManagementAPI.getSessionPosts(sessionId, 0, 100);
+        // 不指定狀態，獲取該session的所有貼文
+        response = await PostingManagementAPI.getSessionPosts(sessionId);
         console.log('✅ getSessionPosts 響應:', response);
       } else {
         // 載入所有貼文（包含所有狀態）
         console.log('📡 調用 getPosts API...');
-        response = await PostingManagementAPI.getPosts(0, 100);
+        response = await PostingManagementAPI.getPosts(0, 5000);
         console.log('✅ getPosts 響應:', response);
       }
       
       const posts = response?.posts || [];
       console.log('📊 設置貼文數據:', posts.length, '篇貼文');
       console.log('📋 貼文詳情:', posts);
+      
+      // 檢查 alternative_versions 數據
+      posts.forEach((post: any, index: number) => {
+        console.log(`🔍 貼文 ${index + 1} alternative_versions:`, post.alternative_versions);
+        console.log(`🔍 貼文 ${index + 1} alternative_versions 類型:`, typeof post.alternative_versions);
+        
+        // 嘗試解析 JSON 字符串
+        let parsedVersions = post.alternative_versions;
+        if (typeof post.alternative_versions === 'string') {
+          try {
+            parsedVersions = JSON.parse(post.alternative_versions);
+            console.log(`✅ 貼文 ${index + 1} alternative_versions 解析成功:`, parsedVersions);
+          } catch (e) {
+            console.log(`❌ 貼文 ${index + 1} alternative_versions JSON 解析失敗:`, e);
+            parsedVersions = [];
+          }
+        }
+        
+        if (parsedVersions && Array.isArray(parsedVersions)) {
+          console.log(`✅ 貼文 ${index + 1} 有 ${parsedVersions.length} 個 alternative_versions`);
+          // 更新 post 對象中的 alternative_versions
+          post.alternative_versions = parsedVersions;
+        } else {
+          console.log(`❌ 貼文 ${index + 1} 沒有 alternative_versions 或不是數組`);
+          post.alternative_versions = [];
+        }
+      });
       
       // 確保每個貼文都有必要的字段
       const safePosts = posts.map((post: any) => {
@@ -160,11 +192,14 @@ const PostReviewPage: React.FC<PostReviewPageProps> = ({ sessionId, onBack }) =>
   useEffect(() => {
     loadPosts();
     
-    // 設置定時刷新，每5秒檢查一次新貼文
+    // 設置定時刷新，每30秒檢查一次新貼文（減少數據庫負載）
+    // 只在頁面可見時才進行輪詢
     const interval = setInterval(() => {
-      console.log('🔄 定時刷新貼文列表');
-      loadPosts();
-    }, 5000);
+      if (!document.hidden) {
+        console.log('🔄 定時刷新貼文列表');
+        loadPosts();
+      }
+    }, 60000); // 改為60秒，減少數據庫負載
     
     return () => clearInterval(interval);
   }, [sessionId]);
@@ -175,13 +210,7 @@ const PostReviewPage: React.FC<PostReviewPageProps> = ({ sessionId, onBack }) =>
       const response = await PostingManagementAPI.approvePost(postId, '審核通過', 'system', editedTitle, editedContent);
       message.success('貼文審核通過');
       
-      // 審核通過後自動發文
-      const post = posts.find(p => p.id === postId);
-      if (post) {
-        message.info('正在自動發文...');
-        await handlePublish(post);
-      }
-      
+      // 審核通過後不自動發文，繼續審核下一則
       loadPosts(); // 重新載入
     } catch (error) {
       console.error('審核失敗:', error);
@@ -213,10 +242,11 @@ const PostReviewPage: React.FC<PostReviewPageProps> = ({ sessionId, onBack }) =>
         message.success(`✅ ${post.stock_names && post.stock_names[0] ? post.stock_names[0] : '未知股票'}(${post.stock_codes && post.stock_codes[0] ? post.stock_codes[0] : '未知代碼'}) 發布成功！`);
         message.info(`文章ID: ${response.article_id}`);
         
-        // 發佈成功後跳轉到成功頁面
-        navigate(`/posting-management/publish-success?sessionId=${post.session_id}`);
+        // 發佈成功後留在當前頁面繼續審核
+        loadPosts(); // 重新載入，更新貼文狀態
         
-        loadPosts(); // 重新載入
+        // 可選：顯示成功提示，但不跳轉
+        // navigate(`/posting-management/publish-success?sessionId=${post.session_id}`);
       } else {
         message.error(`發布失敗: ${response.error}`);
       }
@@ -247,8 +277,6 @@ const PostReviewPage: React.FC<PostReviewPageProps> = ({ sessionId, onBack }) =>
   // 打開編輯Modal
   const handleEditPost = (post: Post) => {
     setEditingPost(post);
-    setEditedTitle(post.title);
-    setEditedContent(post.content);
     setEditModalVisible(true);
     form.setFieldsValue({
       title: post.title,
@@ -261,9 +289,16 @@ const PostReviewPage: React.FC<PostReviewPageProps> = ({ sessionId, onBack }) =>
     if (!editingPost) return;
     
     try {
-      await handleApprove(editingPost.id.toString(), editedTitle, editedContent);
+      // 獲取表單值
+      const formValues = form.getFieldsValue();
+      const { title, content } = formValues;
+      
+      console.log('🔄 保存編輯:', { title, content });
+      
+      await handleApprove(editingPost.id.toString(), title, content);
       setEditModalVisible(false);
       setEditingPost(null);
+      form.resetFields();
       message.success('貼文已編輯並審核通過');
     } catch (error) {
       console.error('保存編輯失敗:', error);
@@ -274,25 +309,73 @@ const PostReviewPage: React.FC<PostReviewPageProps> = ({ sessionId, onBack }) =>
   const handleCancelEdit = () => {
     setEditModalVisible(false);
     setEditingPost(null);
-    setEditedTitle('');
-    setEditedContent('');
     form.resetFields();
   };
 
-  // 處理表單值變化
-  const handleFormChange = (changedValues: any, allValues: any) => {
-    if (changedValues.title !== undefined) {
-      setEditedTitle(changedValues.title);
+  // 處理版本預覽
+  const handleVersionPreview = (post: Post) => {
+    console.log('🔍 處理版本預覽:', post);
+    
+    // 檢查是否有 alternative_versions
+    if (post.alternative_versions && Array.isArray(post.alternative_versions)) {
+      setAlternativeVersions(post.alternative_versions);
+      setSelectedPostForVersions(post);
+      setVersionModalVisible(true);
+    } else {
+      message.warning('此貼文沒有其他版本可供選擇');
     }
-    if (changedValues.content !== undefined) {
-      setEditedContent(changedValues.content);
+  };
+
+  // 選擇版本並更新
+  const handleSelectVersion = async (selectedVersion: any) => {
+    if (!selectedPostForVersions) return;
+    
+    try {
+      console.log('🔄 選擇版本:', selectedVersion);
+      
+      // 調用 API 更新貼文內容
+      const response = await PostingManagementAPI.updatePostContent(
+        selectedPostForVersions.id.toString(),
+        {
+          title: selectedVersion.title,
+          content: selectedVersion.content,
+          content_md: selectedVersion.content
+        }
+      );
+      
+      if (response.success) {
+        message.success('版本已更新成功');
+        setVersionModalVisible(false);
+        setSelectedPostForVersions(null);
+        setAlternativeVersions([]);
+        loadPosts(); // 重新載入貼文列表
+      } else {
+        message.error('版本更新失敗');
+      }
+    } catch (error) {
+      console.error('版本更新失敗:', error);
+      message.error('版本更新失敗');
     }
   };
 
   // 刪除貼文
   const handleDelete = async (post: Post) => {
     try {
-      const response = await PostingManagementAPI.deleteFromCMoney(post.id.toString());
+      // 檢查post.id是否存在
+      if (!post.id) {
+        console.error('❌ 貼文ID不存在:', post);
+        message.error('無法刪除：貼文ID不存在');
+        return;
+      }
+      
+      console.log('🗑️ 準備刪除貼文:', {
+        id: post.id,
+        title: post.title,
+        stock_names: post.stock_names,
+        stock_codes: post.stock_codes
+      });
+      
+      const response = await PostingManagementAPI.deleteFromCMoney(post.id);
       
       if (response.success) {
         message.success(`✅ ${post.stock_names && post.stock_names[0] ? post.stock_names[0] : '未知股票'}(${post.stock_codes && post.stock_codes[0] ? post.stock_codes[0] : '未知代碼'}) 刪除成功！`);
@@ -526,7 +609,7 @@ const PostReviewPage: React.FC<PostReviewPageProps> = ({ sessionId, onBack }) =>
             dataIndex="created_at"
             key="created_at"
             width={150}
-            render={(time: string) => new Date(time).toLocaleString()}
+            render={(time: string) => new Date(time).toLocaleString('zh-TW')}
           />
           
           <Column
@@ -551,6 +634,23 @@ const PostReviewPage: React.FC<PostReviewPageProps> = ({ sessionId, onBack }) =>
                   />
                 </Tooltip>
                 
+                {/* 版本預覽按鈕 - 檢查是否有 alternative_versions */}
+                {(() => {
+                  console.log(`🔍 檢查貼文 ${record.id} 的 alternative_versions:`, record.alternative_versions);
+                  const hasVersions = record.alternative_versions && Array.isArray(record.alternative_versions) && record.alternative_versions.length > 0;
+                  console.log(`🔍 貼文 ${record.id} 是否有版本:`, hasVersions);
+                  return hasVersions;
+                })() && (
+                  <Tooltip title="版本預覽">
+                    <Button 
+                      icon={<BranchesOutlined />} 
+                      size="small"
+                      onClick={() => handleVersionPreview(record)}
+                      style={{ color: '#1890ff' }}
+                    />
+                  </Tooltip>
+                )}
+                
                 {/* 編輯按鈕 - 所有狀態都顯示 */}
                 <Tooltip title="編輯">
                   <Button 
@@ -560,11 +660,11 @@ const PostReviewPage: React.FC<PostReviewPageProps> = ({ sessionId, onBack }) =>
                   />
                 </Tooltip>
 
-                {(record.status === 'pending_review' || record.status === 'draft') && (
+                {(record.status === 'pending_review' || record.status === 'draft') && (record.id || record.post_id) && (
                   <>
                     <Popconfirm
                       title="確定審核通過？"
-                      onConfirm={() => handleApprove(record.id.toString())}
+                      onConfirm={() => handleApprove((record.id || record.post_id).toString())}
                     >
                       <Tooltip title="直接審核通過">
                         <Button 
@@ -581,7 +681,7 @@ const PostReviewPage: React.FC<PostReviewPageProps> = ({ sessionId, onBack }) =>
                       onConfirm={(e) => {
                         const reason = prompt('請輸入拒絕原因:');
                         if (reason) {
-                          handleReject(record.id.toString(), reason);
+                          handleReject((record.id || record.post_id).toString(), reason);
                         }
                       }}
                     >
@@ -594,6 +694,18 @@ const PostReviewPage: React.FC<PostReviewPageProps> = ({ sessionId, onBack }) =>
                       </Tooltip>
                     </Popconfirm>
                   </>
+                )}
+                
+                {/* 對於沒有 ID 的草稿，顯示提示 */}
+                {(record.status === 'draft' && !record.id && !record.post_id) && (
+                  <Tooltip title="此草稿尚未分配 ID，無法進行審核操作">
+                    <Button 
+                      icon={<ExclamationCircleOutlined />} 
+                      size="small" 
+                      disabled
+                      style={{ color: '#faad14' }}
+                    />
+                  </Tooltip>
                 )}
                 
                 {record.status === 'approved' && (
@@ -880,7 +992,7 @@ const PostReviewPage: React.FC<PostReviewPageProps> = ({ sessionId, onBack }) =>
         ]}
       >
         {editingPost && (
-          <Form form={form} layout="vertical" onValuesChange={handleFormChange}>
+          <Form form={form} layout="vertical">
             <Row gutter={16} style={{ marginBottom: '16px' }}>
               <Col span={12}>
                 <Text strong>KOL: </Text>
@@ -900,8 +1012,6 @@ const PostReviewPage: React.FC<PostReviewPageProps> = ({ sessionId, onBack }) =>
               rules={[{ required: true, message: '請輸入標題' }]}
             >
               <Input 
-                value={editedTitle}
-                onChange={(e) => setEditedTitle(e.target.value)}
                 placeholder="請輸入貼文標題"
               />
             </Form.Item>
@@ -912,8 +1022,6 @@ const PostReviewPage: React.FC<PostReviewPageProps> = ({ sessionId, onBack }) =>
               rules={[{ required: true, message: '請輸入內容' }]}
             >
               <TextArea 
-                value={editedContent}
-                onChange={(e) => setEditedContent(e.target.value)}
                 placeholder="請輸入貼文內容"
                 rows={12}
                 showCount
@@ -938,6 +1046,107 @@ const PostReviewPage: React.FC<PostReviewPageProps> = ({ sessionId, onBack }) =>
               </Col>
             </Row>
           </Form>
+        )}
+      </Modal>
+
+      {/* 版本預覽Modal */}
+      <Modal
+        title={`版本預覽 - ${selectedPostForVersions?.stock_names && selectedPostForVersions.stock_names[0] ? selectedPostForVersions.stock_names[0] : '未知股票'}(${selectedPostForVersions?.stock_codes && selectedPostForVersions.stock_codes[0] ? selectedPostForVersions.stock_codes[0] : '未知代碼'})`}
+        open={versionModalVisible}
+        onCancel={() => {
+          setVersionModalVisible(false);
+          setSelectedPostForVersions(null);
+          setAlternativeVersions([]);
+        }}
+        width={1200}
+        footer={[
+          <Button key="cancel" onClick={() => {
+            setVersionModalVisible(false);
+            setSelectedPostForVersions(null);
+            setAlternativeVersions([]);
+          }}>
+            取消
+          </Button>
+        ]}
+      >
+        {selectedPostForVersions && (
+          <div>
+            <Alert
+              message="版本選擇"
+              description={`當前貼文有 ${alternativeVersions.length} 個其他版本可供選擇。點擊「選擇此版本」來替換當前內容。`}
+              type="info"
+              showIcon
+              style={{ marginBottom: '16px' }}
+            />
+            
+            <div style={{ marginBottom: '16px' }}>
+              <Title level={4}>當前版本</Title>
+              <Card size="small" style={{ backgroundColor: '#f0f8ff' }}>
+                <div style={{ marginBottom: '8px' }}>
+                  <Text strong>標題：</Text>
+                  <Text>{selectedPostForVersions.title}</Text>
+                </div>
+                <div>
+                  <Text strong>內容：</Text>
+                  <div style={{ 
+                    marginTop: '8px',
+                    padding: '8px',
+                    backgroundColor: '#f9f9f9',
+                    borderRadius: '4px',
+                    fontSize: '12px',
+                    maxHeight: '100px',
+                    overflow: 'auto'
+                  }}>
+                    {selectedPostForVersions.content.substring(0, 200)}...
+                  </div>
+                </div>
+              </Card>
+            </div>
+            
+            <Divider />
+            
+            <Title level={4}>其他版本 ({alternativeVersions.length} 個)</Title>
+            
+            <div style={{ maxHeight: '500px', overflow: 'auto' }}>
+              {alternativeVersions.map((version, index) => (
+                <Card 
+                  key={index} 
+                  size="small" 
+                  style={{ marginBottom: '12px' }}
+                  title={`版本 ${version.version_number || index + 1} - ${version.angle || '分析型'}`}
+                  extra={
+                    <Button 
+                      type="primary" 
+                      size="small"
+                      onClick={() => handleSelectVersion(version)}
+                    >
+                      選擇此版本
+                    </Button>
+                  }
+                >
+                  <div style={{ marginBottom: '8px' }}>
+                    <Text strong>標題：</Text>
+                    <Text>{version.title}</Text>
+                  </div>
+                  <div>
+                    <Text strong>內容：</Text>
+                    <div style={{ 
+                      marginTop: '8px',
+                      padding: '8px',
+                      backgroundColor: '#f9f9f9',
+                      borderRadius: '4px',
+                      fontSize: '12px',
+                      maxHeight: '150px',
+                      overflow: 'auto',
+                      whiteSpace: 'pre-wrap'
+                    }}>
+                      {version.content}
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </div>
         )}
       </Modal>
 

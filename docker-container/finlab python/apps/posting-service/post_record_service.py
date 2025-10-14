@@ -48,7 +48,17 @@ class CommunityTopic:
 class GenerationParams:
     def __init__(self, kol_persona: str, content_style: str, target_audience: str, 
                  batch_mode: bool, session_id: Optional[int] = None, 
-                 technical_indicators: List[str] = None, data_sources: List[str] = None):
+                 technical_indicators: List[str] = None, data_sources: List[str] = None,
+                 # 新增：百分比配置參數
+                 article_type_distribution: Optional[Dict[str, int]] = None,
+                 content_length_distribution: Optional[Dict[str, int]] = None,
+                 content_style_distribution: Optional[Dict[str, int]] = None,
+                 analysis_depth_distribution: Optional[Dict[str, int]] = None,
+                 max_words: Optional[int] = None,
+                 include_charts: Optional[bool] = None,
+                 include_risk_warning: Optional[bool] = None,
+                 # 新增：觸發器類型
+                 trigger_type: Optional[str] = None):
         self.kol_persona = kol_persona
         self.content_style = content_style
         self.target_audience = target_audience
@@ -56,6 +66,16 @@ class GenerationParams:
         self.session_id = session_id
         self.technical_indicators = technical_indicators or []
         self.data_sources = data_sources or []
+        # 新增：百分比配置參數
+        self.article_type_distribution = article_type_distribution
+        self.content_length_distribution = content_length_distribution
+        self.content_style_distribution = content_style_distribution
+        self.analysis_depth_distribution = analysis_depth_distribution
+        self.max_words = max_words
+        self.include_charts = include_charts
+        self.include_risk_warning = include_risk_warning
+        # 新增：觸發器類型
+        self.trigger_type = trigger_type
     
     def model_dump(self):
         return {
@@ -65,7 +85,17 @@ class GenerationParams:
             "batch_mode": self.batch_mode,
             "session_id": self.session_id,
             "technical_indicators": self.technical_indicators,
-            "data_sources": self.data_sources
+            "data_sources": self.data_sources,
+            # 新增：百分比配置參數
+            "article_type_distribution": self.article_type_distribution,
+            "content_length_distribution": self.content_length_distribution,
+            "content_style_distribution": self.content_style_distribution,
+            "analysis_depth_distribution": self.analysis_depth_distribution,
+            "max_words": self.max_words,
+            "include_charts": self.include_charts,
+            "include_risk_warning": self.include_risk_warning,
+            # 新增：觸發器類型
+            "trigger_type": self.trigger_type
         }
 
 class PostRecordCreate:
@@ -91,7 +121,8 @@ class PostRecordCreate:
                  views: int = 0, likes: int = 0, comments: int = 0, shares: int = 0,
                  topic_id: Optional[str] = None, topic_title: Optional[str] = None,
                  technical_analysis: Optional[Dict] = None,
-                 serper_data: Optional[Dict] = None):
+                 serper_data: Optional[Dict] = None,
+                 alternative_versions: Optional[List[Dict]] = None):
         self.session_id = session_id
         self.kol_serial = kol_serial
         self.kol_nickname = kol_nickname
@@ -124,6 +155,7 @@ class PostRecordCreate:
         self.topic_title = topic_title
         self.technical_analysis = technical_analysis
         self.serper_data = serper_data
+        self.alternative_versions = alternative_versions or []
 
 class PostRecordInDB(PostRecordCreate):
     def __init__(self, post_id: str, created_at: datetime, updated_at: datetime, **kwargs):
@@ -350,12 +382,13 @@ class PostRecordService:
     def save_to_postgresql(self, post_record: PostRecordInDB):
         """保存貼文記錄到 PostgreSQL 數據庫"""
         try:
+            import os
             conn = psycopg2.connect(
-                host='postgres-db',
-                port=5432,
-                database='posting_management',
-                user='postgres',
-                password='password'
+                host=os.getenv('POSTGRES_HOST', 'postgres-db'),
+                port=int(os.getenv('POSTGRES_PORT', '5432')),
+                database=os.getenv('POSTGRES_DB', 'posting_management'),
+                user=os.getenv('POSTGRES_USER', 'postgres'),
+                password=os.getenv('POSTGRES_PASSWORD', 'password')
             )
             cursor = conn.cursor()
             

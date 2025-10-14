@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
-import { Card, Row, Col, Table, Tag, Statistic, Select, Space, Alert } from 'antd';
+import { Card, Row, Col, Table, Tag, Statistic, Select, Space, Alert, Button, message } from 'antd';
 import { 
   LikeOutlined, 
   MessageOutlined, 
   BarChartOutlined,
   RiseOutlined,
   UserOutlined,
-  FireOutlined
+  FireOutlined,
+  DownloadOutlined,
+  ReloadOutlined
 } from '@ant-design/icons';
 import { Column, Pie } from '@ant-design/charts';
 import type { InteractionAnalysisData } from '../../types';
@@ -21,6 +23,61 @@ interface InteractionAnalysisProps {
 
 const InteractionAnalysis: React.FC<InteractionAnalysisProps> = ({ data, loading, error }) => {
   const [selectedPeriod, setSelectedPeriod] = useState('互動回饋_1hr');
+  const [fetchingData, setFetchingData] = useState(false);
+
+  // 刷新所有互動數據
+  const refreshAllInteractions = async () => {
+    setFetchingData(true);
+    try {
+      const response = await fetch('http://localhost:8001/interactions/refresh-all', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        message.success(`刷新完成：${result.message}`);
+        console.log('刷新結果:', result);
+        
+        // 顯示詳細統計
+        if (result.deduplicate) {
+          message.info(`去重完成：移除 ${result.deduplicate.removed_count} 個重複記錄`);
+        }
+        if (result.fetch) {
+          message.info(`開始抓取 ${result.fetch.total_posts} 篇貼文的互動數據`);
+        }
+      } else {
+        message.error('刷新數據失敗');
+      }
+    } catch (error) {
+      console.error('刷新數據錯誤:', error);
+      message.error('刷新數據時發生錯誤');
+    } finally {
+      setFetchingData(false);
+    }
+  };
+
+  // 抓取所有貼文數據
+  const fetchAllPostsData = async () => {
+    setFetchingData(true);
+    try {
+      const response = await fetch('http://localhost:8001/posts?skip=0&limit=10000');
+      if (response.ok) {
+        const result = await response.json();
+        message.success(`成功抓取 ${result.posts?.length || 0} 筆貼文數據`);
+        console.log('抓取的貼文數據:', result);
+      } else {
+        message.error('抓取數據失敗');
+      }
+    } catch (error) {
+      console.error('抓取數據錯誤:', error);
+      message.error('抓取數據時發生錯誤');
+    } finally {
+      setFetchingData(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -201,23 +258,52 @@ const InteractionAnalysis: React.FC<InteractionAnalysisProps> = ({ data, loading
   return (
     <div style={{ padding: '24px' }}>
       <Row gutter={[16, 16]}>
-        {/* 時間週期選擇 */}
+        {/* 時間週期選擇和數據抓取 */}
         <Col span={24}>
           <Card size="small">
-            <Space>
-              <span>選擇時間週期:</span>
-              <Select
-                value={selectedPeriod}
-                onChange={setSelectedPeriod}
-                style={{ width: 200 }}
-              >
-                {periodOptions.map(option => (
-                  <Option key={option.value} value={option.value}>
-                    {option.label}
-                  </Option>
-                ))}
-              </Select>
-            </Space>
+            <Row justify="space-between" align="middle">
+              <Col>
+                <Space>
+                  <span>選擇時間週期:</span>
+                  <Select
+                    value={selectedPeriod}
+                    onChange={setSelectedPeriod}
+                    style={{ width: 200 }}
+                  >
+                    {periodOptions.map(option => (
+                      <Option key={option.value} value={option.value}>
+                        {option.label}
+                      </Option>
+                    ))}
+                  </Select>
+                </Space>
+              </Col>
+              <Col>
+                <Space>
+                  <Button
+                    type="primary"
+                    icon={<ReloadOutlined />}
+                    loading={fetchingData}
+                    onClick={refreshAllInteractions}
+                  >
+                    刷新所有互動數據
+                  </Button>
+                  <Button
+                    icon={<DownloadOutlined />}
+                    loading={fetchingData}
+                    onClick={fetchAllPostsData}
+                  >
+                    抓取所有貼文數據
+                  </Button>
+                  <Button
+                    icon={<ReloadOutlined />}
+                    onClick={() => window.location.reload()}
+                  >
+                    重新整理
+                  </Button>
+                </Space>
+              </Col>
+            </Row>
           </Card>
         </Col>
 

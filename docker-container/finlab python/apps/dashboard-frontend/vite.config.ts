@@ -52,6 +52,11 @@ export default defineConfig({
         target: 'http://localhost:8004',  // trending-api 端口
         changeOrigin: true,
         secure: false,
+      },
+      '/intraday-trigger': {
+        target: 'http://localhost:8001',  // posting-service 端口
+        changeOrigin: true,
+        secure: false,
       }
     }
   },

@@ -60,8 +60,15 @@ class PostgreSQLPostRecordService:
                 ai_detection_score=post_data.get('ai_detection_score'),
                 risk_level=post_data.get('risk_level'),
                 generation_params=post_data.get('generation_params'),
-                commodity_tags=post_data.get('commodity_tags')
+                commodity_tags=post_data.get('commodity_tags'),
+                alternative_versions=post_data.get('alternative_versions')
             )
+            
+            # 記錄 alternative_versions 的保存情況
+            if post_data.get('alternative_versions'):
+                print(f"💾 保存 alternative_versions 到數據庫: {len(post_data.get('alternative_versions', []))} 個版本")
+            else:
+                print(f"⚠️ 沒有 alternative_versions 數據需要保存")
             
             # 保存到數據庫
             db = next(get_db())
@@ -123,7 +130,7 @@ class PostgreSQLPostRecordService:
             logger.error(f"❌ 更新貼文記錄失敗: {e}")
             return None
     
-    def get_all_posts(self, skip: int = 0, limit: int = 100, status: Optional[str] = None) -> List[PostRecord]:
+    def get_all_posts(self, skip: int = 0, limit: int = 3000, status: Optional[str] = None) -> List[PostRecord]:
         """獲取所有貼文記錄"""
         try:
             db = next(get_db())
@@ -145,18 +152,18 @@ class PostgreSQLPostRecordService:
     def get_session_posts(self, session_id: int, status: Optional[str] = None, skip: int = 0, limit: int = 100) -> List[PostRecord]:
         """獲取特定session的貼文記錄"""
         try:
-            db = next(get_db())
-            query = db.query(PostRecord).filter(PostRecord.session_id == session_id)
-            
-            # 如果有狀態過濾條件，添加狀態過濾
-            if status:
-                query = query.filter(PostRecord.status == status)
-            
-            posts = query.offset(skip).limit(limit).all()
-            db.close()
-            
-            logger.info(f"✅ 獲取session {session_id} 貼文記錄成功 - 總數: {len(posts)} (狀態過濾: {status})")
-            return posts
+            # 使用正確的數據庫連接管理
+            with next(get_db()) as db:
+                query = db.query(PostRecord).filter(PostRecord.session_id == session_id)
+                
+                # 如果有狀態過濾條件，添加狀態過濾
+                if status:
+                    query = query.filter(PostRecord.status == status)
+                
+                posts = query.offset(skip).limit(limit).all()
+                
+                logger.info(f"✅ 獲取session {session_id} 貼文記錄成功 - 總數: {len(posts)} (狀態過濾: {status})")
+                return posts
             
         except Exception as e:
             logger.error(f"❌ 獲取session貼文記錄失敗: {e}")

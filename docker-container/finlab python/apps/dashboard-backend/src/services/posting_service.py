@@ -6,6 +6,7 @@ import logging
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from datetime import datetime
 
 from ..models.posting_models import (
     PostingTemplate, PostingSession, Post, KOLProfile, 
@@ -103,18 +104,80 @@ class PostingService:
             raise
     
     async def get_posts(self, skip: int = 0, limit: int = 100, status: Optional[str] = None) -> dict:
-        """獲取發文列表"""
+        """獲取發文列表 - 包含 posts 和 post_records 表"""
         try:
-            query = self.db.query(Post)
+            # 查詢 posts 表
+            posts_query = self.db.query(Post)
+            if status:
+                posts_query = posts_query.filter(Post.status == status)
+            
+            posts = posts_query.all()
+            logger.info(f"Found {len(posts)} posts from posts table")
+            
+            # 查詢 post_records 表（手動發文）
+            post_records_query = """
+                SELECT 
+                    post_id as id,
+                    created_at,
+                    updated_at,
+                    kol_serial,
+                    kol_nickname,
+                    title,
+                    content,
+                    status
+                FROM post_records
+            """
             
             if status:
-                query = query.filter(Post.status == status)
+                post_records_query += f" WHERE status = '{status}'"
             
-            posts = query.offset(skip).limit(limit).all()
-            total = query.count()
+            post_records_query += " ORDER BY created_at DESC"
+            
+            post_records_result = self.db.execute(text(post_records_query)).fetchall()
+            logger.info(f"Found {len(post_records_result)} posts from post_records table")
+            
+            # 合併結果
+            all_posts = []
+            
+            # 添加 posts 表的記錄
+            for post in posts:
+                all_posts.append({
+                    "id": post.id,
+                    "title": post.title,
+                    "content": post.content,
+                    "status": post.status,
+                    "kol_serial": post.kol_serial,
+                    "kol_nickname": post.kol_nickname,
+                    "created_at": post.created_at,
+                    "updated_at": post.updated_at,
+                    "source": "posts"
+                })
+            
+            # 添加 post_records 表的記錄
+            for record in post_records_result:
+                all_posts.append({
+                    "id": record.id,
+                    "title": record.title,
+                    "content": record.content,
+                    "status": record.status,
+                    "kol_serial": record.kol_serial,
+                    "kol_nickname": record.kol_nickname,
+                    "created_at": record.created_at,
+                    "updated_at": record.updated_at,
+                    "source": "post_records"
+                })
+            
+            # 按創建時間排序
+            all_posts.sort(key=lambda x: x["created_at"] or datetime.min, reverse=True)
+            
+            # 應用分頁
+            total = len(all_posts)
+            paginated_posts = all_posts[skip:skip + limit]
+            
+            logger.info(f"Total posts: {total}, returning {len(paginated_posts)} posts")
             
             return {
-                "posts": [PostResponse.from_orm(post) for post in posts],
+                "posts": paginated_posts,
                 "total": total,
                 "skip": skip,
                 "limit": limit

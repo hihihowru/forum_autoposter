@@ -14,6 +14,14 @@ interface GenerationSettings {
   max_words: number;
   include_charts: boolean;
   include_risk_warning: boolean;
+  // 新增：自定義字數
+  custom_word_count?: number;
+  // 新增：發文類型
+  posting_type: 'interaction' | 'analysis';
+  // 新增：互動發問相關設定
+  include_questions: boolean;
+  include_emoji: boolean;
+  include_hashtag: boolean;
 }
 
 interface GenerationSettingsProps {
@@ -44,6 +52,13 @@ const GenerationSettings: React.FC<GenerationSettingsProps> = ({ value, onChange
       ...value,
       content_length: length,
       max_words: maxWordsMap[length]
+    });
+  };
+
+  const handleCustomWordCountChange = (wordCount: number | null) => {
+    onChange({
+      ...value,
+      custom_word_count: wordCount || undefined
     });
   };
 
@@ -86,6 +101,57 @@ const GenerationSettings: React.FC<GenerationSettingsProps> = ({ value, onChange
     onChange({
       ...value,
       include_risk_warning: includeRiskWarning
+    });
+  };
+
+  const handlePostingTypeChange = (postingType: 'interaction' | 'analysis') => {
+    const newSettings = {
+      ...value,
+      posting_type: postingType
+    };
+
+    // 根據發文類型自動調整設定
+    if (postingType === 'interaction') {
+      // 互動發問類型：簡短內容，包含問句和表情符號
+      newSettings.content_length = 'short';
+      newSettings.max_words = 30;
+      newSettings.include_questions = true;
+      newSettings.include_emoji = true;
+      newSettings.include_hashtag = true;
+      newSettings.content_style = 'casual';
+      newSettings.include_analysis_depth = 'basic';
+    } else {
+      // 發表分析類型：正常流程
+      newSettings.content_length = 'medium';
+      newSettings.max_words = 200;
+      newSettings.include_questions = false;
+      newSettings.include_emoji = false;
+      newSettings.include_hashtag = true;
+      newSettings.content_style = 'professional';
+      newSettings.include_analysis_depth = 'detailed';
+    }
+
+    onChange(newSettings);
+  };
+
+  const handleIncludeQuestionsChange = (includeQuestions: boolean) => {
+    onChange({
+      ...value,
+      include_questions: includeQuestions
+    });
+  };
+
+  const handleIncludeEmojiChange = (includeEmoji: boolean) => {
+    onChange({
+      ...value,
+      include_emoji: includeEmoji
+    });
+  };
+
+  const handleIncludeHashtagChange = (includeHashtag: boolean) => {
+    onChange({
+      ...value,
+      include_hashtag: includeHashtag
     });
   };
 
@@ -175,6 +241,87 @@ const GenerationSettings: React.FC<GenerationSettingsProps> = ({ value, onChange
             </Space>
           </Radio.Group>
         </div>
+
+        <Divider />
+
+        {/* 發文類型選擇 */}
+        <div>
+          <Title level={5}>發文類型</Title>
+          <Radio.Group
+            value={value.posting_type}
+            onChange={(e) => handlePostingTypeChange(e.target.value)}
+            style={{ width: '100%' }}
+          >
+            <Space direction="vertical" style={{ width: '100%' }}>
+              <Radio value="analysis" style={{ width: '100%' }}>
+                <Space>
+                  <FileTextOutlined />
+                  <Space direction="vertical" size={0}>
+                    <Text strong>發表分析</Text>
+                    <Text type="secondary" style={{ fontSize: '12px' }}>
+                      專業分析內容，詳細解讀市場動態和技術指標
+                    </Text>
+                  </Space>
+                </Space>
+              </Radio>
+              <Radio value="interaction" style={{ width: '100%' }}>
+                <Space>
+                  <ClockCircleOutlined />
+                  <Space direction="vertical" size={0}>
+                    <Text strong>互動發問</Text>
+                    <Text type="secondary" style={{ fontSize: '12px' }}>
+                      簡短疑問句內容，促進用戶互動和參與
+                    </Text>
+                  </Space>
+                </Space>
+              </Radio>
+            </Space>
+          </Radio.Group>
+        </div>
+
+        <Divider />
+
+        {/* 互動發問類型設定 */}
+        {value.posting_type === 'interaction' && (
+          <div>
+            <Title level={5}>互動發問設定</Title>
+            <Space direction="vertical" style={{ width: '100%' }}>
+              <div>
+                <Text>包含問句：</Text>
+                <Radio.Group
+                  value={value.include_questions}
+                  onChange={(e) => handleIncludeQuestionsChange(e.target.value)}
+                  style={{ marginLeft: 16 }}
+                >
+                  <Radio value={true}>是</Radio>
+                  <Radio value={false}>否</Radio>
+                </Radio.Group>
+              </div>
+              <div>
+                <Text>包含表情符號：</Text>
+                <Radio.Group
+                  value={value.include_emoji}
+                  onChange={(e) => handleIncludeEmojiChange(e.target.value)}
+                  style={{ marginLeft: 16 }}
+                >
+                  <Radio value={true}>是</Radio>
+                  <Radio value={false}>否</Radio>
+                </Radio.Group>
+              </div>
+              <div>
+                <Text>包含標籤：</Text>
+                <Radio.Group
+                  value={value.include_hashtag}
+                  onChange={(e) => handleIncludeHashtagChange(e.target.value)}
+                  style={{ marginLeft: 16 }}
+                >
+                  <Radio value={true}>是</Radio>
+                  <Radio value={false}>否</Radio>
+                </Radio.Group>
+              </div>
+            </Space>
+          </div>
+        )}
 
         <Divider />
 
@@ -269,8 +416,8 @@ const GenerationSettings: React.FC<GenerationSettingsProps> = ({ value, onChange
               <InputNumber
                 min={50}
                 max={1500}
-                value={value.max_words}
-                onChange={handleMaxWordsChange}
+                value={value.custom_word_count || value.max_words}
+                onChange={handleCustomWordCountChange}
                 style={{ width: '100px' }}
                 addonAfter="字"
               />

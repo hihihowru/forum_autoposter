@@ -18,6 +18,12 @@ sys.path.append('../../../../src')
 
 # Google Sheets 已棄用，只使用 posting-service 數據
 
+# 導入 API 路由
+from performance_analysis_api import router as performance_router
+from enhanced_self_learning_api import router as enhanced_self_learning_router
+from self_learning_api import router as self_learning_router
+from interaction_refresh import router as interaction_refresh_router
+
 # 配置日誌
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -40,10 +46,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Google Sheets 已棄用，創建替換函數避免錯誤
+# 註冊 API 路由
+app.include_router(performance_router)
+app.include_router(enhanced_self_learning_router)
+app.include_router(self_learning_router)
+app.include_router(interaction_refresh_router)
+
+# 使用 SQL 資料庫，不再使用 Google Sheets
 def get_sheets_client():
-    """Google Sheets 已棄用，返回 None"""
-    logger.warning("⚠️ Google Sheets 已棄用，此功能不再可用")
+    """已改用 SQL 資料庫，返回 None"""
+    logger.info("✅ 已改用 SQL 資料庫，不再使用 Google Sheets")
     return None
 
 @app.get("/")
@@ -64,17 +76,38 @@ async def root():
 async def health_check():
     """健康檢查"""
     try:
-        client = get_sheets_client()
-        # 測試 Google Sheets 連接
-        client.read_sheet('同學會帳號管理', 'A1:Z1')
-        return {
-            "status": "healthy",
-            "timestamp": datetime.now().isoformat(),
-            "services": {
-                "google_sheets": "connected",
-                "database": "ready"
-            }
-        }
+        # 檢查 SQL 資料庫連線（通過 posting-service）
+        import httpx
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get("http://posting-service:8000/health", timeout=5.0)
+                if response.status_code == 200:
+                    return {
+                        "status": "healthy",
+                        "timestamp": datetime.now().isoformat(),
+                        "services": {
+                            "posting_service": "connected",
+                            "sql_database": "connected"
+                        }
+                    }
+                else:
+                    return JSONResponse(
+                        status_code=503,
+                        content={
+                            "status": "unhealthy",
+                            "timestamp": datetime.now().isoformat(),
+                            "error": "Posting service not responding"
+                        }
+                    )
+        except Exception as e:
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "status": "unhealthy",
+                    "timestamp": datetime.now().isoformat(),
+                    "error": f"Health check failed: {str(e)}"
+                }
+            )
     except Exception as e:
         logger.error(f"健康檢查失敗: {e}")
         return JSONResponse(

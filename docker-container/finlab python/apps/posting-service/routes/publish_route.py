@@ -95,19 +95,40 @@ async def publish_post_to_cmoney(post_id: str):
         )
         
         # 登入 CMoney
-        access_token_obj = await cmoney_client.login(kol_credentials)
-        if not access_token_obj:
-            logger.error(f"❌ KOL {existing_post.kol_serial} 登入 CMoney 失敗")
-            raise HTTPException(status_code=500, detail="KOL 登入失敗")
+        try:
+            access_token_obj = await cmoney_client.login(kol_credentials)
+            if not access_token_obj:
+                logger.error(f"❌ KOL {existing_post.kol_serial} 登入 CMoney 失敗")
+                raise HTTPException(status_code=500, detail="KOL 登入失敗")
+        except Exception as login_error:
+            logger.error(f"❌ KOL {existing_post.kol_serial} 登入 CMoney 異常: {login_error}")
+            # 檢查是否為網路連接問題
+            if "網路連接失敗" in str(login_error) or "ConnectError" in str(login_error):
+                raise HTTPException(status_code=503, detail=f"CMoney 服務暫時無法連接，請稍後再試: {login_error}")
+            else:
+                raise HTTPException(status_code=500, detail=f"KOL 登入失敗: {login_error}")
         
         logger.info(f"✅ KOL {existing_post.kol_serial} 登入成功")
         
         # 發文到 CMoney
-        publish_result = await cmoney_client.publish_article(access_token_obj.token, article_data)
-        
-        if not publish_result.success:
-            logger.error(f"❌ 發文到 CMoney 失敗 - Post ID: {post_id}, 錯誤: {publish_result.error_message}")
-            raise HTTPException(status_code=500, detail=f"發文失敗: {publish_result.error_message}")
+        try:
+            publish_result = await cmoney_client.publish_article(access_token_obj.token, article_data)
+            
+            if not publish_result.success:
+                logger.error(f"❌ 發文到 CMoney 失敗 - Post ID: {post_id}, 錯誤: {publish_result.error_message}")
+                # 檢查是否為網路連接問題
+                if "網路連接失敗" in publish_result.error_message or "ConnectError" in publish_result.error_message:
+                    raise HTTPException(status_code=503, detail=f"CMoney 服務暫時無法連接，請稍後再試: {publish_result.error_message}")
+                else:
+                    raise HTTPException(status_code=500, detail=f"發文失敗: {publish_result.error_message}")
+        except HTTPException:
+            raise
+        except Exception as publish_error:
+            logger.error(f"❌ 發文到 CMoney 異常 - Post ID: {post_id}, 錯誤: {publish_error}")
+            if "網路連接失敗" in str(publish_error) or "ConnectError" in str(publish_error):
+                raise HTTPException(status_code=503, detail=f"CMoney 服務暫時無法連接，請稍後再試: {publish_error}")
+            else:
+                raise HTTPException(status_code=500, detail=f"發文異常: {publish_error}")
         
         logger.info(f"✅ 發文到 CMoney 成功 - Post ID: {post_id}, Article ID: {publish_result.post_id}")
         

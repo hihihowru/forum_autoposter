@@ -272,7 +272,7 @@ class KOLService:
         """獲取 KOL 基本資訊"""
         try:
             from kol_database_service import kol_db_service
-            kol = kol_db_service.get_kol_by_serial(kol_serial)
+            kol = kol_db_service.get_kol_by_serial(str(kol_serial))
             if kol:
                 return {
                     "serial": kol.serial,

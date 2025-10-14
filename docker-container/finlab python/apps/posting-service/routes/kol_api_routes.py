@@ -150,26 +150,26 @@ class KOLResponse(BaseModel):
     prompt_hashtags: Optional[str]
     signature: Optional[str]
     emoji_pack: Optional[str]
-    model_id: str
-    template_variant: str
-    model_temp: float
-    max_tokens: int
-    title_openers: Optional[List[str]]
-    title_signature_patterns: Optional[List[str]]
-    title_tail_word: Optional[str]
-    title_banned_words: Optional[List[str]]
-    title_style_examples: Optional[List[str]]
-    title_retry_max: int
-    tone_formal: int
-    tone_emotion: int
-    tone_confidence: int
-    tone_urgency: int
-    tone_interaction: int
-    question_ratio: float
-    content_length: str
-    interaction_starters: Optional[List[str]]
-    require_finlab_api: bool
-    allow_hashtags: bool
+    model_id: Optional[str] = "gpt-4o-mini"
+    template_variant: Optional[str] = "default"
+    model_temp: Optional[float] = 0.5
+    max_tokens: Optional[int] = 700
+    title_openers: Optional[List[str]] = None
+    title_signature_patterns: Optional[List[str]] = None
+    title_tail_word: Optional[str] = None
+    title_banned_words: Optional[List[str]] = None
+    title_style_examples: Optional[List[str]] = None
+    title_retry_max: Optional[int] = 3
+    tone_formal: Optional[int] = 5
+    tone_emotion: Optional[int] = 5
+    tone_confidence: Optional[int] = 7
+    tone_urgency: Optional[int] = 4
+    tone_interaction: Optional[int] = 6
+    question_ratio: Optional[float] = 0.5
+    content_length: Optional[str] = "medium"
+    interaction_starters: Optional[List[str]] = None
+    require_finlab_api: Optional[bool] = True
+    allow_hashtags: Optional[bool] = True
     created_time: datetime
     last_updated: datetime
     total_posts: int

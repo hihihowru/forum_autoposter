@@ -9,6 +9,7 @@ import InteractionChart from './InteractionChart';
 import TrendChart from './TrendChart';
 import { KOLInfo, KOLStatistics, PostHistory as PostHistoryType, InteractionTrend } from '../../types/kol-types';
 import api from '../../services/api';
+import axios from 'axios';
 
 const KOLDetail: React.FC = () => {
   const { memberId } = useParams<{ memberId: string }>();
@@ -36,12 +37,31 @@ const KOLDetail: React.FC = () => {
     setError(null);
     
     try {
-      const response = await api.get(`/dashboard/kols/${memberId}`);
+      // 首先獲取 KOL 列表，找到對應的 serial
+      const listResponse = await axios.get('http://localhost:8001/api/kol/list');
+      const kols = listResponse.data.data || [];
       
-      if (response.data && response.data.success && response.data.data) {
-        setKolInfo(response.data.data.kol_info);
-        setStatistics(response.data.data.statistics);
-        setLastUpdated(response.data.timestamp);
+      // 根據 member_id 找到對應的 KOL
+      const kol = kols.find((k: any) => k.member_id === memberId);
+      if (!kol) {
+        setError(`找不到 member_id 為 ${memberId} 的 KOL`);
+        return;
+      }
+      
+      // 獲取完整的 KOL 詳情
+      const response = await axios.get(`http://localhost:8001/api/kol/${kol.serial}`);
+      
+      if (response.data) {
+        // 直接使用 PostgreSQL API 返回的數據
+        setKolInfo(response.data);
+        // 創建統計數據結構
+        setStatistics({
+          total_posts: response.data.total_posts || 0,
+          published_posts: response.data.published_posts || 0,
+          avg_interaction_rate: response.data.avg_interaction_rate || 0,
+          best_performing_post: response.data.best_performing_post || ''
+        });
+        setLastUpdated(new Date().toISOString());
       } else {
         setError('獲取 KOL 詳情失敗');
       }

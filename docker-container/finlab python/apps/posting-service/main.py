@@ -4,7 +4,7 @@ import json
 from fastapi import FastAPI, BackgroundTasks, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 import asyncio
@@ -12,45 +12,101 @@ import sys
 import json
 from dotenv import load_dotenv
 import logging
+import pytz
 
 # 添加專案根目錄到 Python 路徑
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..'))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-# 設置日誌
-logging.basicConfig(level=logging.INFO)
+# 設置日誌 - 允許 INFO 級別以顯示排程啟動日誌
+# 強制覆蓋環境變數 LOG_LEVEL=INFO
+import os
+os.environ['LOG_LEVEL'] = 'INFO'
+
+logging.basicConfig(level=logging.INFO, force=True)
 logger = logging.getLogger(__name__)
 
-print("🚀 開始載入模組...")
+# 強制關閉 SQLAlchemy 的 SQL 查詢日誌
+logging.getLogger('sqlalchemy.engine').setLevel(logging.CRITICAL)
+logging.getLogger('sqlalchemy.dialects').setLevel(logging.CRITICAL)
+logging.getLogger('sqlalchemy.pool').setLevel(logging.CRITICAL)
+logging.getLogger('sqlalchemy.orm').setLevel(logging.CRITICAL)
+logging.getLogger('sqlalchemy').setLevel(logging.CRITICAL)
+
+# 強制設置根日誌級別
+logging.getLogger().setLevel(logging.WARNING)
 
 # 導入改進的內容生成器
 from improved_content_generator import generate_improved_kol_content
 # 導入GPT內容生成器
 from gpt_content_generator import gpt_generator
+# 導入互動內容生成器
+# from interaction_content_generator import generate_interaction_content  # 暫時註解，模組不存在
 
 # 載入環境變數
-print("📝 載入環境變數...")
 load_dotenv(os.path.join(os.path.dirname(__file__), '../../../../.env'))
-print("✅ 環境變數載入完成")
 
 # 使用PostgreSQL服務
-print("📦 導入PostgreSQL服務...")
 from postgresql_service import PostgreSQLPostRecordService
 # 導入數據模型 (CommodityTag 將在需要時動態導入)
 try:
     from post_record_service import CommunityTopic, GenerationParams, PostRecordCreate, PostRecordUpdate
-    print("✅ 核心數據模型導入完成")
 except ImportError as e:
     print(f"❌ 數據模型導入失敗: {e}")
-print("✅ PostgreSQL服務導入完成")
 
-print("🏗️ 創建FastAPI應用...")
-app = FastAPI(title="Posting Service", description="虛擬KOL自動發文服務")
-print("✅ FastAPI應用創建完成")
+# 導入 lifespan 相關模組
+from contextlib import asynccontextmanager
+import asyncio
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """應用生命週期管理 - 啟動和關閉時執行"""
+    # 啟動時的邏輯
+    logger.info("🚀🚀🚀 FastAPI 應用開始啟用 🚀🚀🚀")
+    logger.info("📋 正在初始化各項服務...")
+    
+    try:
+        # 🔥 重新啟用排程服務
+        logger.info("🚀 啟動排程服務背景任務...")
+        from schedule_service import schedule_service
+        background_task = asyncio.create_task(schedule_service.start_background_scheduler())
+        app.state.background_scheduler_task = background_task
+        
+        logger.info("✅ ✅ ✅ 排程服務已啟動，API 服務已啟動 ✅ ✅ ✅")
+        
+    except Exception as e:
+        logger.error(f"❌ 排程服務啟動失敗: {e}")
+        logger.error(f"🔍 錯誤詳情: {str(e)}")
+        import traceback
+        traceback.print_exc()
+    
+    logger.info("🎉 所有服務初始化完成！應用開始運行...")
+    yield  # 應用運行期間
+    
+    # 關閉時的邏輯
+    logger.info("🛑 應用正在關閉...")
+    try:
+        # 清理背景任務
+        if hasattr(app.state, 'background_scheduler_task'):
+            logger.info("🔄 正在停止背景排程器...")
+            app.state.background_scheduler_task.cancel()
+            try:
+                await app.state.background_scheduler_task
+            except asyncio.CancelledError:
+                logger.info("✅ 背景排程器已停止")
+    except Exception as e:
+        logger.error(f"❌ 關閉服務時發生錯誤: {e}")
+    
+    logger.info("🏁 應用關閉完成")
+
+app = FastAPI(
+    title="Posting Service", 
+    description="虛擬KOL自動發文服務",
+    lifespan=lifespan
+)
 
 # 添加 CORS 中間件
-print("🌐 添加CORS中間件...")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # 生產環境應該限制特定域名
@@ -58,23 +114,19 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-print("✅ CORS中間件添加完成")
 
 # 包含路由模組
-print("🛣️ 載入路由模組...")
 from routes import main_router
+from routes.schedule_routes_simple import router as schedule_router
 app.include_router(main_router)
-print("✅ 路由模組載入完成")
+app.include_router(schedule_router, prefix="/api/schedule")
 
 # API 端點配置
-print("⚙️ 配置API端點...")
 TRENDING_API_URL = os.getenv("TRENDING_API_URL", "http://localhost:8004")
 SUMMARY_API_URL = os.getenv("SUMMARY_API_URL", "http://summary-api:8003")
 OHLC_API_URL = os.getenv("OHLC_API_URL", "http://ohlc-api:8001")
-print("✅ API端點配置完成")
 
 # 初始化PostgreSQL數據庫服務
-print("💾 準備PostgreSQL數據庫服務...")
 # 延遲初始化，避免啟動時連接數據庫
 post_record_service = None
 
@@ -82,14 +134,80 @@ def get_post_record_service():
     """獲取PostgreSQL服務實例（延遲初始化）"""
     global post_record_service
     if post_record_service is None:
-        print("💾 初始化PostgreSQL數據庫服務...")
         post_record_service = PostgreSQLPostRecordService()
-        print("✅ PostgreSQL數據庫服務初始化完成")
     return post_record_service
+
+def _extract_stock_from_keywords(keywords: str) -> dict:
+    """從關鍵詞中提取股票信息"""
+    if not keywords:
+        return None
+    
+    # 股票名稱到代碼的映射
+    stock_mapping = {
+        "正達": "3149",
+        "茂矽": "2342", 
+        "環球晶": "6488",
+        "中美晶": "5483",
+        "合晶": "6182",
+        "嘉晶": "3016",
+        "漢磊": "3707",
+        "世界": "5347",
+        "力積電": "6770",
+        "南亞科": "2408",
+        "華邦電": "2344",
+        "旺宏": "2337",
+        "群聯": "8299",
+        "慧榮": "2379",
+        "瑞昱": "2379",
+        "聯詠": "3034",
+        "矽力": "6415",
+        "譜瑞": "4966",
+        "祥碩": "5269",
+        "信驊": "5274",
+        "創意": "3443",
+        "世芯": "3661",
+        "智原": "3035",
+        "力旺": "3529",
+        "台勝科": "3532",
+        "台積電": "2330",
+        "聯發科": "2454", 
+        "鴻海": "2317",
+        "中華電": "2412",
+        "台塑": "1301",
+        "中鋼": "2002",
+        "長榮": "2603",
+        "陽明": "2609",
+        "萬海": "2615",
+        "富邦金": "2881"
+    }
+    
+    # 檢查關鍵詞中是否包含股票名稱
+    for stock_name, stock_code in stock_mapping.items():
+        if stock_name in keywords:
+            logger.info(f"🎯 在關鍵詞中找到股票: {stock_name}({stock_code})")
+            return {
+                "name": stock_name,
+                "code": stock_code
+            }
+    
+    logger.info(f"⚠️ 在關鍵詞中未找到已知股票: {keywords}")
+    return None
 
 class PostingRequest(BaseModel):
     stock_code: Optional[str] = None
     stock_name: Optional[str] = None
+    
+    @validator('stock_name', pre=True)
+    def validate_stock_name(cls, v):
+        """驗證 stock_name 字段，如果是對象則提取 company_name"""
+        if isinstance(v, dict):
+            # 如果是對象，提取 company_name 字段
+            company_name = v.get('company_name')
+            if company_name:
+                return company_name
+            # 如果沒有 company_name，嘗試其他可能的字段
+            return v.get('name', v.get('stock_name', str(v)))
+        return v
     kol_serial: Optional[str] = None
     kol_persona: str = "technical"
     content_style: str = "chart_analysis"
@@ -107,6 +225,10 @@ class PostingRequest(BaseModel):
     news_time_range: Optional[str] = "d2"
     explainability_config: Optional[Dict[str, Any]] = None
     news_config: Optional[Dict[str, Any]] = None
+    # 新增話題相關欄位
+    topic_title: Optional[str] = None
+    topic_keywords: Optional[str] = None
+    kol_nickname: Optional[str] = None
     # 標籤配置
     tags_config: Optional[Dict[str, Any]] = None
     # 共享 commodity tags (用於批量生成)
@@ -114,6 +236,28 @@ class PostingRequest(BaseModel):
     # 熱門話題相關欄位
     topic_id: Optional[str] = None
     topic_title: Optional[str] = None
+    # 發文類型
+    posting_type: Optional[str] = 'analysis'  # analysis/interaction
+    # 觸發器類型
+    trigger_type: Optional[str] = None
+    
+    # 新增：百分比配置欄位
+    article_type_distribution: Optional[Dict[str, int]] = None
+    content_length_distribution: Optional[Dict[str, int]] = None
+    content_style_distribution: Optional[Dict[str, int]] = None
+    analysis_depth_distribution: Optional[Dict[str, int]] = None
+    include_charts: Optional[bool] = None
+    include_risk_warning: Optional[bool] = None
+    
+    # 新增：生成模式和廢文情感傾向
+    generation_mode: Optional[str] = "high_quality"
+    trash_sentiment: Optional[str] = "positive"
+    
+    # 新增：新聞連結配置
+    enable_news_links: Optional[bool] = True
+    news_max_links: Optional[int] = 5
+    # 新增：發文類型 (analysis/interaction)
+    posting_type: Optional[str] = 'analysis'
 
 class PostingResult(BaseModel):
     success: bool
@@ -130,6 +274,7 @@ class BatchPostRequest(BaseModel):
     explainability_config: Optional[Dict[str, Any]] = None
     news_config: Optional[Dict[str, Any]] = None
     tags_config: Optional[Dict[str, Any]] = None  # 新增：標籤配置
+    posting_type: Optional[str] = 'analysis'  # 新增：發文類型 (analysis/interaction)
 
 class BatchPostResponse(BaseModel):
     success: bool
@@ -205,11 +350,71 @@ async def auto_post_content(background_tasks: BackgroundTasks, config: AutoPosti
             timestamp=datetime.now()
         )
 
+@app.post("/api/simple-mode/generate-batch")
+async def simple_mode_generate_batch(request: dict):
+    """簡易模式/廢文模式批次生成"""
+    try:
+        print(f"🎲 簡易模式批次生成開始: {request}")
+        
+        stock_codes = request.get('stock_codes', [])
+        stock_names = request.get('stock_names', [])
+        session_id = request.get('session_id')
+        use_random_kol = request.get('use_random_kol', False)
+        trash_mode = request.get('trash_mode', False)
+        trash_sentiment = request.get('trash_sentiment', 'positive')
+        
+        if not stock_codes:
+            return {"success": False, "error": "沒有股票代碼"}
+        
+        results = []
+        
+        for i, stock_code in enumerate(stock_codes):
+            stock_name = stock_names[i] if i < len(stock_names) else stock_code
+            
+            # 隨機選擇KOL
+            if use_random_kol:
+                kol_serial = random.choice(['200', '201', '202', '203', '204', '205', '206', '207', '208'])
+            else:
+                kol_serial = '200'  # 預設KOL
+            
+            # 生成內容
+            if trash_mode:
+                # 廢文模式
+                title = f"{stock_name} {random.choice(['爆了', '噴了', '崩了', '穩了'])}！"
+                content = f"{stock_name}今天{random.choice(['超強', '超弱', '超穩', '超猛'])}，{random.choice(['買爆', '賣爆', '觀望', '加碼'])}就對了！"
+            else:
+                # 簡易模式
+                title = f"{stock_name} 技術分析"
+                content = f"{stock_name}近期表現{random.choice(['強勢', '弱勢', '穩定'])}，技術面顯示{random.choice(['突破', '回調', '整理'])}，建議{random.choice(['逢低布局', '觀望', '減碼'])}。"
+            
+            results.append({
+                "stock_code": stock_code,
+                "stock_name": stock_name,
+                "kol_serial": kol_serial,
+                "title": title,
+                "content": content,
+                "session_id": session_id
+            })
+        
+        return {
+            "success": True,
+            "data": {
+                "posts": results,
+                "total_count": len(results),
+                "mode": "trash" if trash_mode else "simple"
+            }
+        }
+        
+    except Exception as e:
+        print(f"❌ 簡易模式批次生成失敗: {e}")
+        return {"success": False, "error": str(e)}
+
 @app.post("/post/simple")
 async def simple_post_content(request: PostingRequest):
-    """簡化版貼文生成，跳過複雜邏輯直接存入數據庫"""
+    """簡化版貼文生成，使用修復後的 ContentGenerator"""
     try:
-        print(f"🚀 簡化模式：開始生成貼文")
+        logger.info(f"🚀 簡化模式：開始生成貼文")
+        logger.info(f"📝 請求參數: topic_title={request.topic_title}, topic_keywords={request.topic_keywords}, kol_serial={request.kol_serial}")
         
         # 基本參數
         stock_id = request.stock_code or "2330"
@@ -217,21 +422,95 @@ async def simple_post_content(request: PostingRequest):
         kol_serial = int(request.kol_serial) if request.kol_serial else 200
         session_id = request.session_id or 1  # 使用簡單數字 1, 2, 3...
         
-        # 創建簡單內容
-        simple_content = {
-            "title": f"{stock_name}({stock_id}) - 技術分析",
-            "content": f"今日{stock_name}表現如何？讓我們來看看技術面的狀況...",
-            "stock_code": stock_id,
-            "stock_name": stock_name,
-            "kol_serial": kol_serial,
-            "session_id": session_id,
-            "post_id": f"simple_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-            "status": "pending_review",
-            "created_at": datetime.now().isoformat()
-        }
+        logger.info(f"📊 基本參數: stock_id={stock_id}, stock_name={stock_name}, kol_serial={kol_serial}")
+        
+        # 使用修復後的 ContentGenerator
+        try:
+            logger.info(f"🔧 嘗試導入 ContentGenerator...")
+            from src.services.content.content_generator import ContentGenerator, ContentRequest
+            logger.info(f"✅ ContentGenerator 導入成功")
+            
+            # 創建內容生成器
+            logger.info(f"🔧 創建 ContentGenerator 實例...")
+            content_generator = ContentGenerator()
+            logger.info(f"✅ ContentGenerator 實例創建成功")
+            
+            # 🔍 檢查KOL個人化管理器是否載入
+            if hasattr(content_generator, 'kol_personalization_manager') and content_generator.kol_personalization_manager:
+                logger.info(f"✅ KOL個人化管理器已載入")
+                # 測試KOL個人化管理器
+                try:
+                    test_nickname = content_generator.kol_personalization_manager.get_kol_nickname(str(kol_serial))
+                    test_persona = content_generator.kol_personalization_manager.get_kol_persona(str(kol_serial))
+                    logger.info(f"🎯 KOL {kol_serial} 真實資料: 暱稱={test_nickname}, 人設={test_persona}")
+                except Exception as e:
+                    logger.warning(f"⚠️ KOL個人化管理器測試失敗: {e}")
+            else:
+                logger.warning(f"❌ KOL個人化管理器未載入或不可用")
+            
+            # 從 topic_keywords 中提取股票信息
+            extracted_stock_info = _extract_stock_from_keywords(request.topic_keywords)
+            if extracted_stock_info:
+                stock_name = extracted_stock_info['name']
+                stock_id = extracted_stock_info['code']
+                logger.info(f"🎯 從關鍵詞提取股票信息: {stock_name}({stock_id})")
+            
+            # 創建內容請求
+            content_request = ContentRequest(
+                topic_title=request.topic_title or f"{stock_name}盤後分析",
+                topic_keywords=request.topic_keywords or f"{stock_name}, 技術分析",
+                kol_persona=request.kol_persona or "技術派",
+                kol_nickname=request.kol_nickname or f"KOL-{kol_serial}",
+                content_type=request.content_style or "investment",
+                target_audience=request.target_audience or "active_traders"
+            )
+            
+            logger.info(f"📝 內容請求: topic_title={content_request.topic_title}, topic_keywords={content_request.topic_keywords}")
+            
+            # 生成內容
+            logger.info(f"🔄 開始生成內容...")
+            generated_content = content_generator.generate_complete_content(content_request)
+            
+            if generated_content.success:
+                simple_content = {
+                    "title": generated_content.title,
+                    "content": generated_content.content,
+                    "stock_code": stock_id,
+                    "stock_name": stock_name,
+                    "kol_serial": kol_serial,
+                    "session_id": session_id,
+                    "post_id": f"simple_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                    "status": "draft",
+                    "created_at": datetime.now().isoformat()
+                }
+                logger.info(f"✅ 使用 ContentGenerator 生成內容成功")
+                logger.info(f"📝 生成標題: {generated_content.title}")
+            else:
+                raise Exception(f"ContentGenerator 生成失敗: {generated_content.error_message}")
+                
+        except Exception as gen_error:
+            logger.warning(f"⚠️ ContentGenerator 失敗，使用簡化邏輯: {gen_error}")
+            logger.error(f"❌ ContentGenerator 錯誤詳情: {str(gen_error)}")
+            import traceback
+            logger.error(f"📋 錯誤堆疊: {traceback.format_exc()}")
+            
+            # Fallback 到簡化邏輯
+            simple_content = {
+                "title": f"{stock_name}({stock_id}) - 技術分析",
+                "content": f"今日{stock_name}表現如何？讓我們來看看技術面的狀況...",
+                "stock_code": stock_id,
+                "stock_name": stock_name,
+                "kol_serial": kol_serial,
+                "session_id": session_id,
+                "post_id": f"simple_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                "status": "pending_review",
+                "created_at": datetime.now().isoformat()
+            }
+            logger.info(f"🔄 使用簡化邏輯生成內容")
         
         # 嘗試保存到數據庫（不使用 CommodityTag）
         try:
+            logger.info(f"💾 開始保存到數據庫...")
             from postgresql_service import PostgreSQLPostRecordService
             post_service = PostgreSQLPostRecordService()
             
@@ -239,13 +518,15 @@ async def simple_post_content(request: PostingRequest):
             kol_nickname = f"KOL-{kol_serial}"  # 默認名稱
             try:
                 from kol_service import kol_service
-                kol_data = kol_service.get_kol_by_serial(kol_serial)
+                kol_data = kol_service.get_kol_info(str(kol_serial))
                 if kol_data and 'nickname' in kol_data:
                     kol_nickname = kol_data['nickname']
+                    logger.info(f"👤 獲取 KOL 暱稱: {kol_nickname}")
             except Exception as kol_error:
-                print(f"⚠️ 獲取 KOL 信息失敗，使用默認名稱: {kol_error}")
+                logger.warning(f"⚠️ 獲取 KOL 信息失敗，使用默認名稱: {kol_error}")
             
             # 創建簡化的貼文記錄，不包含 commodity_tags
+            logger.info(f"📝 創建貼文記錄: stock_code={stock_id}, stock_name={stock_name}, kol_serial={kol_serial}")
             post_record = post_service.create_post_record_simple(
                 stock_code=stock_id,
                 stock_name=stock_name,
@@ -255,15 +536,19 @@ async def simple_post_content(request: PostingRequest):
             )
             
             simple_content["database_saved"] = True
-            simple_content["database_post_id"] = post_record.post_id if post_record else None
-            print(f"✅ 簡化貼文已保存到數據庫: {simple_content['database_post_id']}")
+            simple_content["database_post_id"] = post_record.id if post_record else None
+            logger.info(f"✅ 簡化貼文已保存到數據庫: {simple_content['database_post_id']}")
             
         except Exception as db_error:
-            print(f"⚠️ 數據庫保存失敗，但內容生成成功: {db_error}")
+            logger.error(f"⚠️ 數據庫保存失敗，但內容生成成功: {db_error}")
+            logger.error(f"❌ 數據庫錯誤詳情: {str(db_error)}")
+            import traceback
+            logger.error(f"📋 數據庫錯誤堆疊: {traceback.format_exc()}")
             simple_content["database_saved"] = False
             simple_content["database_error"] = str(db_error)
         
-        print(f"✅ 簡化貼文生成完成")
+        logger.info(f"✅ 簡化貼文生成完成")
+        logger.info(f"📊 最終結果: title={simple_content.get('title', 'N/A')}, stock_name={simple_content.get('stock_name', 'N/A')}")
         
         return {
             "success": True,
@@ -274,8 +559,9 @@ async def simple_post_content(request: PostingRequest):
         
     except Exception as e:
         import traceback
-        print(f"❌ 簡化模式錯誤: {e}")
-        traceback.print_exc()
+        logger.error(f"❌ 簡化模式錯誤: {e}")
+        logger.error(f"❌ 錯誤詳情: {str(e)}")
+        logger.error(f"📋 錯誤堆疊: {traceback.format_exc()}")
         return {
             "success": False,
             "error": str(e),
@@ -285,6 +571,13 @@ async def simple_post_content(request: PostingRequest):
 @app.post("/post/manual", response_model=PostingResult)
 async def manual_post_content(request: PostingRequest):
     """手動發文 - 指定股票和KOL風格"""
+    print("🚀🚀🚀 manual_post_content 函數被調用！")
+    print(f"🚀🚀🚀 請求參數: stock_code={request.stock_code}, kol_serial={request.kol_serial}")
+    print(f"🚀🚀🚀 請求時間: {datetime.now()}")
+    
+    # 初始化 topic_id 和 topic_title 變量
+    topic_id = request.topic_id or None
+    topic_title = request.topic_title or None
     
     print(f"🚀 開始手動發文生成 - 請求參數: {request}")
     print(f"📝 內容長度設定: content_length={request.content_length}, max_words={request.max_words}")
@@ -294,13 +587,14 @@ async def manual_post_content(request: PostingRequest):
     print(f"  - tags_config: {request.tags_config}")
     print(f"  - topic_tags: {request.tags_config.get('topic_tags', {}) if request.tags_config else {}}")
     print(f"  - mixed_mode: {request.tags_config.get('topic_tags', {}).get('mixed_mode', False) if request.tags_config else False}")
-    print(f"  - topic_id: {request.topic_id}")
-    print(f"  - topic_title: {request.topic_title}")
+    print(f"  - topic_id: {topic_id}")
+    print(f"  - topic_title: {topic_title}")
     
     try:
         # 如果前端指定了股票代號，使用指定的股票
         if request.stock_code:
             stock_id = request.stock_code
+            # 使用前端傳遞的股票名稱，如果沒有則使用默認格式
             stock_name = request.stock_name or f"股票{stock_id}"
             print(f"📊 使用指定股票: {stock_name}({stock_id})")
         else:
@@ -330,7 +624,7 @@ async def manual_post_content(request: PostingRequest):
                 stock_name = "台積電"
                 print(f"📈 使用預設股票: {stock_name}({stock_id})")
         
-        print(f"✅ 股票確定: {stock_name}({stock_id})")
+        # print(f"✅ 股票確定: {stock_name}({stock_id})")
         
         # 導入新的服務
         print("🔧 導入服務模組...")
@@ -338,13 +632,13 @@ async def manual_post_content(request: PostingRequest):
             from serper_integration import serper_service
             from smart_data_source_assigner import smart_assigner, KOLProfile, StockProfile
             from publish_service import publish_service
-            print("✅ 服務模組導入成功")
+            # print("✅ 服務模組導入成功")
         except Exception as e:
             print(f"❌ 服務模組導入失敗: {e}")
             raise
         
         # 1. 智能數據源分配
-        print(f"🎯 開始智能數據源分配: {stock_id}, {request.kol_persona}")
+        # print(f"🎯 開始智能數據源分配: {stock_id}, {request.kol_persona}")
         
         # 檢查是否有前端傳來的數據源配置
         if request.data_sources:
@@ -392,17 +686,128 @@ async def manual_post_content(request: PostingRequest):
             # 分配數據源
             data_source_assignment = smart_assigner.assign_data_sources(kol_profile, stock_profile)
         
-        print(f"✅ 數據源分配完成: {data_source_assignment.assignment_reason}")
+        # print(f"✅ 數據源分配完成: {data_source_assignment.assignment_reason}")
         print(f"📊 主要數據源: {[s.value for s in data_source_assignment.primary_sources]}")
         
-        # 2. 獲取Serper新聞數據 - 使用前端配置的關鍵字
+        # 2. 獲取即時股價數據和驗證觸發器類型
+        print(f"🔍 開始獲取即時股價數據: {stock_id}")
+        actual_price_data = None
+        
+        try:
+            # 🔥 使用盤中觸發器獲取即時股價數據
+            print(f"📊 調用盤中觸發器獲取即時股價數據...")
+            
+            # 構建盤中觸發器請求 - 使用正確的 StockCalculation endpoint
+            trigger_config = {
+                "endpoint": "https://asterisk-chipsapi.cmoney.tw/AdditionInformationRevisit/api/GetAll/StockCalculation",
+                "processing": [
+                    {"ParameterJson": f'{{"TargetPropertyNamePath": ["CommKey"], "Value": "{stock_id}"}}', "ProcessType": "EqualValueFilter"},
+                    {"ProcessType": "TakeCount", "ParameterJson": "{\"Count\":1}"}
+                ]
+            }
+            
+            # 直接調用 CMoney API 獲取即時股價數據
+            import httpx
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    "https://asterisk-chipsapi.cmoney.tw/AdditionInformationRevisit/api/GetAll/StockCalculation",
+                    json=trigger_config
+                )
+                
+                if response.status_code == 200:
+                    trigger_data = response.json()
+                    if trigger_data and len(trigger_data) > 0:
+                        # 解析即時股價數據
+                        price_data = trigger_data
+                        if price_data and len(price_data) > 0:
+                            # 數據格式: [交易時間,傳輸序號,內外盤旗標,即時成交價,即時成交量,最低價,最高價,標的,漲跌,漲跌幅,累計成交總額,累計成交量,開盤價]
+                            stock_data = price_data[0]  # 取第一筆數據
+                            
+                            actual_price_data = {
+                                'current_price': float(stock_data[3]) if len(stock_data) > 3 else 0,  # 即時成交價
+                                'change_amount': float(stock_data[8]) if len(stock_data) > 8 else 0,  # 漲跌
+                                'change_percentage': float(stock_data[9]) if len(stock_data) > 9 else 0,  # 漲跌幅
+                                'current_volume': int(stock_data[4]) if len(stock_data) > 4 else 0,  # 即時成交量
+                                'total_volume': int(stock_data[11]) if len(stock_data) > 11 else 0,  # 累計成交量
+                                'high_price': float(stock_data[5]) if len(stock_data) > 5 else 0,  # 最高價
+                                'low_price': float(stock_data[6]) if len(stock_data) > 6 else 0,  # 最低價
+                                'open_price': float(stock_data[12]) if len(stock_data) > 12 else 0,  # 開盤價
+                                'is_limit_up': abs(float(stock_data[9])) >= 9.5 and float(stock_data[9]) > 0 if len(stock_data) > 9 else False,
+                                'is_limit_down': abs(float(stock_data[9])) >= 9.5 and float(stock_data[9]) < 0 if len(stock_data) > 9 else False,
+                                'volume_ratio': 1.0,  # 需要計算
+                                'raw_data': stock_data,  # 🔥 保存原始 JSON 數據
+                                'column_names': ['交易時間', '傳輸序號', '內外盤旗標', '即時成交價', '即時成交量', '最低價', '最高價', '標的', '漲跌', '漲跌幅', '累計成交總額', '累計成交量', '開盤價'],  # 新增：column names
+                                'avg_volume': 0  # 需要從其他API獲取
+                            }
+                            
+                            print(f"✅ 獲取即時股價數據成功:")
+                            print(f"   - 當前價格: {actual_price_data['current_price']}")
+                            print(f"   - 漲跌: {actual_price_data['change_amount']}")
+                            print(f"   - 漲跌幅: {actual_price_data['change_percentage']}%")
+                            print(f"   - 是否漲停: {actual_price_data['is_limit_up']}")
+                            print(f"   - 是否跌停: {actual_price_data['is_limit_down']}")
+                        else:
+                            print(f"⚠️ CMoney API 返回空數據")
+                    else:
+                        print(f"⚠️ CMoney API 請求失敗: {trigger_data}")
+                else:
+                    print(f"⚠️ CMoney API 調用失敗: HTTP {response.status_code}")
+                    
+        except Exception as e:
+            print(f"⚠️ 獲取即時股價數據失敗: {e}")
+            import traceback
+            print(f"📋 錯誤堆疊: {traceback.format_exc()}")
+        
+        # 3. 股價驗證和新聞關鍵字修正
+        corrected_keywords = None
+        if actual_price_data:
+            try:
+                # 導入股價驗證器
+                from stock_price_validator import stock_price_validator
+                
+                # 驗證觸發器類型
+                trigger_type = getattr(request, 'trigger_type', 'intraday_limit_up')
+                is_valid, validation_message, suggested_trigger = stock_price_validator.validate_trigger_type(
+                    stock_code=stock_id,
+                    stock_name=stock_name,
+                    trigger_type=trigger_type,
+                    actual_price_data=actual_price_data
+                )
+                
+                print(f"🔍 觸發器驗證結果: {validation_message}")
+                if not is_valid and suggested_trigger:
+                    print(f"⚠️ 建議使用觸發器類型: {suggested_trigger}")
+                    # 可以選擇是否自動修正觸發器類型
+                    # trigger_type = suggested_trigger
+                
+                # 根據實際股價表現獲取正確的新聞關鍵字
+                corrected_keywords = stock_price_validator.get_corrected_news_keywords(
+                    stock_code=stock_id,
+                    stock_name=stock_name,
+                    trigger_type=trigger_type,
+                    actual_price_data=actual_price_data
+                )
+                
+            except Exception as e:
+                print(f"⚠️ 股價驗證失敗，使用預設設定: {e}")
+                corrected_keywords = None
+        else:
+            print(f"⚠️ 無法獲取即時股價數據，跳過驗證")
+        
+        # 4. 獲取Serper新聞數據 - 使用修正後的關鍵字
         print(f"🔍 開始獲取Serper新聞數據: {stock_id}")
         try:
             # 提取新聞搜尋關鍵字配置
             search_keywords = None
             time_range = "d2"  # 預設時間範圍
             
-            if request.news_config:
+            # 優先使用修正後的關鍵字
+            if corrected_keywords:
+                search_keywords = corrected_keywords
+                print(f"📝 使用修正後的新聞關鍵字: {len(search_keywords)} 個關鍵字")
+                for kw in search_keywords:
+                    print(f"   - {kw.get('type', 'custom')}: {kw.get('keyword', '')}")
+            elif request.news_config:
                 # 提取搜尋關鍵字
                 if request.news_config.get('search_keywords'):
                     search_keywords = request.news_config.get('search_keywords')
@@ -417,6 +822,16 @@ async def manual_post_content(request: PostingRequest):
                 elif request.news_time_range:
                     time_range = request.news_time_range
                     print(f"⏰ 使用請求時間範圍設定: {time_range}")
+                
+                # 🔥 修復：提取新聞連結設定
+                if 'enable_news_links' in request.news_config:
+                    request.enable_news_links = request.news_config.get('enable_news_links', True)
+                    print(f"🔗 使用前端新聞連結設定: {request.enable_news_links}")
+                
+                # 🔥 修復：提取新聞數量設定
+                if 'max_links' in request.news_config:
+                    request.news_max_links = request.news_config.get('max_links', 5)
+                    print(f"📊 使用前端新聞數量設定: {request.news_max_links}")
             else:
                 print("📝 使用預設新聞搜尋關鍵字")
             
@@ -424,57 +839,314 @@ async def manual_post_content(request: PostingRequest):
                 stock_id, 
                 stock_name, 
                 search_keywords=search_keywords,
-                time_range=time_range
+                time_range=time_range,
+                trigger_type=request.trigger_type
             )
             news_items = serper_analysis.get('news_items', [])
             limit_up_analysis = serper_analysis.get('limit_up_analysis', {})
-            print(f"✅ Serper分析完成: 找到 {len(news_items)} 則新聞")
+            # print(f"✅ Serper分析完成: 找到 {len(news_items)} 則新聞")
         except Exception as e:
             print(f"⚠️ Serper分析失敗: {e}")
             serper_analysis = {'news_items': [], 'limit_up_analysis': {}}
             news_items = []
             limit_up_analysis = {}
         
-        # 3. 生成KOL內容 - 強制使用新聞分析Agent
+        # 3. 生成KOL內容 - 檢查發文類型
         print(f"✍️ 開始生成KOL內容: {stock_id}, {request.kol_persona}")
         
-        try:
-            # 強制使用新聞分析Agent
-            if news_items:
-                print(f"🤖 強制使用新聞分析Agent分析 {len(news_items)} 則新聞")
+        # 檢查是否為互動發問類型
+        posting_type = getattr(request, 'posting_type', 'analysis')
+        print(f"📝 發文類型: {posting_type}")
+        
+        if posting_type == 'interaction':
+            print("🎯 使用互動發問捷徑生成內容（跳過個人化模組）")
+            
+            # 使用互動內容生成器
+            kol_content = generate_interaction_content(
+                stock_id=stock_id,
+                stock_name=stock_name,
+                include_questions=True,
+                include_emoji=True,
+                include_hashtag=True
+            )
+            
+            print(f"✅ 互動發問內容生成完成: {kol_content['title']} - {kol_content['content']}")
+            print(f"📊 內容長度: {kol_content['content_length']} 字")
+            print(f"🚫 跳過個人化模組: {kol_content['skipped_personalization']}")
+            
+        else:
+            print("📊 使用正常分析流程生成內容")
+            
+            try:
+                # 強制使用新聞分析Agent
+                if news_items:
+                    print(f"🤖 強制使用新聞分析Agent分析 {len(news_items)} 則新聞")
                 from news_analysis_agent import NewsAnalysisAgent
+                
+                # 獲取KOL配置信息
+                kol_nickname = f"KOL-{request.kol_serial}" if request.kol_serial else "分析師"
+                kol_persona = request.kol_persona or "technical"  # 初始化 kol_persona
+                kol_config = {}
+                
+                # 嘗試從KOL服務獲取詳細配置
+                try:
+                    print(f"🔍 開始獲取KOL配置: serial={request.kol_serial}")
+                    from kol_service import kol_service
+                    kol_data = kol_service.get_kol_info(str(request.kol_serial)) if request.kol_serial else None
+                    print(f"🔍 KOL數據查詢結果: {kol_data is not None}")
+                    if kol_data:
+                        print(f"🔍 KOL數據內容: {list(kol_data.keys())}")
+                        kol_nickname = kol_data.get('nickname', kol_nickname)
+                        # 構建KOL配置字典
+                        kol_config = {
+                            'tone_style': kol_data.get('tone_style', '專業友善'),
+                            'common_words': kol_data.get('common_terms', ''),
+                            'casual_words': kol_data.get('colloquial_terms', ''),
+                            'typing_habit': kol_data.get('typing_habit', '正常標點'),
+                            'background_story': kol_data.get('backstory', ''),
+                            'expertise': kol_data.get('expertise', ''),
+                            'ending_style': kol_data.get('signature', '感謝閱讀，歡迎討論')
+                        }
+                        print(f"👤 獲取KOL配置: {kol_nickname}")
+                        print(f"👤 KOL配置內容: {kol_config}")
+                        print(f"👤 KOL配置詳細: tone_style={kol_config.get('tone_style')}, common_words={kol_config.get('common_words')}, casual_words={kol_config.get('casual_words')}")
+                    else:
+                        print(f"⚠️ 未找到KOL數據: serial={request.kol_serial}")
+                except Exception as kol_error:
+                    print(f"⚠️ 獲取KOL配置失敗，使用默認設定: {kol_error}")
+                    import traceback
+                    print(f"📋 錯誤堆疊: {traceback.format_exc()}")
+                
                 # 創建新的實例以確保API Key正確載入
                 news_agent = NewsAnalysisAgent()
-                kol_content = news_agent.analyze_stock_news(
-                    stock_id, stock_name, news_items, request.kol_persona, 
-                    request.content_length, request.max_words
-                )
-                print(f"✅ Agent內容生成完成: {len(kol_content.get('content', ''))} 字")
-            else:
-                print("⚠️ 沒有新聞數據，使用GPT生成器")
-                kol_content = gpt_generator.generate_stock_analysis(
+                
+                # 根據生成模式選擇不同的內容生成邏輯
+                # 🔥 修復：強制使用高品質模式，忽略前端的錯誤參數
+                generation_mode = 'high_quality'  # 強制使用高品質模式
+                print(f"🎯 強制使用高品質模式，忽略前端參數: {request.generation_mode}")
+                
+                if generation_mode == 'trash':
+                    # 廢文模式 - 使用簡易內容生成器
+                    print("🗑️ 使用廢文模式生成內容")
+                    from simple_content_generator import SimpleContentGenerator
+                    simple_generator = SimpleContentGenerator()
+                    
+                    kol_content = simple_generator.generate_content(
+                        stock_codes=[stock_id],
+                        stock_names=[stock_name],
+                        kol_nickname=kol_nickname,
+                        kol_persona=request.kol_persona,
+                        session_id=request.session_id,
+                        trash_mode=True,
+                        trash_sentiment=request.trash_sentiment or 'positive'
+                    )
+                    # print(f"✅ 廢文模式生成完成: {len(kol_content.get('content', ''))} 字")
+                    
+                elif generation_mode == 'simple':
+                    # 簡易模式 - 使用修復後的ContentGenerator（與高品質模式相同）
+                    print("🎲 使用簡易模式生成內容（使用ContentGenerator）")
+                    
+                    # 🔧 使用修復後的ContentGenerator
+                    try:
+                        print("🔧 嘗試使用修復後的ContentGenerator...")
+                        from src.services.content.content_generator import ContentGenerator, ContentRequest
+                        content_generator = ContentGenerator()
+                        
+                        # 🔍 檢查KOL個人化管理器
+                        if hasattr(content_generator, 'kol_personalization_manager') and content_generator.kol_personalization_manager:
+                            # print("✅ KOL個人化管理器已載入")
+                            # 獲取真實KOL資料
+                            real_nickname = content_generator.kol_personalization_manager.get_kol_nickname(str(kol_serial))
+                            real_persona = content_generator.kol_personalization_manager.get_kol_persona(str(kol_serial))
+                            # print(f"🎯 KOL {kol_serial} 真實資料: 暱稱={real_nickname}, 人設={real_persona}")
+                            
+                            # 使用真實KOL資料
+                            kol_nickname = real_nickname
+                            if real_persona:
+                                request.kol_persona = real_persona
+                        else:
+                            print("⚠️ KOL個人化管理器未載入，使用預設資料")
+                        
+                        # 構建ContentRequest
+                        content_request = ContentRequest(
+                            stock_code=stock_id,
+                            stock_name=stock_name,
+                            kol_serial=kol_serial,
+                            kol_nickname=kol_nickname,
+                            kol_persona=request.kol_persona,
+                            content_style=request.content_style,
+                            target_audience=request.target_audience,
+                            content_length=request.content_length,
+                            max_words=request.max_words,
+                            data_sources=request.data_sources,
+                            serper_analysis=serper_analysis,
+                            trigger_type=request.trigger_type
+                        )
+                        
+                        # 生成內容
+                        generated_content = content_generator.generate_content(content_request)
+                        
+                        if generated_content.success:
+                            kol_content = {
+                                "title": generated_content.title,
+                                "content": generated_content.content,
+                                "content_md": generated_content.content_md,
+                                "commodity_tags": generated_content.commodity_tags,
+                                "community_topic": generated_content.community_topic
+                            }
+                            print(f"✅ 簡易模式生成完成: {len(kol_content.get('content', ''))} 字")
+                        else:
+                            raise Exception(f"ContentGenerator生成失敗: {generated_content.error}")
+                            
+                    except Exception as e:
+                        print(f"❌ ContentGenerator失敗: {e}")
+                        # Fallback 到基本內容
+                        kol_content = {
+                            "title": f"{stock_name} 分析",
+                            "content": f"關於 {stock_name} 的技術分析，建議謹慎操作。",
+                            "content_md": f"關於 {stock_name} 的技術分析，建議謹慎操作。",
+                            "commodity_tags": [{"type": "Stock", "key": stock_id, "bullOrBear": 0}],
+                            "community_topic": None
+                        }
+                    
+                else:
+                    # 高品質模式 - 使用修復後的ContentGenerator
+                    print("✨ 使用高品質模式生成內容")
+                    
+                    # 🔧 使用修復後的ContentGenerator
+                    try:
+                        print("🔧 嘗試使用修復後的ContentGenerator...")
+                        from src.services.content.content_generator import ContentGenerator, ContentRequest
+                        content_generator = ContentGenerator()
+                        
+                        # 🔍 檢查KOL個人化管理器
+                        if hasattr(content_generator, 'kol_personalization_manager') and content_generator.kol_personalization_manager:
+                            # print("✅ KOL個人化管理器已載入")
+                            # 獲取真實KOL資料
+                            real_nickname = content_generator.kol_personalization_manager.get_kol_nickname(str(kol_serial))
+                            real_persona = content_generator.kol_personalization_manager.get_kol_persona(str(kol_serial))
+                            # print(f"🎯 KOL {kol_serial} 真實資料: 暱稱={real_nickname}, 人設={real_persona}")
+                            
+                            # 使用真實KOL資料
+                            kol_nickname = real_nickname
+                            kol_persona = real_persona
+                        else:
+                            print("⚠️ KOL個人化管理器未載入，使用預設資料")
+                        
+                        # 創建內容請求
+                        content_request = ContentRequest(
+                            topic_title=request.topic_title or f"{stock_name}盤後分析",
+                            topic_keywords=request.topic_keywords or f"{stock_name}, 技術分析",
+                            kol_persona=kol_persona,
+                            kol_nickname=kol_nickname,
+                            content_type=request.content_style or "investment",
+                            target_audience=request.target_audience or "active_traders"
+                        )
+                        
+                        # 生成內容 - 整合新聞數據
+                        generated_content = content_generator.generate_complete_content(
+                            content_request,
+                            serper_analysis=serper_analysis,
+                            data_sources=[source.value for source in data_source_assignment.primary_sources] if data_source_assignment else None
+                        )
+                        
+                        if generated_content.success:
+                            kol_content = {
+                                "title": generated_content.title,
+                                "content": generated_content.content,
+                                "stock_code": stock_id,
+                                "stock_name": stock_name,
+                                "kol_serial": kol_serial,
+                                "kol_nickname": kol_nickname,
+                                "kol_persona": kol_persona
+                            }
+                            # print(f"✅ ContentGenerator生成成功: {len(generated_content.content)} 字")
+                        else:
+                            raise Exception(f"ContentGenerator生成失敗: {generated_content.error_message}")
+                            
+                    except Exception as e:
+                        print(f"⚠️ ContentGenerator失敗，回退到原有邏輯: {e}")
+                        # 回退到原有邏輯
+                        # 檢查是否為熱門話題
+                        if topic_id and topic_title:
+                            print(f"🔥 檢測到熱門話題，使用專用分析方法: {topic_title}")
+                        # 獲取話題內容
+                        topic_content = ""
+                        try:
+                            from src.services.triggers.trending_topic_trigger_system import get_trending_topic_trigger_system
+                            trending_system = get_trending_topic_trigger_system()
+                            topic_data = trending_system.get_topic_details(topic_id)
+                            if topic_data:
+                                topic_content = topic_data.get("content", "")
+                                print(f"📝 獲取話題內容: {len(topic_content)} 字")
+                        except Exception as e:
+                            print(f"⚠️ 獲取話題內容失敗: {e}")
+                        
+                        kol_content = news_agent.analyze_stock_news(
+                            stock_code=stock_id,
+                            stock_name=stock_name,
+                            news_items=news_items,
+                            kol_persona=request.kol_persona,
+                            content_length=request.content_length,
+                            max_words=request.max_words
+                        )
+                        # print(f"✅ 熱門話題分析完成: {len(kol_content.get('content', ''))} 字")
+                    else:
+                        # 根據觸發器類型選擇不同的分析方法
+                        trigger_type = request.trigger_type or 'default'
+                        print(f"📈 使用股票分析方法: {stock_name}({stock_id}), 觸發器類型: {trigger_type}")
+                        print(f"🔍 DEBUG: request.trigger_type = {request.trigger_type}")
+                        print(f"🔍 DEBUG: trigger_type = {trigger_type}")
+                        
+                        if trigger_type == 'volume_low':
+                            # 成交量低迷觸發器 - 使用下跌分析
+                            kol_content = news_agent.analyze_volume_low_stock(
+                                stock_id, stock_name, news_items, request.kol_persona, 
+                                kol_nickname, kol_config, request.content_length, request.max_words
+                            )
+                            # print(f"✅ 成交量低迷分析完成: {len(kol_content.get('content', ''))} 字")
+                        elif trigger_type == 'limit_down_after_hours':
+                            # 盤後下跌觸發器 - 使用下跌分析
+                            kol_content = news_agent.analyze_limit_down_stock(
+                                stock_id, stock_name, news_items, request.kol_persona, 
+                                kol_nickname, kol_config, request.content_length, request.max_words
+                            )
+                            # print(f"✅ 盤後下跌分析完成: {len(kol_content.get('content', ''))} 字")
+                        else:
+                            # 默認使用通用股票分析
+                            kol_content = news_agent.analyze_stock_news(
+                                stock_id, stock_name, news_items, request.kol_persona, 
+                                kol_nickname, kol_config, request.content_length, request.max_words, trigger_type
+                            )
+                            # print(f"✅ 通用股票分析完成: {len(kol_content.get('content', ''))} 字")
+                        
+                        # 如果沒有新聞數據，使用GPT生成器
+                        if not news_items:
+                            print("⚠️ 沒有新聞數據，使用GPT生成器")
+                            kol_content = gpt_generator.generate_stock_analysis(
+                                stock_id=stock_id,
+                                stock_name=stock_name,
+                                kol_persona=request.kol_persona,
+                                serper_analysis=serper_analysis,
+                                data_sources=[source.value for source in data_source_assignment.primary_sources],
+                                content_length=request.content_length,
+                                max_words=request.max_words
+                            )
+                            # print(f"✅ GPT內容生成完成: {len(kol_content.get('content', ''))} 字")
+                    
+            except Exception as e:
+                print(f"❌ Agent內容生成失敗: {e}")
+                # 回退到改進的內容生成器
+                kol_content = generate_improved_kol_content(
                     stock_id=stock_id,
                     stock_name=stock_name,
                     kol_persona=request.kol_persona,
+                    content_style=request.content_style,
+                    target_audience=request.target_audience,
                     serper_analysis=serper_analysis,
-                    data_sources=[source.value for source in data_source_assignment.primary_sources],
-                    content_length=request.content_length,
-                    max_words=request.max_words
+                    data_sources=[source.value for source in data_source_assignment.primary_sources]
                 )
-                print(f"✅ GPT內容生成完成: {len(kol_content.get('content', ''))} 字")
-        except Exception as e:
-            print(f"❌ Agent內容生成失敗: {e}")
-            # 回退到改進的內容生成器
-            kol_content = generate_improved_kol_content(
-                stock_id=stock_id,
-                stock_name=stock_name,
-                kol_persona=request.kol_persona,
-                content_style=request.content_style,
-                target_audience=request.target_audience,
-                serper_analysis=serper_analysis,
-                data_sources=[source.value for source in data_source_assignment.primary_sources]
-            )
-            print(f"✅ 回退內容生成完成: {len(kol_content.get('content', ''))} 字")
+                # print(f"✅ 回退內容生成完成: {len(kol_content.get('content', ''))} 字")
         
         # 4. 整合新聞素材和數據源資訊
         print("🔗 整合新聞素材和數據源資訊...")
@@ -484,54 +1156,160 @@ async def manual_post_content(request: PostingRequest):
                 serper_analysis, 
                 data_source_assignment
             )
-            print("✅ 內容整合完成")
+            # print("✅ 內容整合完成")
         except Exception as e:
             print(f"⚠️ 內容整合失敗: {e}")
             enhanced_content = kol_content
         
+        # 定義百分比配置變數（避免語法錯誤）
+        article_type_distribution = getattr(request, 'article_type_distribution', None)
+        content_length_distribution = getattr(request, 'content_length_distribution', None)
+        content_style_distribution = getattr(request, 'content_style_distribution', None)
+        analysis_depth_distribution = getattr(request, 'analysis_depth_distribution', None)
+        max_words = getattr(request, 'max_words', None)
+        include_charts = getattr(request, 'include_charts', None)
+        include_risk_warning = getattr(request, 'include_risk_warning', None)
+        
+        # 🎯 個人化步驟 - 在內容整合完成後，保存到數據庫前
+        print("🎯 開始個人化處理...")
+        
+        # 檢查是否為互動發問類型，如果是則跳過個人化處理
+        if posting_type == 'interaction':
+            print("🚫 互動發問類型跳過個人化處理")
+            enhanced_content = kol_content  # 直接使用互動內容
+        else:
+            print("🎯 正常類型進行個人化處理")
+        
+        # 🔔 排程生成檢測標記
+        batch_mode = getattr(request, 'batch_mode', False)
+        session_id = getattr(request, 'session_id', None)
+        schedule_task_id = os.environ.get('CURRENT_SCHEDULE_TASK_ID', None)
+        
+        # 🔥 修復：只有當CURRENT_SCHEDULE_TASK_ID存在時才是真正的排程模式
+        if schedule_task_id:
+            print(f"🔔🔔🔔 檢測到排程生成模式！這是排程系統自動觸發的貼文！🔔🔔🔔")
+            print(f"🔔 Task ID: {schedule_task_id}, Stock: {request.stock_code}, KOL: KOL-{request.kol_serial}")
+        elif batch_mode:
+            print("📦📦📦 檢測到手動批次模式！這是用戶手動觸發的批次貼文！📦📦📦")
+            print(f"📦 Stock: {request.stock_code}, Session: {session_id}")
+        else:
+            print("👤👤👤 檢測到手動單篇模式！這是用戶手動觸發的單篇貼文！👤👤👤")
+            print(f"👤 Stock: {request.stock_code}, Session: {session_id}")
+        
+        print(f"🔍 調試：enhanced_content keys: {list(enhanced_content.keys()) if enhanced_content else 'None'}")
+        print(f"🔍 調試：enhanced_content title: {enhanced_content.get('title', 'None') if enhanced_content else 'None'}")
+        print(f"🔍 調試：enhanced_content content length: {len(enhanced_content.get('content', '')) if enhanced_content else 0}")
+        
+        # 定義 kol_serial 變數 - 如果沒有指定則隨機選擇
+        if request.kol_serial:
+            kol_serial = request.kol_serial
+            print(f"🎯 使用指定的KOL序列號: {kol_serial}")
+        else:
+            # 隨機選擇KOL - 從資料庫動態獲取所有可用KOL
+            import random
+            import time
+            try:
+                # 從資料庫獲取所有可用的KOL
+                from kol_database_service import KOLDatabaseService
+                kol_service = KOLDatabaseService()
+                all_kols = kol_service.get_all_kols()
+                available_kols = [str(kol.serial) for kol in all_kols if kol.status == 'active']
+                
+                if not available_kols:
+                    # 如果資料庫沒有KOL，使用預設的9個
+                    available_kols = ['200', '201', '202', '203', '204', '205', '206', '207', '208']
+                    print(f"⚠️ 資料庫沒有可用KOL，使用預設池子: {len(available_kols)} 個")
+                else:
+                    print(f"📊 從資料庫獲取到 {len(available_kols)} 個可用KOL")
+                
+                # 使用當前時間作為隨機種子的一部分，增加隨機性
+                random.seed(int(time.time() * 1000) % 1000000)
+                # 打亂順序後選擇
+                random.shuffle(available_kols)
+                kol_serial = random.choice(available_kols)
+                print(f"🎲 隨機選擇KOL序列號: {kol_serial} (從 {len(available_kols)} 個KOL中選擇)")
+                
+            except Exception as e:
+                print(f"❌ 獲取KOL列表失敗: {e}，使用預設KOL")
+                # 回退到預設的9個KOL
+                available_kols = ['200', '201', '202', '203', '204', '205', '206', '207', '208']
+                random.seed(int(time.time() * 1000) % 1000000)
+                random.shuffle(available_kols)
+                kol_serial = random.choice(available_kols)
+                print(f"🎲 隨機選擇KOL序列號: {kol_serial} (從預設池子中選擇)")
+        print(f"🎯 請求中的 kol_persona: {request.kol_persona}")
+        
+        # 🎯 舊版個人化模組已移除，使用增強版個人化模組
+        print("🎯 跳過舊版個人化模組，等待增強版個人化處理...")
+        
         # 5. 內容檢查和修復（在新聞整合後進行）
         print("🔍 開始內容檢查和修復...")
-        try:
-            from content_checker import ContentChecker
-            content_checker = ContentChecker()
-            
-            # 檢查並修復內容（檢查 content_md 字段）
-            content_to_check = enhanced_content.get('content_md', enhanced_content.get('content', ''))
-            check_result = content_checker.check_and_fix_content(
-                content_to_check,
-                stock_name,
-                stock_id,
-                request.kol_persona,
-                request.kol_serial
-            )
-            
-            if check_result['success']:
-                print(f"✅ 內容檢查完成: {check_result['fix_method']} 修復")
-                if check_result['issues_found']:
-                    print(f"🔧 發現問題: {', '.join(check_result['issues_found'])}")
-                
-                # 使用修復後的內容，但保留新聞來源
-                # 檢查是否有新聞來源需要保留
-                news_sources_section = ""
-                if "新聞來源:" in enhanced_content['content']:
-                    news_sources_start = enhanced_content['content'].find("新聞來源:")
-                    news_sources_section = enhanced_content['content'][news_sources_start:]
-                    print(f"🔍 保留新聞來源: {len(news_sources_section)} 字")
-                
-                enhanced_content['content'] = check_result['fixed_content']
-                enhanced_content['content_md'] = check_result['fixed_content']
-                
-                # 如果有新聞來源，重新添加
-                if news_sources_section:
-                    enhanced_content['content'] += "\n\n" + news_sources_section
-                    enhanced_content['content_md'] += "\n\n" + news_sources_section
-                    print(f"✅ 新聞來源已重新添加: {len(news_sources_section)} 字")
-                enhanced_content['content_check'] = check_result
-            else:
-                print(f"⚠️ 內容檢查失敗: {check_result.get('error', '未知錯誤')}")
-                
-        except Exception as e:
-            print(f"⚠️ 內容檢查器初始化失敗: {e}")
+        print("⚠️ 暫時禁用 ContentChecker 以測試個人化功能")
+        # try:
+        #     from content_checker import ContentChecker
+        #     content_checker = ContentChecker()
+        #     
+        #     # 檢查並修復內容（檢查 content_md 字段）
+        #     content_to_check = enhanced_content.get('content_md', enhanced_content.get('content', ''))
+        #     check_result = content_checker.check_and_fix_content(
+        #         content_to_check,
+        #         stock_name,
+        #         stock_id,
+        #         request.kol_persona,
+        #         request.kol_serial,
+        #         # 新增：傳遞百分比配置
+        #         article_type_distribution=article_type_distribution,
+        #         content_length_distribution=content_length_distribution,
+        #         content_style_distribution=content_style_distribution,
+        #         analysis_depth_distribution=analysis_depth_distribution,
+        #         max_words=max_words,
+        #         include_charts=include_charts,
+        #         include_risk_warning=include_risk_warning,
+        #         # 新增：傳遞觸發器類型
+        #         trigger_type=request.trigger_type
+        #     )
+        #     
+        #     if check_result['success']:
+        #         print(f"✅ 內容檢查完成: {check_result['fix_method']} 修復")
+        #         if check_result['issues_found']:
+        #             print(f"🔧 發現問題: {', '.join(check_result['issues_found'])}")
+        #         
+        #         # 使用修復後的內容，但保留個人化標籤和新聞來源
+        #         # 檢查是否有個人化標籤需要保留
+        #         personalization_tag = ""
+        #         if enhanced_content['content'].startswith(f"【{real_nickname}】"):
+        #             personalization_tag = f"【{real_nickname}】"
+        #             print(f"🔍 保留個人化標籤: {personalization_tag}")
+        #         
+        #         # 檢查是否有新聞來源需要保留
+        #         news_sources_section = ""
+        #         if "新聞來源:" in enhanced_content['content']:
+        #             news_sources_start = enhanced_content['content'].find("新聞來源:")
+        #             news_sources_section = enhanced_content['content'][news_sources_start:]
+        #             print(f"🔍 保留新聞來源: {len(news_sources_section)} 字")
+        #         
+        #         # 應用修復後的內容
+        #         enhanced_content['content'] = check_result['fixed_content']
+        #         enhanced_content['content_md'] = check_result['fixed_content']
+        #         
+        #         # 重新添加個人化標籤
+        #         if personalization_tag:
+        #             enhanced_content['content'] = personalization_tag + enhanced_content['content']
+        #             enhanced_content['content_md'] = personalization_tag + enhanced_content['content_md']
+        #             print(f"✅ 個人化標籤已重新添加: {personalization_tag}")
+        #         
+        #         # 重新添加新聞來源
+        #         if news_sources_section:
+        #             enhanced_content['content'] += "\n\n" + news_sources_section
+        #             enhanced_content['content_md'] += "\n\n" + news_sources_section
+        #             print(f"✅ 新聞來源已重新添加: {len(news_sources_section)} 字")
+        #         
+        #         enhanced_content['content_check'] = check_result
+        #     else:
+        #         print(f"⚠️ 內容檢查失敗: {check_result.get('error', '未知錯誤')}")
+        #         
+        # except Exception as e:
+        #     print(f"⚠️ 內容檢查器初始化失敗: {e}")
         
         # 添加額外的欄位以符合前端期望
         enhanced_content.update({
@@ -544,22 +1322,60 @@ async def manual_post_content(request: PostingRequest):
         
         # 準備商品標籤
         print("🏷️ 準備商品標籤...")
-        # 生成 commodity tags (暫時禁用以解決導入問題)
-        commodity_tags = []
-        print("⚠️ 商品標籤功能暫時禁用，不影響貼文生成")
         
-        print(f"✅ 生成的商品標籤: {commodity_tags}")
+        # 處理 commodity tags
+        commodity_tags = []
+        
+        # 默認添加 TWA00 標籤（台股大盤）
+        commodity_tags.append({
+            "type": "Market",
+            "key": "TWA00",
+            "bullOrBear": 0  # 預設中性
+        })
+        print(f"🏷️ 添加默認 TWA00 標籤")
+        
+        # 如果有共享的 commodity tags（來自批量生成），優先使用
+        if request.shared_commodity_tags:
+            commodity_tags.extend(request.shared_commodity_tags)
+            print(f"🏷️ 使用共享 commodity tags: {len(request.shared_commodity_tags)} 個")
+            for tag in request.shared_commodity_tags:
+                print(f"  - {tag.get('type')}: {tag.get('key')}")
+        else:
+            # 檢查是否為熱門話題
+            if topic_id and topic_title:
+                # 熱門話題生成專用標籤 - 使用 topic_id 作為 key
+                commodity_tags.append({
+                    "type": "TrendingTopic",
+                    "key": topic_id,  # 使用 topic_id (UUID) 而不是 topic_title
+                    "bullOrBear": 0  # 預設中性，後續可以根據內容分析調整
+                })
+                print(f"🏷️ 生成熱門話題 commodity tag: {topic_id} - {topic_title}")
+            else:
+                # 否則根據股票信息生成 commodity tags
+                commodity_tags.append({
+                    "type": "Stock",
+                    "key": stock_id,
+                    "bullOrBear": 0  # 預設中性
+                })
+                print(f"🏷️ 生成單個股票 commodity tag: {stock_id}")
+        
+        print(f"✅ 最終 commodity tags: {len(commodity_tags)} 個")
         print(f"📊 股票代號: {stock_id}, 股票名稱: {stock_name}")
         print(f"👤 KOL序號: {request.kol_serial}")
         
         # 準備社群話題
         community_topic = None
         if request.post_to_thread:
-            community_topic = CommunityTopic(id=request.post_to_thread)
+            community_topic = CommunityTopic(id=request.post_to_thread, title=request.post_to_thread)
             print(f"💬 社群話題: {request.post_to_thread}")
+        elif topic_id and topic_title:
+            # 如果是熱門話題，使用 topic_id 作為社群話題 ID
+            community_topic = CommunityTopic(id=topic_id, title=topic_title)
+            print(f"💬 熱門話題社群話題: {topic_id} - {topic_title}")
         
         # 準備生成參數 - 整合數據源資訊
         print("⚙️ 準備生成參數...")
+        
         generation_params = GenerationParams(
             kol_persona=request.kol_persona,
             content_style=request.content_style,
@@ -567,16 +1383,39 @@ async def manual_post_content(request: PostingRequest):
             batch_mode=request.batch_mode,
             data_sources=[source.value for source in data_source_assignment.primary_sources],
             session_id=request.session_id,
-            technical_indicators=[]
+            technical_indicators=[],
+            # 新增：百分比配置參數
+            article_type_distribution=article_type_distribution,
+            content_length_distribution=content_length_distribution,
+            content_style_distribution=content_style_distribution,
+            analysis_depth_distribution=analysis_depth_distribution,
+            max_words=max_words,
+            include_charts=include_charts,
+            include_risk_warning=include_risk_warning
         )
         print("✅ 生成參數準備完成")
         
         # 創建貼文記錄
         print("💾 開始保存貼文記錄到資料庫...")
         try:
-            # 暫時禁用 CommodityTag 模型轉換
+            # 處理 commodity tags 模型轉換
             commodity_tag_models = []
-            print("⚠️ CommodityTag 模型轉換暫時禁用")
+            if commodity_tags:
+                try:
+                    # 動態導入 CommodityTag 模型
+                    from post_record_service import CommodityTag
+                    for tag_data in commodity_tags:
+                        commodity_tag_models.append(CommodityTag(
+                            type=tag_data.get("type", "Stock"),
+                            key=tag_data.get("key", ""),
+                            bullOrBear=tag_data.get("bullOrBear", 0)
+                        ))
+                    print(f"✅ 成功轉換 {len(commodity_tag_models)} 個 commodity tags")
+                except ImportError as e:
+                    print(f"⚠️ CommodityTag 模型導入失敗，跳過 commodity tags: {e}")
+                    commodity_tag_models = []
+            else:
+                print("ℹ️ 沒有 commodity tags 需要處理")
             
             # 確保使用存在的 KOL
             from kol_service import kol_service
@@ -598,9 +1437,6 @@ async def manual_post_content(request: PostingRequest):
         
         # 處理熱門話題 ID（混和模式）- 在保存到數據庫之前執行
         print("🔍 開始處理熱門話題 ID（混和模式）")
-        topic_id = request.topic_id
-        topic_title = request.topic_title
-        
         # 調試日誌
         print(f"🔍 調試標籤模式條件:")
         print(f"  - topic_id: {topic_id}")
@@ -654,12 +1490,127 @@ async def manual_post_content(request: PostingRequest):
                 else:
                     print("⚠️ 未獲取到熱門話題數據")
                     print(f"🔍 響應數據結構: {trending_data}")
+                    # 確保變量有默認值
+                    if not topic_id:
+                        topic_id = None
+                    if not topic_title:
+                        topic_title = None
             except Exception as e:
                 print(f"❌ 獲取熱門話題失敗: {e}")
                 import traceback
                 print(f"🔍 錯誤堆疊: {traceback.format_exc()}")
+                # 確保變量有默認值
+                if not topic_id:
+                    topic_id = None
+                if not topic_title:
+                    topic_title = None
         
-        # 保存到數據庫 - 使用完整的 enhanced_content
+        # 🎯 增強版個人化節點 - 在保存到數據庫之前進行個人化處理
+        print("🎯 開始增強版個人化節點處理...")
+        try:
+            from personalization_module import enhanced_personalization_processor
+            
+            # 獲取KOL序號 - 使用之前確定的kol_serial
+            print(f"🎯 使用增強版個人化處理器 - KOL: {kol_serial}")
+            
+            # 準備個人化參數
+            original_title = enhanced_content.get('title', f"{stock_name} 分析")
+            original_content = enhanced_content.get('content', '')
+            batch_config = {}  # 可以從request中獲取
+            serper_analysis = enhanced_content.get('serper_data', {})
+            trigger_type = request.trigger_type or 'manual'
+            
+            print(f"🎯 個人化輸入 - 標題: {original_title}")
+            print(f"🎯 個人化輸入 - 內容長度: {len(original_content)} 字")
+            print(f"🎯 個人化輸入 - 觸發器類型: {trigger_type}")
+            
+            # 將新聞連結配置添加到 serper_analysis 中
+            if serper_analysis:
+                serper_analysis['enable_news_links'] = getattr(request, 'enable_news_links', True)
+                serper_analysis['news_max_links'] = getattr(request, 'news_max_links', 5) if getattr(request, 'enable_news_links', True) else 0
+            
+            # 使用增強版個人化處理器 - 整合隨機化生成
+            try:
+                personalized_title, personalized_content, random_metadata = enhanced_personalization_processor.personalize_content(
+                    standard_title=original_title,
+                    standard_content=original_content,
+                    kol_serial=kol_serial,
+                    batch_config=batch_config,
+                    serper_analysis=serper_analysis,
+                    trigger_type=trigger_type,
+                    real_time_price_data=actual_price_data or {},  # 🔥 新增：傳入即時股價數據，如果為 None 則傳入空字典
+                    posting_type=posting_type  # 🎲 新增：傳入發文類型
+                )
+                
+                # 🎲 新增：處理隨機化元數據
+                if random_metadata:
+                    alternative_versions = random_metadata.get('alternative_versions', [])
+                    generation_metadata = random_metadata.get('generation_metadata', {})
+                    
+                    print(f"🎲 隨機化生成完成 - 選中版本: {generation_metadata.get('selected_index', 'Unknown') + 1}")
+                    print(f"📝 其他版本數量: {len(alternative_versions)}")
+                    
+                    # 詳細記錄每個 alternative_versions 的內容
+                    for i, version in enumerate(alternative_versions):
+                        print(f"📝 版本 {i+1}: {version.get('title', 'No title')}")
+                        print(f"   角度: {version.get('angle', 'No angle')}")
+                        print(f"   內容長度: {len(version.get('content', ''))} 字符")
+                    
+                    # 將其他版本存儲到 enhanced_content 中，稍後保存到數據庫
+                    enhanced_content['alternative_versions'] = alternative_versions
+                    enhanced_content['generation_metadata'] = generation_metadata
+                    
+                    print(f"💾 alternative_versions 已存儲到 enhanced_content，數量: {len(enhanced_content.get('alternative_versions', []))}")
+                    
+            except Exception as e:
+                print(f"⚠️ 增強版個人化節點失敗: {e}")
+                # 回退到基本個人化處理
+                personalized_title = original_title
+                personalized_content = original_content
+                enhanced_content['alternative_versions'] = []
+                enhanced_content['generation_metadata'] = {}
+            
+            # 移除Markdown格式（用於社交媒體發布）
+            import re
+            def remove_markdown(text):
+                """移除Markdown格式符號"""
+                # 移除標題符號 ##
+                text = re.sub(r'^#{1,6}\s*', '', text, flags=re.MULTILINE)
+                # 移除粗體 **text**
+                text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)
+                # 移除斜體 *text*
+                text = re.sub(r'\*(.*?)\*', r'\1', text)
+                # 移除程式碼區塊 ```
+                text = re.sub(r'```[^`]*```', '', text, flags=re.DOTALL)
+                # 移除行內程式碼 `code`
+                text = re.sub(r'`([^`]*)`', r'\1', text)
+                # 移除水平分隔線 ---
+                text = re.sub(r'^[\-*_]{3,}\s*$', '', text, flags=re.MULTILINE)
+                # 移除連結 [text](url) 但保留文字
+                text = re.sub(r'\[([^\]]*)\]\([^)]*\)', r'\1', text)
+                # 移除圖片 ![alt](url)
+                text = re.sub(r'!\[([^\]]*)\]\([^)]*\)', '', text)
+                # 清理多餘的空行（最多保留兩個）
+                text = re.sub(r'\n\s*\n\s*\n+', '\n\n', text)
+                return text.strip()
+            
+            # 更新enhanced_content
+            personalized_content_no_md = remove_markdown(personalized_content)
+            enhanced_content['title'] = personalized_title
+            enhanced_content['content'] = personalized_content_no_md
+            enhanced_content['content_md'] = personalized_content_no_md
+            
+            print(f"✅ 增強版個人化完成")
+            print(f"✅ 個人化標題: {original_title} → {personalized_title}")
+            print(f"✅ 個人化內容長度: {len(original_content)} → {len(personalized_content_no_md)} 字")
+            print(f"✅ Markdown格式已移除")
+            print(f"✅ 個人化內容前100字: {personalized_content_no_md[:100]}...")
+            
+        except Exception as e:
+            print(f"⚠️ 增強版個人化節點失敗: {e}")
+            # 如果個人化失敗，使用原始內容
+
+        # 保存到數據庫 - 使用個人化後的 enhanced_content
         try:
             post_service = get_post_record_service()
             
@@ -667,14 +1618,38 @@ async def manual_post_content(request: PostingRequest):
             print(f"🔍 準備保存到數據庫的 topic_id: {topic_id}")
             print(f"🔍 準備保存到數據庫的 topic_title: {topic_title}")
             
+            # 安全處理 kol_serial
+            # 使用之前確定的kol_serial
+            try:
+                kol_serial_int = int(kol_serial)
+                kol_nickname = f"KOL-{kol_serial}"
+            except (ValueError, TypeError):
+                kol_serial_int = 200
+                kol_nickname = "KOL-200"
+            
+            # 獲取正確的 KOL persona
+            actual_kol_persona = request.kol_persona
+            try:
+                # 嘗試從 KOL 服務獲取正確的 persona
+                from kol_service import KOLService
+                kol_service = KOLService()
+                kol_profile = kol_service.get_kol_info(str(kol_serial_int))
+                if kol_profile and kol_profile.get('persona'):
+                    actual_kol_persona = kol_profile['persona']
+                    print(f"🎯 使用 KOL 數據庫中的 persona: {actual_kol_persona}")
+                else:
+                    print(f"⚠️ 無法獲取 KOL {kol_serial_int} 的 persona，使用預設值: {actual_kol_persona}")
+            except Exception as e:
+                print(f"⚠️ 獲取 KOL persona 失敗: {e}，使用預設值: {actual_kol_persona}")
+            
             post_data = {
                 'session_id': request.session_id or 1,
-                'kol_serial': int(request.kol_serial or 200),
-                'kol_nickname': f"KOL-{request.kol_serial or 200}",
-                'kol_persona': request.kol_persona,
+                'kol_serial': kol_serial_int,
+                'kol_nickname': kol_nickname,
+                'kol_persona': actual_kol_persona,
                 'stock_code': request.stock_code or "2330",
-                'stock_name': request.stock_name or "台積電",
-                'title': enhanced_content.get("title", f"【KOL-{request.kol_serial or 200}】{request.stock_name or '台積電'}({request.stock_code or '2330'}) 盤後分析"),
+                'stock_name': stock_name,  # 使用從 stock_mapping 獲取的正確名稱
+                'title': enhanced_content.get("title", f"【{kol_nickname}】{request.stock_name or '台積電'}({request.stock_code or '2330'}) 盤後分析"),
                 'content': enhanced_content.get("content", ""),
                 'content_md': enhanced_content.get("content_md", ""),
                 'status': 'draft',
@@ -685,8 +1660,10 @@ async def manual_post_content(request: PostingRequest):
                 'risk_level': enhanced_content.get("risk_level"),
                 'topic_id': topic_id,  # 使用處理後的 topic_id
                 'topic_title': topic_title,  # 使用處理後的 topic_title
+                'trigger_type': request.trigger_type or 'manual',  # 添加觸發器類型
+                'commodity_tags': [tag.model_dump() for tag in commodity_tag_models] if commodity_tag_models else [],
                 'generation_params': json.dumps({
-                    "method": "manual",
+                    "method": "manual",  # 手動發文生成（步驟1-9）
                     "kol_persona": request.kol_persona,
                     "content_style": request.content_style,
                     "target_audience": request.target_audience,
@@ -695,18 +1672,23 @@ async def manual_post_content(request: PostingRequest):
                     "tag_mode": tag_mode,
                     "topic_tags_enabled": topic_tags_enabled,
                     "mixed_mode": mixed_mode_enabled,
-                    "created_at": datetime.now().isoformat()
-                })
+                    "shared_commodity_tags": len(commodity_tags) if request.shared_commodity_tags else 0,
+                    "trigger_type": request.trigger_type or 'manual',  # 在 generation_params 中也添加
+                    "posting_type": posting_type,  # 🎲 新增：發文類型
+                    "created_at": datetime.now(pytz.timezone('Asia/Taipei')).replace(tzinfo=None).isoformat()
+                }),
+                'alternative_versions': json.dumps(enhanced_content.get('alternative_versions', []))  # 🎲 新增：其他版本
             }
             
             print(f"🔍 完整的 post_data: {post_data}")
+            print(f"💾 準備保存到數據庫的 alternative_versions: {len(enhanced_content.get('alternative_versions', []))} 個版本")
             
             # 創建完整的貼文記錄
             post_record = post_service.create_post_record(post_data)
             
             print(f"✅ 貼文記錄保存成功: {post_record.post_id}")
             enhanced_content["post_id"] = post_record.post_id
-            enhanced_content["status"] = "draft"  # 設置為 draft 狀態
+            enhanced_content["status"] = "draft"  # 設置為 draft 狀態，等待審核
             
             # 將 topic_id 和 topic_title 添加到 enhanced_content 中
             if topic_id:
@@ -718,6 +1700,12 @@ async def manual_post_content(request: PostingRequest):
             print(f"❌ 保存貼文記錄失敗: {db_error}")
             enhanced_content["post_id"] = f"temp_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
             enhanced_content["status"] = "error"
+            # 如果數據庫保存失敗，返回錯誤
+            return PostingResult(
+                success=False,
+                error=f"數據庫保存失敗: {str(db_error)}",
+                timestamp=datetime.now()
+            )
         
         # 發文
         if request.auto_post:
@@ -728,6 +1716,14 @@ async def manual_post_content(request: PostingRequest):
         
         print(f"🎉 發文生成完成: {enhanced_content.get('post_id')}")
         
+        # 將 commodity_tags 和 community_topic 添加到 enhanced_content 中
+        enhanced_content["commodity_tags"] = [tag.model_dump() for tag in commodity_tag_models] if commodity_tag_models else []
+        enhanced_content["community_topic"] = community_topic.model_dump() if community_topic else None
+        
+        print(f"✅ 已添加 commodity_tags: {len(enhanced_content['commodity_tags'])} 個")
+        print(f"✅ 已添加 community_topic: {enhanced_content['community_topic']}")
+        
+        
         return PostingResult(
             success=True,
             post_id=enhanced_content.get("post_id", f"post_{datetime.now().strftime('%Y%m%d_%H%M%S')}"),
@@ -736,6 +1732,10 @@ async def manual_post_content(request: PostingRequest):
         )
         
     except Exception as e:
+        import traceback
+        print(f"❌ manual_post_content 函數發生錯誤: {e}")
+        print(f"❌ 錯誤詳情: {str(e)}")
+        print(f"📋 錯誤堆疊: {traceback.format_exc()}")
         return PostingResult(
             success=False,
             error=str(e),
@@ -851,10 +1851,14 @@ def enhance_content_with_news(kol_content: Dict, topic: Dict, news_items: List[D
         # 在內容末尾加入新聞素材
         enhanced_content["content_md"] += news_section
         
-        # 添加新聞來源到最後
+        # 添加新聞來源到最後 - 避免重複添加
         if news_sources:
-            sources_section = "\n\n新聞來源:\n" + "\n".join(news_sources)
-            enhanced_content["content_md"] += sources_section
+            # 檢查是否已經有新聞來源
+            if "新聞來源:" not in enhanced_content["content_md"]:
+                sources_section = "\n\n新聞來源:\n" + "\n".join(news_sources)
+                enhanced_content["content_md"] += sources_section
+            else:
+                print("⚠️ 內容中已包含新聞來源，跳過重複添加")
         
         # 更新關鍵點
         if "key_points" in enhanced_content:
@@ -966,9 +1970,9 @@ class KOLCredentialManager:
             print(f"❌ 從KOL服務載入憑證失敗: {e}")
             # 使用預設憑證作為備用
             self.kol_credentials = {
-                "200": {"email": "forum_200@cmoney.com.tw", "password": "D8k9mN2p", "member_id": "9505546"},
-                "201": {"email": "forum_201@cmoney.com.tw", "password": "D8k9mN2p", "member_id": "9505547"},
-                "202": {"email": "forum_202@cmoney.com.tw", "password": "D8k9mN2p", "member_id": "9505548"},
+                "200": {"email": "forum_200@cmoney.com.tw", "password": "N9t1kY3x", "member_id": "9505546"},
+                "201": {"email": "forum_201@cmoney.com.tw", "password": "m7C1lR4t", "member_id": "9505547"},
+                "202": {"email": "forum_202@cmoney.com.tw", "password": "x2U9nW5p", "member_id": "9505548"},
                 "203": {"email": "forum_203@cmoney.com.tw", "password": "D8k9mN2p", "member_id": "9505549"},
                 "204": {"email": "forum_204@cmoney.com.tw", "password": "D8k9mN2p", "member_id": "9505550"},
                 "205": {"email": "forum_205@cmoney.com.tw", "password": "Z5u6dL9o", "member_id": "9505551"},
@@ -1031,7 +2035,7 @@ kol_credential_manager = KOLCredentialManager()
 
 
 @app.get("/posts")
-async def get_all_posts(skip: int = 0, limit: int = 100, status: Optional[str] = None):
+async def get_all_posts(skip: int = 0, limit: int = 1000, status: Optional[str] = None):
     """獲取所有貼文"""
     try:
         posts = get_post_record_service().get_all_posts()
@@ -1054,100 +2058,6 @@ async def get_all_posts(skip: int = 0, limit: int = 100, status: Optional[str] =
         print(f"獲取貼文失敗: {e}")
         raise HTTPException(status_code=500, detail=f"獲取貼文失敗: {str(e)}")
 
-@app.get("/posts/history-stats")
-async def get_history_stats():
-    """獲取歷史生成資料統計"""
-    try:
-        all_posts = get_post_record_service().get_all_posts()
-        
-        # 按狀態分組統計
-        status_stats = {}
-        session_stats = {}
-        kol_stats = {}
-        stock_stats = {}
-        
-        for post in all_posts:
-            # 狀態統計
-            status = post.status
-            status_stats[status] = status_stats.get(status, 0) + 1
-            
-            # Session 統計
-            session_id = post.session_id
-            if session_id not in session_stats:
-                session_stats[session_id] = {
-                    'count': 0,
-                    'statuses': {},
-                    'kols': set(),
-                    'stocks': set()
-                }
-            session_stats[session_id]['count'] += 1
-            session_stats[session_id]['statuses'][status] = session_stats[session_id]['statuses'].get(status, 0) + 1
-            session_stats[session_id]['kols'].add(post.kol_serial)
-            session_stats[session_id]['stocks'].add(post.stock_code)
-            
-            # KOL 統計
-            kol_key = f"KOL-{post.kol_serial}"
-            if kol_key not in kol_stats:
-                kol_stats[kol_key] = {
-                    'count': 0,
-                    'persona': post.kol_persona,
-                    'stocks': set(),
-                    'sessions': set()
-                }
-            kol_stats[kol_key]['count'] += 1
-            kol_stats[kol_key]['stocks'].add(post.stock_code)
-            kol_stats[kol_key]['sessions'].add(session_id)
-            
-            # 股票統計
-            stock_key = f"{post.stock_name}({post.stock_code})"
-            if stock_key not in stock_stats:
-                stock_stats[stock_key] = {
-                    'count': 0,
-                    'kols': set(),
-                    'sessions': set()
-                }
-            stock_stats[stock_key]['count'] += 1
-            stock_stats[stock_key]['kols'].add(post.kol_serial)
-            stock_stats[stock_key]['sessions'].add(session_id)
-        
-        # 轉換 set 為 list
-        for session_id, data in session_stats.items():
-            data['kols'] = list(data['kols'])
-            data['stocks'] = list(data['stocks'])
-        
-        for kol_key, data in kol_stats.items():
-            data['stocks'] = list(data['stocks'])
-            data['sessions'] = list(data['sessions'])
-        
-        for stock_key, data in stock_stats.items():
-            data['kols'] = list(data['kols'])
-            data['sessions'] = list(data['sessions'])
-        
-        # 自我學習數據完整性檢查
-        learning_data_stats = {
-            'total_posts': len(all_posts),
-            'with_generation_params': sum(1 for post in all_posts if post.generation_params),
-            'with_technical_analysis': sum(1 for post in all_posts if post.technical_analysis),
-            'with_serper_data': sum(1 for post in all_posts if post.serper_data),
-            'with_quality_scores': sum(1 for post in all_posts if post.quality_score is not None),
-            'reconstruction_ready': sum(1 for post in all_posts 
-                                       if post.generation_params and post.stock_code and post.kol_persona)
-        }
-        
-        return {
-            "success": True,
-            "total_posts": len(all_posts),
-            "status_stats": status_stats,
-            "session_stats": session_stats,
-            "kol_stats": kol_stats,
-            "stock_stats": stock_stats,
-            "learning_data_stats": learning_data_stats,
-            "timestamp": datetime.now().isoformat()
-        }
-        
-    except Exception as e:
-        print(f"獲取歷史統計失敗: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/posts/pending-review")
 async def get_pending_review_posts():
@@ -1421,11 +2331,51 @@ async def get_session_posts(session_id: int, status: Optional[str] = None):
         print(f"🔍 獲取會話貼文: session_id={session_id}, status={status}")
         posts = get_post_record_service().get_session_posts(session_id, status)
         print(f"✅ 找到 {len(posts)} 篇貼文")
+        
+        # 將 PostRecord 對象轉換為可序列化的字典
+        posts_data = []
+        for post in posts:
+            post_data = {
+                "post_id": post.post_id,
+                "session_id": post.session_id,
+                "kol_serial": post.kol_serial,
+                "kol_nickname": post.kol_nickname,
+                "kol_persona": post.kol_persona,
+                "stock_code": post.stock_code,
+                "stock_name": post.stock_name,
+                "title": post.title,
+                "content": post.content,
+                "content_md": post.content_md,
+                "status": post.status,
+                "quality_score": post.quality_score,
+                "ai_detection_score": post.ai_detection_score,
+                "risk_level": post.risk_level,
+                "reviewer_notes": post.reviewer_notes,
+                "approved_by": post.approved_by,
+                "approved_at": post.approved_at.isoformat() if post.approved_at else None,
+                "scheduled_at": post.scheduled_at.isoformat() if post.scheduled_at else None,
+                "published_at": post.published_at.isoformat() if post.published_at else None,
+                "cmoney_post_id": post.cmoney_post_id,
+                "cmoney_post_url": post.cmoney_post_url,
+                "publish_error": post.publish_error,
+                "views": post.views,
+                "likes": post.likes,
+                "comments": post.comments,
+                "shares": post.shares,
+                "topic_id": post.topic_id,
+                "topic_title": post.topic_title,
+                "alternative_versions": post.alternative_versions,  # 新增：其他版本
+                "created_at": post.created_at.isoformat() if post.created_at else None,
+                "updated_at": post.updated_at.isoformat() if post.updated_at else None
+            }
+            posts_data.append(post_data)
+        
         return {
             "success": True,
-            "posts": posts,
-            "count": len(posts),
-            "timestamp": datetime.now()
+            "posts": posts_data,
+            "count": len(posts_data),
+            "session_id": session_id,
+            "timestamp": datetime.now().isoformat()
         }
     except Exception as e:
         print(f"❌ 獲取會話貼文失敗: {e}")
@@ -1437,6 +2387,15 @@ async def batch_generate_posts_stream(request: BatchPostRequest):
     批量生成貼文 - 使用Server-Sent Events一則一則回傳
     """
     print(f"🚀 開始批量發文生成 - 會話ID: {request.session_id}, 貼文數量: {len(request.posts)}")
+    
+    # 導入必要的模組
+    try:
+        from smart_data_source_assigner import smart_assigner, KOLProfile, StockProfile
+    except ImportError as e:
+        print(f"❌ 導入模組失敗: {e}")
+        async def error_generator():
+            yield f"data: {json.dumps({'type': 'error', 'error': f'導入模組失敗: {e}'})}\n\n"
+        return StreamingResponse(error_generator(), media_type="text/plain")
     
     async def generate_posts():
         total_posts = len(request.posts)
@@ -1468,8 +2427,13 @@ async def batch_generate_posts_stream(request: BatchPostRequest):
                 if stock_code:
                     unique_stocks.add(stock_code)
             
-            # 暫時禁用 commodity tag 生成
-            print("⚠️ 批量 commodity tag 生成暫時禁用")
+            # 為所有股票生成 commodity tags
+            for stock_code in unique_stocks:
+                batch_commodity_tags.append({
+                    "type": "Stock",
+                    "key": stock_code,
+                    "bullOrBear": 0  # 預設中性
+                })
             
             print(f"✅ 生成 {len(batch_commodity_tags)} 個共享 commodity tags: {[tag['key'] for tag in batch_commodity_tags]}")
         else:
@@ -1551,6 +2515,35 @@ async def batch_generate_posts_stream(request: BatchPostRequest):
                 
                 print(f"📊 數據源分配: 智能={smart_sources}, 批次={list(batch_sources.keys())}")
                 
+                # 為熱門話題觸發器動態調整搜索關鍵字
+                news_config = request.news_config.copy() if request.news_config else {}
+                
+                # 檢查是否為熱門話題觸發器且有具體話題
+                topic_id = post_data.get('topic_id')
+                topic_title = post_data.get('topic_title')
+                
+                if topic_id and topic_title:
+                    print(f"🎯 為貼文動態調整搜索關鍵字 - 話題: {topic_title}")
+                    
+                    # 為這個特定話題生成搜索關鍵字
+                    topic_keywords = [
+                        {
+                            "id": "1",
+                            "keyword": "{stock_name}",
+                            "type": "stock_name",
+                            "description": "股票名稱"
+                        },
+                        {
+                            "id": f"topic_{topic_id}",
+                            "keyword": topic_title,
+                            "type": "trigger_keyword",
+                            "description": f"熱門話題關鍵字: {topic_title}"
+                        }
+                    ]
+                    
+                    news_config['search_keywords'] = topic_keywords
+                    print(f"✅ 更新後的搜索關鍵字: {topic_keywords}")
+                
                 # 生成單個貼文
                 post_request = PostingRequest(
                     stock_code=post_data.get('stock_code'),
@@ -1563,7 +2556,7 @@ async def batch_generate_posts_stream(request: BatchPostRequest):
                     session_id=request.session_id,
                     data_sources=hybrid_data_sources,  # 使用混合數據源
                     explainability_config=request.explainability_config,
-                    news_config=request.news_config,
+                    news_config=news_config,  # 使用動態調整後的 news_config
                     tags_config=request.tags_config,  # 傳遞標籤配置
                     shared_commodity_tags=batch_commodity_tags  # 傳遞共享的 commodity tags
                 )
@@ -1685,7 +2678,7 @@ async def approve_post(post_id: str, request: Request):
                 "success": True,
                 "message": "貼文審核通過",
                 "post": {
-                    "post_id": post_record.post_id,
+                    "post_id": post_record.id,
                     "status": post_record.status,
                     "approved_by": post_record.approved_by,
                     "approved_at": post_record.approved_at.isoformat() if post_record.approved_at else None,
@@ -1747,7 +2740,7 @@ async def reject_post(post_id: str, request: Request):
                 "success": True,
                 "message": "貼文已拒絕",
                 "post": {
-                    "post_id": post_record.post_id,
+                    "post_id": post_record.id,
                     "status": post_record.status,
                     "reviewer_notes": post_record.reviewer_notes
                 },
@@ -1805,6 +2798,7 @@ async def publish_post_to_cmoney(post_id: str, cmoney_config: Optional[Dict[str,
             "timestamp": datetime.now().isoformat()
         }
 
+
 @app.get("/posts/{post_id}")
 async def get_post(post_id: str):
     """獲取單個貼文詳情"""
@@ -1817,7 +2811,7 @@ async def get_post(post_id: str):
             
             # 將貼文記錄轉換為可序列化的字典
             post_data = {
-                "post_id": post_record.post_id,
+                "post_id": post_record.id,
                 "session_id": post_record.session_id,
                 "kol_serial": post_record.kol_serial,
                 "kol_nickname": post_record.kol_nickname,
@@ -1867,6 +2861,63 @@ async def get_post(post_id: str):
         logger.error(f"📋 錯誤堆疊: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"獲取貼文失敗: {str(e)}")
 
+@app.put("/posts/{post_id}/content")
+async def update_post_content(post_id: str, content_data: dict):
+    """更新貼文內容（用於版本選擇）"""
+    logger.info(f"🔄 更新貼文內容請求 - Post ID: {post_id}")
+    
+    try:
+        # 檢查貼文是否存在
+        existing_post = get_post_record_service().get_post_record(post_id)
+        if not existing_post:
+            logger.error(f"❌ 貼文不存在 - Post ID: {post_id}")
+            raise HTTPException(status_code=404, detail=f"貼文不存在: {post_id}")
+        
+        logger.info(f"✅ 找到貼文 - Post ID: {post_id}, 當前標題: {existing_post.title}")
+        
+        # 準備更新數據
+        update_data = {
+            'updated_at': datetime.now()
+        }
+        
+        # 更新標題
+        if 'title' in content_data:
+            update_data['title'] = content_data['title']
+            logger.info(f"📝 更新標題: {content_data['title']}")
+        
+        # 更新內容
+        if 'content' in content_data:
+            update_data['content'] = content_data['content']
+            logger.info(f"📝 更新內容: {len(content_data['content'])} 字符")
+        
+        # 更新 Markdown 內容
+        if 'content_md' in content_data:
+            update_data['content_md'] = content_data['content_md']
+        elif 'content' in content_data:
+            # 如果沒有提供 content_md，使用 content 作為 content_md
+            update_data['content_md'] = content_data['content']
+        
+        # 更新貼文記錄
+        post_record = get_post_record_service().update_post_record(post_id, update_data)
+        
+        if post_record:
+            logger.info(f"✅ 貼文內容更新成功 - Post ID: {post_id}")
+            return {
+                "success": True,
+                "message": "貼文內容更新成功",
+                "post_id": post_id,
+                "timestamp": datetime.now().isoformat()
+            }
+        else:
+            logger.error(f"❌ 貼文內容更新失敗 - Post ID: {post_id}")
+            raise HTTPException(status_code=500, detail="更新失敗")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ 更新貼文內容失敗 - Post ID: {post_id}, 錯誤: {e}")
+        raise HTTPException(status_code=500, detail=f"更新失敗: {str(e)}")
+
 @app.get("/posts/{post_id}/self-learning-data")
 async def get_post_self_learning_data(post_id: str):
     """獲取貼文的自我學習數據 - 用於重建相同內容"""
@@ -1879,7 +2930,7 @@ async def get_post_self_learning_data(post_id: str):
         
         # 準備自我學習數據
         self_learning_data = {
-            "post_id": post_record.post_id,
+            "post_id": post_record.id,
             "session_id": post_record.session_id,
             "kol_serial": post_record.kol_serial,
             "kol_nickname": post_record.kol_nickname,
@@ -1930,6 +2981,7 @@ async def get_post_self_learning_data(post_id: str):
                 self_learning_data['stock_code'] and 
                 self_learning_data['kol_persona']
             ),
+            
             "timestamp": datetime.now().isoformat()
         }
         
@@ -2131,13 +3183,21 @@ def enhance_content_with_serper_data(kol_content: Dict[str, Any],
         
         # 如果有新聞數據，整合到內容中
         if news_items:
-            print(f"🔗 整合 {len(news_items)} 則新聞到內容中")
+            # 從 serper_analysis 獲取新聞連結配置，如果沒有則使用預設值
+            news_max_links = serper_analysis.get('news_max_links', 5)
+            enable_news_links = serper_analysis.get('enable_news_links', True)
+            
+            if not enable_news_links:
+                print("⚠️ 新聞連結已停用，跳過新聞來源整合")
+                return enhanced_content
+            
+            print(f"🔗 整合 {len(news_items)} 則新聞到內容中 (最多 {news_max_links} 則)")
             
             # 提取新聞摘要和連結
             news_summary = []
             news_sources = []
             print(f"🔍 處理 {len(news_items)} 則新聞...")
-            for i, news in enumerate(news_items[:5]):  # 取前5則新聞
+            for i, news in enumerate(news_items[:news_max_links]):  # 根據配置取新聞數量
                 title = news.get('title', '')
                 snippet = news.get('snippet', '')
                 link = news.get('link', '')
@@ -2169,10 +3229,14 @@ def enhance_content_with_serper_data(kol_content: Dict[str, Any],
                 print(f"   {i+1}. {source[:50]}...")
             
             if news_sources:
-                sources_section = "\n\n新聞來源:\n" + "\n".join(news_sources)
-                enhanced_content['content'] += sources_section
-                enhanced_content['content_md'] += sources_section
-                print(f"✅ 新聞來源已添加: {len(sources_section)} 字")
+                # 檢查是否已經有新聞來源，避免重複添加
+                if "新聞來源:" not in enhanced_content['content']:
+                    sources_section = "\n\n新聞來源:\n" + "\n".join(news_sources)
+                    enhanced_content['content'] += sources_section
+                    enhanced_content['content_md'] += sources_section
+                    print(f"✅ 新聞來源已添加: {len(sources_section)} 字")
+                else:
+                    print("⚠️ 內容中已包含新聞來源，跳過重複添加")
             else:
                 print("⚠️ 沒有新聞來源可添加")
             

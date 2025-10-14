@@ -67,8 +67,8 @@ stop_services() {
     log_info "停止現有服務..."
     
     # 停止 Docker 服務
-    if docker-compose -f docker-compose.full.yml ps -q | grep -q .; then
-        docker-compose -f docker-compose.full.yml down
+    if docker-compose ps -q | grep -q .; then
+        docker-compose down
         log_success "Docker 服務已停止"
     else
         log_info "沒有運行中的 Docker 服務"
@@ -86,7 +86,7 @@ start_backend() {
     log_info "啟動後端 Docker 服務..."
     
     # 構建並啟動服務
-    docker-compose -f docker-compose.full.yml up -d --build
+    docker-compose up -d --build
     
     # 等待服務啟動
     log_info "等待服務啟動..."
@@ -94,7 +94,7 @@ start_backend() {
     
     # 檢查服務狀態
     log_info "檢查服務狀態..."
-    docker-compose -f docker-compose.full.yml ps
+    docker-compose ps
     
     log_success "後端服務啟動完成"
 }
@@ -191,7 +191,7 @@ main() {
             stop_services
             ;;
         "status")
-            docker-compose -f docker-compose.full.yml ps
+            docker-compose ps
             ;;
         "all"|"")
             check_dependencies

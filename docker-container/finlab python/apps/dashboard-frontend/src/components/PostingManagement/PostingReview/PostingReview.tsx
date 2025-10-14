@@ -50,11 +50,19 @@ const PostingReview: React.FC = () => {
       // 從真實API獲取數據
       const postsData = await PostingManagementAPI.getPosts(
         0, 
-        100, 
+        10000, 
         statusFilter === 'all' ? undefined : statusFilter
       );
       
       console.log('📊 獲取到的貼文數據:', postsData);
+      
+      // 檢查響應結構
+      if (!postsData || !postsData.posts) {
+        console.error('❌ API 響應格式錯誤:', postsData);
+        message.error('API 響應格式錯誤');
+        setPosts([]);
+        return;
+      }
       
       // 確保 posts 是陣列
       const postsArray = Array.isArray(postsData.posts) ? postsData.posts : [];
@@ -63,8 +71,9 @@ const PostingReview: React.FC = () => {
       message.success(`載入 ${postsArray.length} 篇貼文`);
       
     } catch (error) {
-      console.error('載入發文失敗:', error);
-      message.error('載入發文失敗，請檢查後端服務是否運行');
+      console.error('❌ 載入發文失敗:', error);
+      const errorMessage = error.response?.data?.detail || error.message || '未知錯誤';
+      message.error(`載入發文失敗: ${errorMessage}`);
       
       // 如果API失敗，顯示示例數據
       const samplePosts: Post[] = [

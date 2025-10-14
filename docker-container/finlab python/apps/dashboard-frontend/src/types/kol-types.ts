@@ -33,8 +33,29 @@ export interface KOLInfo {
   signature: string;
   emoji_pack: string;
   model_id: string;
+  template_variant: string;
   model_temp: number;
   max_tokens: number;
+  title_openers: string[];
+  title_signature_patterns: string[];
+  title_tail_word: string;
+  title_banned_words: string[];
+  title_style_examples: string[];
+  title_retry_max: number;
+  tone_formal: number;
+  tone_emotion: number;
+  tone_confidence: number;
+  tone_urgency: number;
+  tone_interaction: number;
+  question_ratio: number;
+  content_length: string;
+  interaction_starters: string[];
+  require_finlab_api: boolean;
+  allow_hashtags: boolean;
+  total_posts: number;
+  published_posts: number;
+  avg_interaction_rate: number;
+  best_performing_post: string;
 }
 
 export interface KOLStatistics {

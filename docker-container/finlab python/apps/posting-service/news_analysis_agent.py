@@ -20,11 +20,11 @@ logger = logging.getLogger(__name__)
 class NewsAnalysisAgent:
     """新聞分析Agent - 多維度分析新聞並提供建設性見解"""
     
-    def __init__(self, api_key: Optional[str] = None, model: str = "gpt-4o-mini"):
+    def __init__(self, api_key: Optional[str] = None, model: str = None):
         # 重新載入環境變數以確保API Key正確載入
         load_dotenv('../../../../.env')
         self.api_key = api_key or os.getenv('OPENAI_API_KEY')
-        self.model = model
+        self.model = model or os.getenv('OPENAI_MODEL', 'gpt-4o-mini')
         
         print(f"🔑 新聞分析Agent初始化: API Key={'有' if self.api_key else '無'}, 模型={self.model}")
         
@@ -96,8 +96,8 @@ class NewsAnalysisAgent:
                             "content": prompt
                         }
                     ],
-                    "max_tokens": 2000,
-                    "temperature": 0.7
+                    "max_completion_tokens": 2000,
+                    "temperature": 1.0
                 }
                 
                 response = requests.post(

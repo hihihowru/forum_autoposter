@@ -93,7 +93,7 @@ class SerperNewsService:
     
     def analyze_limit_up_reason(self, stock_code: str, stock_name: str, 
                                search_keywords: Optional[List[Dict[str, Any]]] = None,
-                               time_range: str = "d1") -> Dict[str, Any]:
+                               time_range: str = "d1", trigger_type: str = None) -> Dict[str, Any]:
         """分析漲停原因"""
         try:
             if not self.api_key:
@@ -118,10 +118,21 @@ class SerperNewsService:
                     else:  # custom
                         query_parts.append(keyword)
                 
-                # 添加漲停相關關鍵字
-                query_parts.extend(['漲停', '原因', '利多', '消息'])
+                # 根據觸發器類型添加相關關鍵字
+                if trigger_type == 'intraday_limit_down' or trigger_type == 'limit_down_after_hours':
+                    # 跌停觸發器
+                    query_parts.extend(['跌停', '原因', '利空', '消息'])
+                    print(f"🔍 使用前端配置分析跌停原因: {' '.join(query_parts)}")
+                elif trigger_type == 'intraday_limit_up' or trigger_type == 'limit_up_after_hours':
+                    # 漲停觸發器
+                    query_parts.extend(['漲停', '原因', '利多', '消息'])
+                    print(f"🔍 使用前端配置分析漲停原因: {' '.join(query_parts)}")
+                else:
+                    # 其他觸發器，使用中性關鍵字
+                    query_parts.extend(['表現', '原因', '分析', '消息'])
+                    print(f"🔍 使用前端配置分析表現原因: {' '.join(query_parts)}")
+                
                 query = ' '.join(query_parts)
-                print(f"🔍 使用前端配置分析漲停原因: {query}")
             else:
                 # 預設搜尋查詢
                 query = f"{stock_name} {stock_code} 漲停 原因 利多 消息"
@@ -199,12 +210,15 @@ class SerperNewsService:
     
     def get_comprehensive_stock_analysis(self, stock_code: str, stock_name: str, 
                                         search_keywords: Optional[List[Dict[str, Any]]] = None,
-                                        time_range: str = "d1") -> Dict[str, Any]:
+                                        time_range: str = "d1", trigger_type: str = None) -> Dict[str, Any]:
         """獲取股票綜合分析資料"""
         try:
+            # 根據觸發器類型調整搜尋關鍵字
+            adjusted_keywords = self._adjust_keywords_for_trigger(search_keywords, trigger_type)
+            
             # 並行獲取新聞和漲停分析
-            news_items = self.search_stock_news(stock_code, stock_name, limit=5, search_keywords=search_keywords, time_range=time_range)
-            limit_up_analysis = self.analyze_limit_up_reason(stock_code, stock_name, search_keywords=search_keywords, time_range=time_range)
+            news_items = self.search_stock_news(stock_code, stock_name, limit=5, search_keywords=adjusted_keywords, time_range=time_range)
+            limit_up_analysis = self.analyze_limit_up_reason(stock_code, stock_name, search_keywords=adjusted_keywords, time_range=time_range, trigger_type=trigger_type)
             
             return {
                 'stock_code': stock_code,
@@ -212,12 +226,50 @@ class SerperNewsService:
                 'news_items': news_items,
                 'limit_up_analysis': limit_up_analysis,
                 'analysis_timestamp': datetime.now().isoformat(),
-                'data_quality': 'high' if self.api_key else 'mock'
+                'data_quality': 'high' if self.api_key else 'mock',
+                'enable_news_links': True,  # 添加新聞連結配置
+                'news_max_links': 5
             }
             
         except Exception as e:
             logger.error(f"獲取 {stock_name}({stock_code}) 綜合分析失敗: {e}")
             return self._get_mock_comprehensive_analysis(stock_code, stock_name)
+    
+    def _adjust_keywords_for_trigger(self, search_keywords: Optional[List[Dict[str, Any]]], trigger_type: str) -> Optional[List[Dict[str, Any]]]:
+        """根據觸發器類型調整搜尋關鍵字"""
+        if not search_keywords:
+            return search_keywords
+        
+        # 複製關鍵字列表
+        adjusted_keywords = search_keywords.copy()
+        
+        # 根據觸發器類型調整關鍵字
+        if trigger_type == 'intraday_limit_down' or trigger_type == 'limit_down_after_hours':
+            # 跌停觸發器：移除漲停相關關鍵字，確保搜尋跌停相關內容
+            for keyword_config in adjusted_keywords:
+                if keyword_config.get('type') == 'trigger_keyword':
+                    keyword = keyword_config.get('keyword', '')
+                    if '漲停' in keyword:
+                        keyword_config['keyword'] = keyword.replace('漲停', '跌停')
+                    elif keyword == '跌停':
+                        # 保持跌停關鍵字
+                        pass
+                    else:
+                        # 其他關鍵字保持不變
+                        pass
+        elif trigger_type == 'intraday_limit_up' or trigger_type == 'limit_up_after_hours':
+            # 漲停觸發器：確保搜尋漲停相關內容
+            for keyword_config in adjusted_keywords:
+                if keyword_config.get('type') == 'trigger_keyword':
+                    keyword = keyword_config.get('keyword', '')
+                    if '跌停' in keyword:
+                        keyword_config['keyword'] = keyword.replace('跌停', '漲停')
+                    elif keyword == '漲停':
+                        # 保持漲停關鍵字
+                        pass
+        
+        logger.info(f"🔧 根據觸發器類型 {trigger_type} 調整關鍵字: {[kw.get('keyword') for kw in adjusted_keywords]}")
+        return adjusted_keywords
     
     def _get_time_range_filter(self, time_range: str) -> str:
         """獲取時間範圍過濾器
