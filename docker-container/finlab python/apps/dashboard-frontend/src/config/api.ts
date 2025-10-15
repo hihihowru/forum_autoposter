@@ -63,7 +63,14 @@ export const API_ENDPOINTS = {
 
 // 創建完整的 API URL
 export const createApiUrl = (endpoint: string, service: 'OHLC' | 'BASE' | 'TRENDING' | 'ANALYZE' | 'FINANCIAL' | 'SUMMARY' | 'DASHBOARD' = 'BASE') => {
-  const baseUrl = API_CONFIG[`${service}_API`] || API_CONFIG.BASE_URL;
+  let baseUrl = API_CONFIG[`${service}_API`] || API_CONFIG.BASE_URL;
+  
+  // 確保 baseUrl 有正確的協議
+  if (!baseUrl.startsWith('http')) {
+    baseUrl = `https://${baseUrl}`;
+  }
+  
+  console.log(`🔗 createApiUrl: ${baseUrl}${endpoint}`);
   return `${baseUrl}${endpoint}`;
 };
 
