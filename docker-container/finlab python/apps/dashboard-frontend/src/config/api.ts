@@ -1,6 +1,7 @@
 /**
  * API 配置
  * 統一管理所有 API 端點
+ * 使用 Vercel Proxy 解決 CORS 問題
  */
 
 // 環境變數配置
@@ -18,17 +19,15 @@ const getApiConfig = () => {
     };
   }
   
-  // 生產環境 - 使用統一的 API 網關
-  const railwayBaseUrl = (import.meta as any).env.VITE_API_BASE_URL || 'https://forumautoposter-production.up.railway.app';
-  
+  // 生產環境 - 使用 Vercel Proxy
   return {
-    BASE_URL: railwayBaseUrl,
-    OHLC_API: railwayBaseUrl, // 通過 API 網關路由
-    TRENDING_API: railwayBaseUrl,
-    ANALYZE_API: railwayBaseUrl,
-    FINANCIAL_API: railwayBaseUrl,
-    SUMMARY_API: railwayBaseUrl,
-    DASHBOARD_API: railwayBaseUrl,
+    BASE_URL: '/api/proxy',  // 使用 Vercel API Route
+    OHLC_API: '/api/proxy',  // 通過 Vercel Proxy 路由
+    TRENDING_API: '/api/proxy',
+    ANALYZE_API: '/api/proxy',
+    FINANCIAL_API: '/api/proxy',
+    SUMMARY_API: '/api/proxy',
+    DASHBOARD_API: '/api/proxy',
   };
 };
 
@@ -59,19 +58,23 @@ export const API_ENDPOINTS = {
   SEARCH_STOCKS: '/search-stocks-by-keywords',
   ANALYZE_TOPIC: '/analyze-topic',
   GENERATE_CONTENT: '/generate-content',
+  
+  // Intraday Trigger
+  INTRADAY_TRIGGER: '/intraday-trigger/execute',
 };
 
 // 創建完整的 API URL
 export const createApiUrl = (endpoint: string, service: 'OHLC' | 'BASE' | 'TRENDING' | 'ANALYZE' | 'FINANCIAL' | 'SUMMARY' | 'DASHBOARD' = 'BASE') => {
   let baseUrl = API_CONFIG[`${service}_API` as keyof typeof API_CONFIG] || API_CONFIG.BASE_URL;
   
-  // 確保 baseUrl 有正確的協議
-  if (!baseUrl.startsWith('http')) {
-    baseUrl = `https://${baseUrl}`;
+  // 確保 baseUrl 有正確的協議（僅在開發環境需要）
+  if ((import.meta as any).env.DEV && !baseUrl.startsWith('http')) {
+    baseUrl = `http://${baseUrl}`;
   }
   
-  console.log(`🔗 createApiUrl: ${baseUrl}${endpoint}`);
-  return `${baseUrl}${endpoint}`;
+  const fullUrl = `${baseUrl}${endpoint}`;
+  console.log(`🔗 createApiUrl: ${fullUrl}`);
+  return fullUrl;
 };
 
 export default API_CONFIG;

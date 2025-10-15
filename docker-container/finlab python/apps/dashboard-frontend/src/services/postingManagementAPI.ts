@@ -6,21 +6,13 @@ import axios from 'axios';
 import { API_CONFIG, createApiUrl, API_ENDPOINTS } from '../config/api';
 
 // 調試：輸出實際的 API URL
-console.log('🔍 API 配置調試:');
-console.log('  VITE_API_BASE_URL:', import.meta.env.VITE_API_BASE_URL);
+console.log('🔍 API 配置調試 (使用 Vercel Proxy):');
 console.log('  API_CONFIG.BASE_URL:', API_CONFIG.BASE_URL);
 console.log('  API_CONFIG.OHLC_API:', API_CONFIG.OHLC_API);
 
-// 確保 baseURL 有正確的協議
-const baseURL = API_CONFIG.BASE_URL.startsWith('http') 
-  ? API_CONFIG.BASE_URL 
-  : `https://${API_CONFIG.BASE_URL}`;
-
-console.log('  Final baseURL:', baseURL);
-
-// 創建axios實例
+// 創建axios實例 - 使用 Vercel Proxy
 const apiClient = axios.create({
-  baseURL: baseURL,
+  baseURL: API_CONFIG.BASE_URL,  // 現在是 '/api/proxy'
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
@@ -1126,17 +1118,13 @@ export class PostingManagementAPI {
         params.sortBy = triggerConfig.stockFilterCriteria.join(',');
       }
       
-      // 直接使用正確的 URL
-      const apiUrl = 'https://forumautoposter-production.up.railway.app/after_hours_limit_up';
-      console.log('🚀 調用 API:', apiUrl);
+      // 使用 Vercel Proxy 調用 API
+      const apiUrl = createApiUrl(API_ENDPOINTS.AFTER_HOURS_LIMIT_UP, 'OHLC');
+      console.log('🚀 調用 API (通過 Vercel Proxy):', apiUrl);
       
-      const response = await axios.get(apiUrl, {
+      const response = await apiClient.get(API_ENDPOINTS.AFTER_HOURS_LIMIT_UP, {
         params,
-        timeout: 30000,
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        }
+        timeout: 30000
       });
       
       if (response.data && response.data.success) {

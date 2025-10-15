@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { createApiUrl, API_ENDPOINTS } from '../config/api';
 
 export interface IntradayTriggerConfig {
   endpoint: string;
@@ -16,19 +17,18 @@ class IntradayTriggerAPI {
   static async executeTrigger(config: IntradayTriggerConfig): Promise<IntradayTriggerResult> {
     try {
       console.log('🚀 [前端] 執行盤中觸發器:', config);
-      console.log('🌐 [前端] 請求 URL:', `/intraday-trigger/execute`);
       
-      // 直接調用 Railway 後端 - 改為 GET 方法獲取股票列表
-      const response = await axios.get(
-        `https://forumautoposter-production.up.railway.app/intraday-trigger/execute`,
-        {
-          params: config,  // 將配置作為查詢參數
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          timeout: 30000
-        }
-      );
+      // 使用 Vercel Proxy 調用 API
+      const apiUrl = createApiUrl(API_ENDPOINTS.INTRADAY_TRIGGER);
+      console.log('🌐 [前端] 請求 URL (通過 Vercel Proxy):', apiUrl);
+      
+      const response = await axios.get(apiUrl, {
+        params: config,  // 將配置作為查詢參數
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        timeout: 30000
+      });
 
       console.log('📡 [前端] 後端響應狀態:', response.status);
       console.log('📊 [前端] 後端響應數據:', response.data);
