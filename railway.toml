@@ -13,6 +13,13 @@ port = 8000
 [services.deploy]
 startCommand = "uvicorn src.main:app --host 0.0.0.0 --port 8000"
 
+[services]
+workingDirectory = "/"
+
+[services.env]
+PYTHONPATH = "/"
+DATABASE_URL = { type = "string", required = true }
+
 # Frontend Service
 [[services]]
 name = "frontend"
@@ -24,16 +31,7 @@ root = "docker-container/finlab python/apps/dashboard-frontend"
   command = "npm install && npm run build"
 
 [services.start]
-  command = "npm run preview -- --host"
-  port = 3000
+  command = "npm run preview -- --host --port 3000"
 
-# Shared Environment Variables
-[env]
-DATABASE_URL = { type = "string", required = true }
-VITE_API_BASE_URL = "https://${RAILWAY_STATIC_URL}"  # Will point to backend URL
-PORT = "8000"  # Explicitly set for backend
-
-[healthcheck]
-timeout = 60
-interval = 30
-retries = 5
+[services.env]
+VITE_API_BASE_URL = "https://${RAILWAY_STATIC_URL}"
