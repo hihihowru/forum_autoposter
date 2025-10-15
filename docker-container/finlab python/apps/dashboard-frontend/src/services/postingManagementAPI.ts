@@ -1123,7 +1123,10 @@ export class PostingManagementAPI {
         params.sortBy = triggerConfig.stockFilterCriteria.join(',');
       }
       
-      const response = await axios.get(createApiUrl(API_ENDPOINTS.AFTER_HOURS_LIMIT_UP, 'OHLC'), {
+      const apiUrl = createApiUrl(API_ENDPOINTS.AFTER_HOURS_LIMIT_UP, 'OHLC');
+      console.log('🚀 調用 API:', apiUrl);
+      
+      const response = await axios.get(apiUrl, {
         params,
         timeout: 30000,
         headers: {
