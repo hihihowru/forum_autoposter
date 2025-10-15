@@ -7,14 +7,18 @@ port = 8080
 base_dockerfile = "Dockerfile.backend"
 
 [services.start]
-command = "uvicorn src.main:app --host 0.0.0.0 --port 8080"
+command = "uvicorn src.main:app --host 0.0.0.0 --port 8080 --no-access-log"
 
 [services.env]
+PYTHONUNBUFFERED = "1"
+PYTHONDONTWRITEBYTECODE = "1"
 PYTHONPATH = "/app"
 DATABASE_URL = { type = "string", required = true }
 
 [services.deployment]
 working_directory = "/app"
+restart_policy = "on-failure"
+restart_interval = 5
 
 # Frontend Service
 [[services]]
@@ -33,6 +37,8 @@ NODE_ENV = "production"
 
 [services.deployment]
 working_directory = "/app"
+restart_policy = "on-failure"
+restart_interval = 5
 
 [deploy]
 public = true
