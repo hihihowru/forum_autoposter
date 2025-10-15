@@ -22,7 +22,7 @@ COPY . .
 RUN mkdir -p credentials
 
 # 設置環境變數
-ENV PYTHONPATH=/app/src
+ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 
 # 創建非root用戶
@@ -31,17 +31,10 @@ USER appuser
 
 # 健康檢查
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import sys; sys.exit(0)"
+    CMD curl -f http://localhost:$PORT/health || exit 1
 
-# 默認命令
-CMD ["python", "batch_post_publisher.py"]
+# 暴露端口
+EXPOSE $PORT
 
-
-
-
-
-
-
-
-
-
+# 啟動命令
+CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "$PORT"]
