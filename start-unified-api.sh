@@ -4,7 +4,7 @@
 echo "🚀 啟動 Forum Autoposter Unified API..."
 
 # 設置環境變數
-export PYTHONPATH="/app:$PYTHONPATH"
+export PYTHONPATH="/app"
 export PORT=${PORT:-8000}
 
 echo "📋 環境變數:"
@@ -23,8 +23,8 @@ fi
 
 # 安裝依賴
 echo "📦 安裝依賴..."
-pip install -r requirements.txt
+pip install --no-cache-dir -r requirements.txt
 
 # 啟動服務
 echo "🌟 啟動統一 API 服務在端口 $PORT..."
-uvicorn main:app --host 0.0.0.0 --port $PORT
+exec uvicorn main:app --host 0.0.0.0 --port $PORT
