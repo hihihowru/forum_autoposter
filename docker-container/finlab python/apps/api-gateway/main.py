@@ -38,37 +38,57 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 微服務配置
+# 微服務配置 - 基於你的 Railway 部署
 SERVICES = {
     "ohlc": {
-        "host": os.getenv("OHLC_SERVICE_HOST", "ohlc-api"),
-        "port": int(os.getenv("OHLC_SERVICE_PORT", "8000")),
+        "host": os.getenv("OHLC_SERVICE_HOST", "localhost"),
+        "port": int(os.getenv("OHLC_SERVICE_PORT", "8005")),
         "prefixes": ["/after_hours_limit_up", "/after_hours_limit_down", "/industries", "/stocks_by_industry", "/get_ohlc"]
     },
     "posting": {
-        "host": os.getenv("POSTING_SERVICE_HOST", "posting-service"),
-        "port": int(os.getenv("POSTING_SERVICE_PORT", "8000")),
+        "host": os.getenv("POSTING_SERVICE_HOST", "localhost"),
+        "port": int(os.getenv("POSTING_SERVICE_PORT", "8001")),
         "prefixes": ["/posts", "/api/posting", "/api/schedule", "/intraday-trigger"]
     },
     "trending": {
-        "host": os.getenv("TRENDING_SERVICE_HOST", "trending-api"),
-        "port": int(os.getenv("TRENDING_SERVICE_PORT", "8000")),
+        "host": os.getenv("TRENDING_SERVICE_HOST", "localhost"),
+        "port": int(os.getenv("TRENDING_SERVICE_PORT", "8004")),
         "prefixes": ["/trending", "/extract-keywords", "/search-stocks-by-keywords", "/analyze-topic", "/generate-content"]
     },
     "analyze": {
-        "host": os.getenv("ANALYZE_SERVICE_HOST", "analyze-api"),
-        "port": int(os.getenv("ANALYZE_SERVICE_PORT", "8000")),
+        "host": os.getenv("ANALYZE_SERVICE_HOST", "localhost"),
+        "port": int(os.getenv("ANALYZE_SERVICE_PORT", "8002")),
         "prefixes": ["/analyze"]
     },
     "summary": {
-        "host": os.getenv("SUMMARY_SERVICE_HOST", "summary-api"),
-        "port": int(os.getenv("SUMMARY_SERVICE_PORT", "8000")),
+        "host": os.getenv("SUMMARY_SERVICE_HOST", "localhost"),
+        "port": int(os.getenv("SUMMARY_SERVICE_PORT", "8003")),
         "prefixes": ["/summary"]
     },
     "dashboard": {
-        "host": os.getenv("DASHBOARD_SERVICE_HOST", "dashboard-api"),
-        "port": int(os.getenv("DASHBOARD_SERVICE_PORT", "8000")),
+        "host": os.getenv("DASHBOARD_SERVICE_HOST", "localhost"),
+        "port": int(os.getenv("DASHBOARD_SERVICE_PORT", "8012")),
         "prefixes": ["/dashboard", "/health"]
+    },
+    "financial": {
+        "host": os.getenv("FINANCIAL_SERVICE_HOST", "localhost"),
+        "port": int(os.getenv("FINANCIAL_SERVICE_PORT", "8006")),
+        "prefixes": ["/financial"]
+    },
+    "revenue": {
+        "host": os.getenv("REVENUE_SERVICE_HOST", "localhost"),
+        "port": int(os.getenv("REVENUE_SERVICE_PORT", "8008")),
+        "prefixes": ["/revenue"]
+    },
+    "monthly-revenue": {
+        "host": os.getenv("MONTHLY_REVENUE_SERVICE_HOST", "localhost"),
+        "port": int(os.getenv("MONTHLY_REVENUE_SERVICE_PORT", "8009")),
+        "prefixes": ["/monthly-revenue"]
+    },
+    "fundamental": {
+        "host": os.getenv("FUNDAMENTAL_SERVICE_HOST", "localhost"),
+        "port": int(os.getenv("FUNDAMENTAL_SERVICE_PORT", "8010")),
+        "prefixes": ["/fundamental"]
     }
 }
 
@@ -164,36 +184,33 @@ async def health_check():
         "services": {name: f"{config['host']}:{config['port']}" for name, config in SERVICES.items()}
     }
 
-# 添加一些基本的 API 端點，避免依賴其他微服務
-@app.get("/after_hours_limit_up")
-async def after_hours_limit_up(limit: int = 1000):
-    """模擬 after_hours_limit_up 端點"""
+# 添加服務狀態檢查端點
+@app.get("/services/status")
+async def services_status():
+    """檢查所有微服務的狀態"""
+    import asyncio
+    
+    status = {}
+    for service_name, config in SERVICES.items():
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(f"http://{config['host']}:{config['port']}/health")
+                status[service_name] = {
+                    "status": "healthy" if response.status_code == 200 else "unhealthy",
+                    "url": f"http://{config['host']}:{config['port']}",
+                    "response_code": response.status_code
+                }
+        except Exception as e:
+            status[service_name] = {
+                "status": "unreachable",
+                "url": f"http://{config['host']}:{config['port']}",
+                "error": str(e)
+            }
+    
     return {
-        "success": True,
-        "message": "API Gateway is working - this is a mock response",
-        "data": [],
-        "count": 0,
-        "limit": limit
-    }
-
-@app.get("/after_hours_limit_down")
-async def after_hours_limit_down(limit: int = 1000):
-    """模擬 after_hours_limit_down 端點"""
-    return {
-        "success": True,
-        "message": "API Gateway is working - this is a mock response",
-        "data": [],
-        "count": 0,
-        "limit": limit
-    }
-
-@app.get("/industries")
-async def get_industries():
-    """模擬 industries 端點"""
-    return {
-        "success": True,
-        "message": "API Gateway is working - this is a mock response",
-        "data": ["電子業", "金融業", "傳產", "生技醫療"]
+        "gateway": "running",
+        "services": status,
+        "timestamp": datetime.now().isoformat()
     }
 
 if __name__ == "__main__":
