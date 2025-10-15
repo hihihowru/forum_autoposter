@@ -23,16 +23,10 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# 配置 CORS - 允許 Vercel 域名
+# 配置 CORS - 允許所有來源（因為我們會用 Vercel Proxy）
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://forum-autoposter-dz27.vercel.app",
-        "https://forum-autoposter-dz27-*.vercel.app",  # 允許所有 preview 域名
-        "http://localhost:3000",
-        "http://localhost:5173"
-    ],
-    allow_origin_regex=r"^https:\/\/forum-autoposter-dz27.*\.vercel\.app$",  # 正則匹配所有 preview 域名
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],

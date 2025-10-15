@@ -1,7 +1,7 @@
 /**
  * API 配置
  * 統一管理所有 API 端點
- * 直接調用 Railway 後端
+ * 使用 Vercel Rewrites 解決 CORS 問題
  */
 
 // 環境變數配置
@@ -19,17 +19,15 @@ const getApiConfig = () => {
     };
   }
   
-  // 生產環境 - 直接調用 Railway
-  const railwayBaseUrl = 'https://forumautoposter-production.up.railway.app';
-  
+  // 生產環境 - 使用 Vercel Rewrites
   return {
-    BASE_URL: railwayBaseUrl,
-    OHLC_API: railwayBaseUrl,
-    TRENDING_API: railwayBaseUrl,
-    ANALYZE_API: railwayBaseUrl,
-    FINANCIAL_API: railwayBaseUrl,
-    SUMMARY_API: railwayBaseUrl,
-    DASHBOARD_API: railwayBaseUrl,
+    BASE_URL: '/api',  // 使用 Vercel Rewrites
+    OHLC_API: '/api',  // 通過 Vercel Rewrites 路由
+    TRENDING_API: '/api',
+    ANALYZE_API: '/api',
+    FINANCIAL_API: '/api',
+    SUMMARY_API: '/api',
+    DASHBOARD_API: '/api',
   };
 };
 
@@ -68,11 +66,6 @@ export const API_ENDPOINTS = {
 // 創建完整的 API URL
 export const createApiUrl = (endpoint: string, service: 'OHLC' | 'BASE' | 'TRENDING' | 'ANALYZE' | 'FINANCIAL' | 'SUMMARY' | 'DASHBOARD' = 'BASE') => {
   let baseUrl = API_CONFIG[`${service}_API` as keyof typeof API_CONFIG] || API_CONFIG.BASE_URL;
-  
-  // 確保 baseUrl 有正確的協議
-  if (!baseUrl.startsWith('http')) {
-    baseUrl = `https://${baseUrl}`;
-  }
   
   const fullUrl = `${baseUrl}${endpoint}`;
   console.log(`🔗 createApiUrl: ${fullUrl}`);
