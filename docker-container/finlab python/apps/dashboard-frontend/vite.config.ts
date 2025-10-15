@@ -24,11 +24,10 @@ export default ({ mode }) => {
       port: 3000,
       open: true,
       proxy: {
-        '/api': {
+        '/intraday-trigger': {
           target: 'https://forumautoposter-production.up.railway.app',
           changeOrigin: true,
           secure: true,
-          rewrite: (path) => path.replace(/^\/api/, '')
         },
       },
     },

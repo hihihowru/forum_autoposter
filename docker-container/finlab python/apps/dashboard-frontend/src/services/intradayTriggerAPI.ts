@@ -16,7 +16,7 @@ class IntradayTriggerAPI {
   static async executeTrigger(config: IntradayTriggerConfig): Promise<IntradayTriggerResult> {
     try {
       console.log('🚀 [前端] 執行盤中觸發器:', config);
-      const apiPath = '/api/intraday-trigger/execute';
+      const apiPath = '/intraday-trigger/execute';
       console.log('🌐 [前端] 請求 URL:', apiPath);
       
       // 使用相對路徑，通過 Vite 代理訪問後端
