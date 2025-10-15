@@ -1,44 +1,76 @@
 # Backend Service
+[build]
+  command = ""
+  builder = "NIXPACKS"
+  [build.nixpacks]
+    provider = "python"
+    pythonVersion = "3.11"
+
 [[services]]
 name = "backend"
 port = 8080
 
 [services.build]
-base_dockerfile = "Dockerfile.backend"
+  base_dockerfile = "Dockerfile.backend"
 
 [services.start]
-command = "uvicorn src.main:app --host 0.0.0.0 --port 8080 --no-access-log"
+  command = "gunicorn src.main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8080 --timeout 120 --keep-alive 60 --log-level debug --access-logfile - --error-logfile -"
 
 [services.env]
-PYTHONUNBUFFERED = "1"
-PYTHONDONTWRITEBYTECODE = "1"
-PYTHONPATH = "/app"
-DATABASE_URL = { type = "string", required = true }
+  PYTHONUNBUFFERED = "1"
+  PYTHONDONTWRITEBYTECODE = "1"
+  PYTHONPATH = "/app"
+  PYTHONFAULTHANDLER = "1"
+  DATABASE_URL = { type = "string", required = true }
+  LOG_LEVEL = "DEBUG"
+
+[services.checks.liveness]
+  http_path = "/health"
+  initial_delay = "30s"
+  timeout = "10s"
+  interval = "60s"
+  retries = 3
+
+[services.checks.readiness]
+  http_path = "/health"
+  initial_delay = "5s"
+  timeout = "5s"
+  interval = "15s"
+  retries = 3
 
 [services.deployment]
-working_directory = "/app"
-restart_policy = "on-failure"
-restart_interval = 5
+  working_directory = "/app"
+  restart_policy = "on-failure"
+  restart_interval = 5
+  max_retries = 3
 
 # Frontend Service
 [[services]]
-name = "frontend"
+name = "web"
 port = 3000
 
 [services.build]
-base_dockerfile = "Dockerfile.frontend"
+  base_dockerfile = "Dockerfile.frontend"
 
 [services.start]
-command = "sh -c 'cd /app && npm run preview -- --host 0.0.0.0 --port 3000'"
+  command = "sh -c 'cd /app && npm run preview -- --host 0.0.0.0 --port 3000'"
 
 [services.env]
-VITE_API_BASE_URL = "/api"
-NODE_ENV = "production"
+  VITE_API_BASE_URL = "/api"
+  NODE_ENV = "production"
+
+[services.checks.liveness]
+  http_path = "/"
+  initial_delay = "30s"
+  timeout = "5s"
+  interval = "60s"
+  retries = 3
 
 [services.deployment]
-working_directory = "/app"
-restart_policy = "on-failure"
-restart_interval = 5
+  working_directory = "/app"
+  restart_policy = "on-failure"
+  restart_interval = 5
+  max_retries = 3
 
 [deploy]
 public = true
