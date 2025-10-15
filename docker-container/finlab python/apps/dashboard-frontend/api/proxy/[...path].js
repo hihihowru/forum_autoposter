@@ -1,7 +1,7 @@
 // Vercel API Proxy - 解決 CORS 問題
 // 將前端請求代理到 Railway 後端
 
-const RAILWAY_BASE_URL = 'https://forumautoposter-production.up.railway.app';
+const RAILWAY_BASE_URL = process.env.RAILWAY_API_URL || 'https://forumautoposter-production.up.railway.app';
 
 export default async function handler(req, res) {
   // 設置 CORS headers
@@ -26,6 +26,8 @@ export default async function handler(req, res) {
     const targetUrl = `${RAILWAY_BASE_URL}${req.url}${queryString ? `?${queryString}` : ''}`;
 
     console.log(`🔄 [Proxy] ${req.method} ${req.url} -> ${targetUrl}`);
+    console.log(`🌐 [Proxy] Railway URL: ${RAILWAY_BASE_URL}`);
+    console.log(`📋 [Proxy] Environment: ${process.env.NODE_ENV}`);
 
     // 準備請求選項
     const requestOptions = {
