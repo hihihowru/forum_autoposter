@@ -9,12 +9,10 @@ NODE_VERSION = "18.x"
 [[services]]
 name = "backend"
 port = 8000
+workingDirectory = "/"
 
 [services.deploy]
 startCommand = "uvicorn src.main:app --host 0.0.0.0 --port 8000"
-
-[services]
-workingDirectory = "/"
 
 [services.env]
 PYTHONPATH = "/"
@@ -27,11 +25,11 @@ port = 3000
 root = "docker-container/finlab python/apps/dashboard-frontend"
 
 [services.build]
-  base_dockerfile = "Dockerfile.frontend"
-  command = "npm install && npm run build"
+base_dockerfile = "Dockerfile.frontend"
+command = "npm install && npm run build"
 
 [services.start]
-  command = "npm run preview -- --host --port 3000"
+command = "npm run preview -- --host --port 3000"
 
 [services.env]
 VITE_API_BASE_URL = "https://${RAILWAY_STATIC_URL}"
