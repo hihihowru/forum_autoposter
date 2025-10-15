@@ -14,6 +14,7 @@ from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.dialects.postgresql import UUID
 import psycopg2
 from psycopg2.extras import RealDictCursor
+from timezone_utils import get_taiwan_utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -28,8 +29,8 @@ class ScheduleTask(Base):
     
     # 主鍵和時間戳
     schedule_id = Column(String, primary_key=True, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=get_taiwan_utcnow)
+    updated_at = Column(DateTime, default=get_taiwan_utcnow, onupdate=get_taiwan_utcnow)
     
     # 基本資訊
     schedule_name = Column(String, nullable=False)
@@ -61,6 +62,7 @@ class ScheduleTask(Base):
     success_count = Column(Integer, default=0)
     failure_count = Column(Integer, default=0)
     total_posts_generated = Column(Integer, default=0)
+    # total_posts_published = Column(Integer, default=0)  # 🔥 暫時註解：已發布貼文數量
     
     # 生成配置
     generation_config = Column(JSON, nullable=True)
@@ -96,6 +98,8 @@ class ScheduleDatabaseService:
     def __init__(self):
         self.engine = create_engine(DATABASE_URL)
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
+        # 🔥 自動創建資料表
+        self.create_tables()
     
     def get_db_session(self) -> Session:
         """獲取資料庫會話"""
@@ -413,6 +417,7 @@ class ScheduleDatabaseService:
             task.success_count = (task.success_count or 0) + success_count
             task.failure_count = (task.failure_count or 0) + failure_count
             task.total_posts_generated = (task.total_posts_generated or 0) + posts_generated
+            # task.total_posts_published = (task.total_posts_published or 0) + posts_published  # 🔥 暫時註解
             task.updated_at = datetime.utcnow()
             
             db.commit()
@@ -477,6 +482,30 @@ class ScheduleDatabaseService:
         finally:
             db.close()
     
+    async def update_schedule_auto_posting(self, schedule_id: str, auto_posting: bool) -> bool:
+        """更新排程的自動發文設定"""
+        db = self.get_db_session()
+        try:
+            task = db.query(ScheduleTask).filter(ScheduleTask.schedule_id == schedule_id).first()
+            if not task:
+                logger.error(f"❌ 排程任務不存在: {schedule_id}")
+                return False
+            
+            # 更新自動發文設定
+            task.auto_posting = auto_posting
+            task.updated_at = datetime.utcnow()
+            
+            db.commit()
+            logger.info(f"✅ 排程 {schedule_id} 自動發文設定更新成功: {auto_posting}")
+            return True
+            
+        except Exception as e:
+            db.rollback()
+            logger.error(f"❌ 更新自動發文設定失敗: {e}")
+            return False
+        finally:
+            db.close()
+
     async def get_post_schedule(self, post_id: str) -> Optional[str]:
         """獲取貼文所屬的排程ID"""
         db = self.get_db_session()
@@ -496,6 +525,32 @@ class ScheduleDatabaseService:
     async def cancel_schedule_task(self, schedule_id: str) -> bool:
         """取消排程任務"""
         return await self.update_schedule_status(schedule_id, 'cancelled')
+    
+    async def update_schedule_task(self, schedule_id: str, update_data: Dict[str, Any]) -> bool:
+        """更新排程任務"""
+        db = self.get_db_session()
+        try:
+            # 獲取現有任務
+            task = db.query(ScheduleTask).filter(ScheduleTask.schedule_id == schedule_id).first()
+            if not task:
+                logger.error(f"找不到排程任務: {schedule_id}")
+                return False
+            
+            # 更新任務數據
+            for key, value in update_data.items():
+                if hasattr(task, key) and value is not None:
+                    setattr(task, key, value)
+            
+            db.commit()
+            logger.info(f"✅ 排程任務更新成功 - Schedule ID: {schedule_id}")
+            return True
+            
+        except Exception as e:
+            db.rollback()
+            logger.error(f"❌ 更新排程任務失敗: {e}")
+            return False
+        finally:
+            db.close()
     
     async def delete_schedule_task(self, schedule_id: str) -> bool:
         """刪除排程任務"""

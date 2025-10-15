@@ -55,56 +55,88 @@ try:
 except ImportError as e:
     print(f"❌ 數據模型導入失敗: {e}")
 
-# 導入 lifespan 相關模組
-from contextlib import asynccontextmanager
+# 導入 asyncio 模組
 import asyncio
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """應用生命週期管理 - 啟動和關閉時執行"""
+app = FastAPI(
+    title="Posting Service", 
+    description="虛擬KOL自動發文服務"
+)
+
+# 🔥 使用舊版本的啟動事件
+@app.on_event("startup")
+async def startup_event():
+    """應用啟動事件"""
+    print("🚀🚀🚀 STARTUP 事件被調用！🚀🚀🚀")
+    print("🚀🚀🚀 FastAPI 應用開始啟用 🚀🚀🚀")
+    
     # 啟動時的邏輯
     logger.info("🚀🚀🚀 FastAPI 應用開始啟用 🚀🚀🚀")
     logger.info("📋 正在初始化各項服務...")
+    print("📋 正在初始化各項服務...")
     
     try:
         # 🔥 重新啟用排程服務
-        logger.info("🚀 啟動排程服務背景任務...")
-        from schedule_service import schedule_service
-        background_task = asyncio.create_task(schedule_service.start_background_scheduler())
-        app.state.background_scheduler_task = background_task
+        logger.info("🚀🚀🚀 開始啟動排程服務背景任務 🚀🚀🚀")
+        logger.info("📋 正在導入排程服務模組...")
+        print("🚀🚀🚀 開始啟動排程服務背景任務 🚀🚀🚀")
         
-        logger.info("✅ ✅ ✅ 排程服務已啟動，API 服務已啟動 ✅ ✅ ✅")
+        try:
+            from schedule_service import schedule_service
+            logger.info("✅ 排程服務模組導入成功")
+            print("✅ 排程服務模組導入成功")
+            
+            logger.info("🔄 正在創建背景排程任務...")
+            print("🔄 正在創建背景排程任務...")
+            background_task = asyncio.create_task(schedule_service.start_background_scheduler())
+            app.state.background_scheduler_task = background_task
+            logger.info("✅ 背景排程任務創建成功")
+            print("✅ 背景排程任務創建成功")
+            
+            logger.info("✅ ✅ ✅ 排程服務已啟動，API 服務已啟動 ✅ ✅ ✅")
+            print("✅ ✅ ✅ 排程服務已啟動，API 服務已啟動 ✅ ✅ ✅")
+            
+        except Exception as import_error:
+            logger.error(f"❌ 排程服務模組導入或啟動失敗: {import_error}")
+            logger.error(f"🔍 導入錯誤詳情: {str(import_error)}")
+            print(f"❌ 排程服務模組導入或啟動失敗: {import_error}")
+            import traceback
+            logger.error(f"🔍 導入錯誤堆疊:\n{traceback.format_exc()}")
+            print(f"🔍 導入錯誤堆疊:\n{traceback.format_exc()}")
+            raise
         
     except Exception as e:
         logger.error(f"❌ 排程服務啟動失敗: {e}")
         logger.error(f"🔍 錯誤詳情: {str(e)}")
+        print(f"❌ 排程服務啟動失敗: {e}")
         import traceback
         traceback.print_exc()
     
     logger.info("🎉 所有服務初始化完成！應用開始運行...")
-    yield  # 應用運行期間
-    
-    # 關閉時的邏輯
+    print("🎉 所有服務初始化完成！應用開始運行...")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """應用關閉事件"""
+    print("🛑 應用正在關閉...")
     logger.info("🛑 應用正在關閉...")
     try:
         # 清理背景任務
         if hasattr(app.state, 'background_scheduler_task'):
             logger.info("🔄 正在停止背景排程器...")
+            print("🔄 正在停止背景排程器...")
             app.state.background_scheduler_task.cancel()
             try:
                 await app.state.background_scheduler_task
             except asyncio.CancelledError:
                 logger.info("✅ 背景排程器已停止")
+                print("✅ 背景排程器已停止")
     except Exception as e:
         logger.error(f"❌ 關閉服務時發生錯誤: {e}")
+        print(f"❌ 關閉服務時發生錯誤: {e}")
     
     logger.info("🏁 應用關閉完成")
-
-app = FastAPI(
-    title="Posting Service", 
-    description="虛擬KOL自動發文服務",
-    lifespan=lifespan
-)
+    print("🏁 應用關閉完成")
 
 # 添加 CORS 中間件
 app.add_middleware(
@@ -2365,6 +2397,8 @@ async def get_session_posts(session_id: int, status: Optional[str] = None):
                 "topic_id": post.topic_id,
                 "topic_title": post.topic_title,
                 "alternative_versions": post.alternative_versions,  # 新增：其他版本
+                "generation_params": post.generation_params,  # 🔥 新增：生成參數
+                "trigger_type": post.generation_params.get('trigger_type') if post.generation_params else None,  # 🔥 新增：觸發器類型
                 "created_at": post.created_at.isoformat() if post.created_at else None,
                 "updated_at": post.updated_at.isoformat() if post.updated_at else None
             }
@@ -2768,8 +2802,8 @@ async def publish_post_to_cmoney(post_id: str, cmoney_config: Optional[Dict[str,
         if not post_record:
             raise HTTPException(status_code=404, detail="貼文不存在")
         
-        if post_record.status != "approved":
-            raise HTTPException(status_code=400, detail="只有已審核的貼文才能發布")
+        if post_record.status not in ["approved", "draft"]:
+            raise HTTPException(status_code=400, detail=f"貼文狀態為 {post_record.status}，無法發文。只有已審核或草稿狀態的貼文才能發布")
         
         # 使用發佈服務發佈貼文
         from publish_service import publish_service
@@ -3261,6 +3295,30 @@ def enhance_content_with_serper_data(kol_content: Dict[str, Any],
     except Exception as e:
         print(f"Serper數據增強失敗: {e}")
         return kol_content
+
+@app.post("/api/test-stock-filter")
+async def test_stock_filter(trigger_type: str = "limit_up_after_hours", max_stocks: int = 5):
+    """測試股票篩選服務"""
+    try:
+        from stock_filter_service import stock_filter_service
+        
+        stocks = await stock_filter_service.filter_stocks_by_trigger(
+            trigger_type=trigger_type,
+            max_stocks=max_stocks
+        )
+        
+        return {
+            "success": True,
+            "trigger_type": trigger_type,
+            "max_stocks": max_stocks,
+            "stocks_count": len(stocks),
+            "stocks": stocks
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
 
 print("🎉 所有模組載入完成！")
 

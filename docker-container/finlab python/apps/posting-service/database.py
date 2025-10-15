@@ -7,6 +7,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
 import logging
+from timezone_utils import get_taiwan_utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -39,8 +40,8 @@ class PostRecord(Base):
     __tablename__ = "post_records"
     
     post_id = Column(String, primary_key=True, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=get_taiwan_utcnow)
+    updated_at = Column(DateTime, default=get_taiwan_utcnow, onupdate=get_taiwan_utcnow)
     session_id = Column(Integer, nullable=True)
     kol_serial = Column(Integer, nullable=False)
     kol_nickname = Column(String, nullable=False)

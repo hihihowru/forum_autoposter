@@ -39,7 +39,7 @@ async def publish_post_to_cmoney(post_id: str):
             logger.error(f"❌ 找不到貼文記錄 - Post ID: {post_id}")
             raise HTTPException(status_code=404, detail="找不到貼文記錄")
         
-        if existing_post.status not in ['approved']:
+        if existing_post.status not in ['approved', 'draft']:
             logger.error(f"❌ 貼文狀態不正確，無法發文 - Post ID: {post_id}, 狀態: {existing_post.status}")
             raise HTTPException(status_code=400, detail=f"貼文狀態為 {existing_post.status}，無法發文")
         

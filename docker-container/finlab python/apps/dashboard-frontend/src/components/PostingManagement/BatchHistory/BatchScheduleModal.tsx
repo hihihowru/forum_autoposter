@@ -100,21 +100,34 @@ const BatchScheduleModal: React.FC<BatchScheduleModalProps> = ({
       // 🔥 修復：從 batchData 的 posts 中提取原始配置
       const originalConfig = batchData.posts?.[0]?.generation_config || {};
       
-      // 從 batchData 獲取實際的 trigger_type，而不是硬編碼
-      const defaultTriggerType = batchData.trigger_type || 'limit_up_after_hours';
-      const defaultStockSorting = 'five_day_change_desc';
-      const scheduleName = generateScheduleName(defaultTriggerType, defaultStockSorting, batchData.session_id);
-      
+      // 🔥 修復：從 batchData 獲取實際的 trigger_type
+      const defaultTriggerType = originalConfig.trigger_type || 
+                                originalConfig.settings?.trigger_type || 
+                                batchData.trigger_type || 
+                                'limit_up_after_hours';
+      const defaultStockSorting = originalConfig.stock_sorting || 
+                                 originalConfig.settings?.stock_sorting || 
+                                 'five_day_change_desc';
       // 🔥 修復：提取原始的最大股票數量設定
       const originalMaxStocks = originalConfig.settings?.max_stocks_per_post || 
                                originalConfig.max_stocks_per_post || 
                                batchData.stock_codes?.length || 1;
       
+      const scheduleName = generateScheduleName(defaultTriggerType, defaultStockSorting, batchData.session_id);
+      
+      // 🔥 添加詳細日誌記錄
+      console.log('🔍 批次數據分析:');
+      console.log('  - batchData:', batchData);
+      console.log('  - originalConfig:', originalConfig);
+      console.log('  - defaultTriggerType:', defaultTriggerType);
+      console.log('  - defaultStockSorting:', defaultStockSorting);
+      console.log('  - originalMaxStocks:', originalMaxStocks);
+      
       form.setFieldsValue({
         schedule_name: scheduleName,
         schedule_description: `基於批次 ${batchData.session_id} 的工作日自動排程`,
         schedule_type: 'weekday_daily', // 排程類型：工作日每日執行
-        daily_execution_time: null,
+        daily_execution_time: originalConfig.settings?.posting_time_slots?.[0] || null,
         weekdays_only: true,
         interval_seconds: 300, // 5分鐘間隔
         enabled: true,
@@ -392,7 +405,13 @@ const BatchScheduleModal: React.FC<BatchScheduleModalProps> = ({
                   <Option value="limit_down_after_hours">盤後跌停</Option>
                   <Option value="intraday_limit_up">盤中漲停</Option>
                   <Option value="intraday_limit_down">盤中跌停</Option>
-                  <Option value="custom_stocks">自選股票</Option>
+                  <Option value="volume_surge">成交量暴增</Option>
+                  <Option value="news_hot">新聞熱股</Option>
+                  <Option value="custom_stocks">自選股</Option>
+                  <Option value="intraday_gainers_by_amount">漲幅排序+成交額</Option>
+                  <Option value="intraday_volume_leaders">成交量排序</Option>
+                  <Option value="intraday_amount_leaders">成交額排序</Option>
+                  <Option value="intraday_limit_down_by_amount">跌停篩選+成交額</Option>
                 </Select>
               </Form.Item>
             </Col>

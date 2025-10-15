@@ -82,6 +82,48 @@ const ScheduleManagementPage: React.FC = () => {
   const [configModalVisible, setConfigModalVisible] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState<ScheduleTask | undefined>(undefined);
   const [dailyStats, setDailyStats] = useState<any>(null);
+  const [schedulerEnabled, setSchedulerEnabled] = useState(true);
+
+  // 控制背景排程器開關
+  const handleSchedulerToggle = async (enabled: boolean) => {
+    try {
+      setLoading(true);
+      const response = await fetch(`http://localhost:8001/api/schedule/scheduler/${enabled ? 'start' : 'stop'}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+
+      if (response.ok) {
+        setSchedulerEnabled(enabled);
+        message.success(`背景排程器已${enabled ? '啟動' : '停止'}`);
+      } else {
+        const errorData = await response.json();
+        message.error(`操作失敗: ${errorData.detail || '未知錯誤'}`);
+      }
+    } catch (error) {
+      console.error('控制背景排程器失敗:', error);
+      message.error('控制背景排程器失敗');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 獲取背景排程器狀態
+  const fetchSchedulerStatus = async () => {
+    try {
+      const response = await fetch('http://localhost:8001/api/schedule/scheduler/status');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setSchedulerEnabled(data.data.scheduler_running);
+        }
+      }
+    } catch (error) {
+      console.error('獲取背景排程器狀態失敗:', error);
+    }
+  };
 
   // 計算統計數據
   const getStatistics = () => {
@@ -222,7 +264,12 @@ const ScheduleManagementPage: React.FC = () => {
       }  
       const result = await response.json();
       // API 返回的數據結構是 {success: true, tasks: [...]}
-      setSchedules(result.tasks || []);
+      const tasks = result.tasks || [];
+      // 按創建時間降序排序，最新的排在最前面
+      const sortedTasks = tasks.sort((a: ScheduleTask, b: ScheduleTask) => {
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
+      setSchedules(sortedTasks);
     } catch (error) {
       console.error('獲取排程列表失敗:', error);
       message.error('獲取排程列表失敗');
@@ -276,12 +323,12 @@ const ScheduleManagementPage: React.FC = () => {
   // 切換排程狀態
   const handleToggleEnabled = async (scheduleId: string, enabled: boolean) => {
     try {
-      setLoading(true);
+      // 不設置全局 loading，避免影響表格顯示
       
       let response;
       if (enabled) {
         // 啟用排程 - 調用 start API
-        response = await fetch(`http://localhost:8001/api/start/${scheduleId}`, {
+        response = await fetch(`http://localhost:8001/api/schedule/start/${scheduleId}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -289,7 +336,7 @@ const ScheduleManagementPage: React.FC = () => {
         });
       } else {
         // 暫停排程 - 調用 cancel API
-        response = await fetch(`http://localhost:8001/api/cancel/${scheduleId}`, {
+        response = await fetch(`http://localhost:8001/api/schedule/cancel/${scheduleId}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -301,42 +348,36 @@ const ScheduleManagementPage: React.FC = () => {
       
       if (result.success) {
         message.success(`排程已${enabled ? '啟用' : '暫停'}`);
-        loadSchedules();
+        // 重新載入排程列表
+        await loadSchedules();
       } else {
         message.error(result.message || '更新排程狀態失敗');
       }
     } catch (error) {
       console.error('更新排程狀態失敗:', error);
       message.error('更新排程狀態失敗');
-    } finally {
-      setLoading(false);
     }
   };
 
   // 切換自動發文開關（不影響任務運行狀態，只更新欄位）
   const handleToggleAutoPosting = async (record: ScheduleTask, autoPosting: boolean) => {
     try {
-      setLoading(true);
-      const payload = {
-        ...record,
-        auto_posting: autoPosting
-      } as any;
-      const response = await fetch(`/api/schedule/tasks/${record.task_id}`, {
-        method: 'PUT',
+      // 不設置全局 loading，避免影響表格顯示
+      const response = await fetch(`http://localhost:8001/api/schedule/${record.task_id}/auto-posting`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({ enabled: autoPosting })
       });
       const result = await response.json();
       if (result.success) {
         message.success(`自動發文已${autoPosting ? '開啟' : '關閉'}`);
-        loadSchedules();
+        // 重新載入排程列表
+        await loadSchedules();
       } else {
         message.error(result.message || '更新自動發文設定失敗');
       }
     } catch (e) {
       message.error('更新自動發文設定失敗');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -345,7 +386,7 @@ const ScheduleManagementPage: React.FC = () => {
     try {
       setLoading(true);
       
-      const response = await fetch(`http://localhost:8001/api/execute/${scheduleId}`, {
+      const response = await fetch(`http://localhost:8001/api/schedule/execute/${scheduleId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -447,22 +488,37 @@ const ScheduleManagementPage: React.FC = () => {
       title: '發文時間',
       dataIndex: 'schedule_config',
       key: 'posting_time',
-      width: 180,
-      render: (config: any, record: ScheduleTask) => (
+      width: 140,
+      render: (_: any, record: ScheduleTask) => (
         <div>
           <Space>
             <ClockCircleOutlined />
             <Text style={{ fontSize: '11px' }}>
               {record.schedule_config?.posting_time_slots && record.schedule_config.posting_time_slots.length > 0 
                 ? record.schedule_config.posting_time_slots.join(', ') 
+                : record.schedule_config?.daily_execution_time 
+                ? record.schedule_config.daily_execution_time
                 : '未設定'}
             </Text>
           </Space>
           <div style={{ fontSize: '10px', color: '#666' }}>
-            間隔: {record.interval_seconds || 300}秒
-          </div>
-          <div style={{ fontSize: '10px', color: '#666' }}>
             {record.schedule_config?.timezone || 'Asia/Taipei'}
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: '發文間隔',
+      dataIndex: 'interval_seconds',
+      key: 'interval_seconds',
+      width: 100,
+      render: (intervalSeconds: number) => (
+        <div>
+          <Text style={{ fontSize: '11px' }}>
+            {intervalSeconds ? `${intervalSeconds}秒` : '300秒'}
+          </Text>
+          <div style={{ fontSize: '10px', color: '#666' }}>
+            {intervalSeconds ? `約${Math.round(intervalSeconds / 60)}分鐘` : '約5分鐘'}
           </div>
         </div>
       ),
@@ -564,6 +620,29 @@ const ScheduleManagementPage: React.FC = () => {
       ),
     },
     {
+      title: '創建時間',
+      dataIndex: 'created_at',
+      key: 'created_at',
+      width: 140,
+      sorter: (a: ScheduleTask, b: ScheduleTask) => {
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      },
+      render: (createdAt: string) => (
+        <div>
+          <Text style={{ fontSize: '11px' }}>
+            {new Date(createdAt).toLocaleString('zh-TW', {
+              timeZone: 'Asia/Taipei',
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit'
+            })}
+          </Text>
+        </div>
+      ),
+    },
+    {
       title: '下次執行',
       dataIndex: 'next_run',
       key: 'next_run',
@@ -587,7 +666,7 @@ const ScheduleManagementPage: React.FC = () => {
                     fontWeight: 500
                   }}
                 >
-                  {getCountdown(nextRun, record.schedule_type, record.schedule_config)}
+                  {getCountdown(nextRun || undefined, record.schedule_type, record.schedule_config)}
                 </Text>
               </div>
             </>
@@ -652,6 +731,7 @@ const ScheduleManagementPage: React.FC = () => {
   useEffect(() => {
     loadSchedules();
     loadDailyStats();
+    fetchSchedulerStatus();
   }, []);
 
   // 獲取當前系統時間
@@ -683,10 +763,30 @@ const ScheduleManagementPage: React.FC = () => {
   return (
     <div style={{ padding: '24px' }}>
       <div style={{ marginBottom: '24px' }}>
-        <Title level={2}>
-          <SettingOutlined style={{ marginRight: 8 }} />
-          排程管理
-        </Title>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <Title level={2} style={{ margin: 0 }}>
+            <SettingOutlined style={{ marginRight: 8 }} />
+            排程管理
+          </Title>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <Text style={{ fontSize: '14px', color: '#666' }}>
+              背景排程器:
+            </Text>
+            <Switch
+              checked={schedulerEnabled}
+              onChange={handleSchedulerToggle}
+              checkedChildren="開啟"
+              unCheckedChildren="關閉"
+              loading={loading}
+              style={{ minWidth: '60px' }}
+            />
+            <Badge 
+              status={schedulerEnabled ? "success" : "default"} 
+              text={schedulerEnabled ? "運行中" : "已停止"}
+              style={{ fontSize: '12px' }}
+            />
+          </div>
+        </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Text type="secondary">管理自動發文排程和執行狀態</Text>
           <div style={{ 
@@ -726,7 +826,7 @@ const ScheduleManagementPage: React.FC = () => {
             />
             {statistics.nextExecution && (
               <Text type="secondary" style={{ fontSize: 12 }}>
-                最近: {getCountdown(statistics.nextExecution ?? null, statistics.nextScheduleType, null)}
+                最近: {getCountdown(statistics.nextExecution || undefined, statistics.nextScheduleType || undefined, null)}
               </Text>
             )}
           </Card>
@@ -819,13 +919,20 @@ const ScheduleManagementPage: React.FC = () => {
       )}
 
       <Card>
-        <div style={{ marginBottom: 16 }}>
+        <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between' }}>
           <Button
             type="primary"
             icon={<PlusOutlined />}
             onClick={handleCreateSchedule}
           >
             創建新排程
+          </Button>
+          <Button
+            icon={<ClockCircleOutlined />}
+            onClick={loadSchedules}
+            loading={loading}
+          >
+            刷新列表
           </Button>
         </div>
 

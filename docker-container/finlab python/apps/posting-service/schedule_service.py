@@ -10,6 +10,7 @@ import logging
 import pytz
 
 from schedule_database import schedule_db_service
+from timezone_utils import get_taiwan_utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +42,7 @@ class ScheduleTask:
         self.generation_config = generation_config or {}
         self.batch_info = batch_info or {}
         self.status = 'pending'
-        self.created_at = datetime.utcnow()
+        self.created_at = get_taiwan_utcnow()
         self.started_at = None
         self.completed_at = None
         self.error_message = None
@@ -79,6 +80,37 @@ class ScheduleService:
                                  source_feature_name: Optional[str] = None,
                                  created_by: str = 'system') -> str:
         """創建排程任務 - 持久化到資料庫"""
+        
+        # 🔥 添加詳細的創建日誌記錄
+        print(f"🚀🚀🚀 開始創建排程任務 🚀🚀🚀")
+        print(f"📋 創建參數:")
+        print(f"   📊 Session ID: {session_id}")
+        print(f"   📝 排程名稱: {schedule_name}")
+        print(f"   📝 排程描述: {schedule_description}")
+        print(f"   🕐 排程類型: {schedule_type}")
+        print(f"   ⏰ 執行時間: {daily_execution_time}")
+        print(f"   📅 僅工作日: {weekdays_only}")
+        print(f"   🤖 自動發文: {auto_posting}")
+        print(f"   ⏱️ 間隔秒數: {interval_seconds}")
+        print(f"   📈 每小時最大發文數: {max_posts_per_hour}")
+        print(f"   🌍 時區: {timezone}")
+        print(f"   📦 批次資訊: {batch_info}")
+        print(f"   🎯 生成配置: {generation_config}")
+        
+        # 🔥 詳細分析生成配置
+        if generation_config:
+            print(f"🔍 生成配置詳情:")
+            print(f"   🎯 觸發器類型: {generation_config.get('trigger_type', 'N/A')}")
+            print(f"   📝 發文類型: {generation_config.get('posting_type', 'N/A')}")
+            print(f"   📊 股票排序: {generation_config.get('stock_sorting', 'N/A')}")
+            print(f"   📈 最大股票數: {generation_config.get('max_stocks', 'N/A')}")
+            print(f"   👥 KOL分配: {generation_config.get('kol_assignment', 'N/A')}")
+            print(f"   🎨 內容風格: {generation_config.get('content_style', 'N/A')}")
+            print(f"   📏 內容長度: {generation_config.get('content_length', 'N/A')}")
+            print(f"   📰 新聞連結: {generation_config.get('enable_news_links', 'N/A')}")
+            print(f"   🔧 生成模式: {generation_config.get('generation_mode', 'N/A')}")
+        else:
+            print(f"⚠️ 沒有提供生成配置")
         # 生成預設排程名稱
         if not schedule_name:
             # 使用台灣時區生成時間戳
@@ -195,6 +227,13 @@ class ScheduleService:
             
             if len(active_tasks) == 0:
                 logger.info("✅ 沒有 active 排程任務，背景排程器空轉等待")
+                # 持續等待，每小時檢查一次
+                while self.background_scheduler_running:
+                    await asyncio.sleep(3600)  # 等待 1 小時
+                    active_tasks = await self.db_service.get_active_schedule_tasks()
+                    if len(active_tasks) > 0:
+                        logger.info(f"📋 發現新的 active 排程任務: {len(active_tasks)} 個")
+                        break
                 return
             
             # 啟動所有 active 排程
@@ -206,6 +245,80 @@ class ScheduleService:
                 schedule_name = task.get('schedule_name', 'Unknown')
                 schedule_type = task.get('schedule_type', 'Unknown')
                 daily_execution_time = task.get('daily_execution_time', 'Not Set')
+                
+                logger.info(f"🔍 處理排程任務 {idx}/{len(active_tasks)}:")
+                logger.info(f"   📋 Task ID: {task_id}")
+                logger.info(f"   📝 排程名稱: {schedule_name}")
+                logger.info(f"   🕐 排程類型: {schedule_type}")
+                logger.info(f"   ⏰ 執行時間: {daily_execution_time}")
+                logger.info(f"   🔄 狀態: {task.get('status', 'Unknown')}")
+                logger.info(f"   📊 Session ID: {task.get('session_id', 'N/A')}")
+                logger.info(f"   🌍 時區: {task.get('timezone', 'N/A')}")
+                logger.info(f"   📅 僅工作日: {task.get('weekdays_only', 'N/A')}")
+                logger.info(f"   🤖 自動發文: {task.get('auto_posting', 'N/A')}")
+                logger.info(f"   ⏱️ 間隔秒數: {task.get('interval_seconds', 'N/A')}")
+                logger.info(f"   📈 每小時最大發文數: {task.get('max_posts_per_hour', 'N/A')}")
+                logger.info(f"   🏃 執行次數: {task.get('run_count', 0)}")
+                logger.info(f"   ✅ 成功次數: {task.get('success_count', 0)}")
+                logger.info(f"   ❌ 失敗次數: {task.get('failure_count', 0)}")
+                logger.info(f"   📈 成功率: {task.get('success_rate', 0)}%")
+                logger.info(f"   📝 下次執行: {task.get('next_run', 'Not Set')}")
+                logger.info(f"   📝 最後執行: {task.get('last_run', 'Never')}")
+                
+                # 🔥 計算並顯示預計執行時間
+                try:
+                    next_run_time = await self._calculate_next_run_time(task)
+                    if next_run_time:
+                        tz_next_run = next_run_time.strftime('%Y-%m-%d %H:%M:%S %Z')
+                        logger.info(f"   🎯 預計下次執行時間: {tz_next_run}")
+                        
+                        # 計算距離執行還有多久
+                        now = datetime.now(pytz.timezone(task.get('timezone', 'Asia/Taipei')))
+                        time_diff = next_run_time - now
+                        if time_diff.total_seconds() > 0:
+                            hours = int(time_diff.total_seconds() // 3600)
+                            minutes = int((time_diff.total_seconds() % 3600) // 60)
+                            logger.info(f"   ⏳ 距離執行還有: {hours}小時{minutes}分鐘")
+                        else:
+                            logger.info(f"   ⚠️ 執行時間已過，將重新計算")
+                    else:
+                        logger.warning(f"   ⚠️ 無法計算預計執行時間")
+                except Exception as calc_error:
+                    logger.error(f"   ❌ 計算預計執行時間失敗: {calc_error}")
+                
+                # 🔥 顯示觸發器配置
+                trigger_config = task.get('trigger_config', {})
+                if trigger_config:
+                    logger.info(f"   🎯 觸發器配置:")
+                    logger.info(f"      🎯 觸發器類型: {trigger_config.get('trigger_type', 'N/A')}")
+                    logger.info(f"      📊 最大股票數: {trigger_config.get('max_stocks', 'N/A')}")
+                    logger.info(f"      👥 KOL分配: {trigger_config.get('kol_assignment', 'N/A')}")
+                    logger.info(f"      📈 股票排序: {trigger_config.get('stock_sorting', 'N/A')}")
+                
+                # 🔥 顯示生成配置
+                generation_config = task.get('generation_config', {})
+                if generation_config:
+                    logger.info(f"   🎨 生成配置:")
+                    logger.info(f"      📝 發文類型: {generation_config.get('posting_type', 'N/A')}")
+                    logger.info(f"      📏 內容長度: {generation_config.get('content_length', 'N/A')}")
+                    logger.info(f"      🎨 內容風格: {generation_config.get('content_style', 'N/A')}")
+                    logger.info(f"      📰 新聞連結: {generation_config.get('enable_news_links', 'N/A')}")
+                
+                # 🔥 顯示批次資訊
+                batch_info = task.get('batch_info', {})
+                if batch_info:
+                    logger.info(f"   📦 批次資訊:")
+                    logger.info(f"      📊 總發文數: {batch_info.get('total_posts', 'N/A')}")
+                    logger.info(f"      ✅ 已發布數: {batch_info.get('published_posts', 'N/A')}")
+                    logger.info(f"      📈 成功率: {batch_info.get('success_rate', 'N/A')}%")
+                    logger.info(f"      🏢 股票代碼: {batch_info.get('stock_codes', 'N/A')}")
+                    logger.info(f"      👥 KOL名稱: {batch_info.get('kol_names', 'N/A')}")
+                
+                # 檢查是否有執行時間設定
+                if not daily_execution_time or daily_execution_time == 'Not Set':
+                    logger.warning(f"⚠️ 排程沒有設定執行時間，跳過執行 - Task ID: {task_id}")
+                    failure_count += 1
+                    continue
                 status = task.get('status', 'unknown')
                 
                 logger.info(f"🚀 [{idx}/{len(active_tasks)}] 正在準備啟動排程任務:")
@@ -259,6 +372,41 @@ class ScheduleService:
             if success_count > 0:
                 logger.info("✅ 背景排程器啟動完成 - 開始監控執行")
                 self.background_scheduler_running = True
+                
+                # 持續監控運行中的任務
+                while self.background_scheduler_running:
+                    try:
+                        # 檢查是否有任務需要重啟
+                        active_tasks = await self.db_service.get_active_schedule_tasks()
+                        current_running_task_ids = set(self.running_tasks.keys())
+                        active_task_ids = {task['schedule_id'] for task in active_tasks}
+                        
+                        # 啟動新的 active 任務
+                        for task in active_tasks:
+                            task_id = task['schedule_id']
+                            if task_id not in current_running_task_ids:
+                                logger.info(f"🔄 發現新的 active 任務，正在啟動: {task_id}")
+                                try:
+                                    task_obj = asyncio.create_task(self._execute_schedule_task(task_id))
+                                    self.running_tasks[task_id] = task_obj
+                                    logger.info(f"✅ 新任務啟動成功: {task_id}")
+                                except Exception as e:
+                                    logger.error(f"❌ 新任務啟動失敗: {task_id}, Error: {e}")
+                        
+                        # 清理已停止的任務
+                        for task_id in list(current_running_task_ids):
+                            if task_id not in active_task_ids:
+                                logger.info(f"🛑 任務已停止，清理: {task_id}")
+                                if task_id in self.running_tasks:
+                                    self.running_tasks[task_id].cancel()
+                                    del self.running_tasks[task_id]
+                        
+                        # 等待 5 分鐘後再次檢查
+                        await asyncio.sleep(300)
+                        
+                    except Exception as e:
+                        logger.error(f"❌ 背景排程器監控錯誤: {e}")
+                        await asyncio.sleep(60)  # 錯誤時等待 1 分鐘
             else:
                 logger.warning("⚠️ 沒有成功啟動任何排程任務")
                 
@@ -293,9 +441,53 @@ class ScheduleService:
         logger.info(f"   🔄 當前狀態: {current_status}")
         logger.info(f"   ⏰ 執行時間: {daily_execution_time}")
         
-        if current_status != 'pending':
-            logger.error(f"❌ 排程任務狀態不正確 - Task ID: {task_id}, 期望: pending, 實際: {current_status}")
+        # 詳細的排程設定資訊
+        logger.info(f"🔧 詳細排程設定:")
+        logger.info(f"   📊 Session ID: {db_task.get('session_id', 'N/A')}")
+        logger.info(f"   📝 描述: {db_task.get('schedule_description', 'N/A')}")
+        logger.info(f"   ⏱️ 間隔秒數: {db_task.get('interval_seconds', 'N/A')}")
+        logger.info(f"   🌍 時區: {db_task.get('timezone', 'N/A')}")
+        logger.info(f"   📅 僅工作日: {db_task.get('weekdays_only', 'N/A')}")
+        logger.info(f"   📈 每小時最大發文數: {db_task.get('max_posts_per_hour', 'N/A')}")
+        logger.info(f"   🤖 自動發文: {db_task.get('auto_posting', 'N/A')}")
+        
+        # 觸發器配置
+        trigger_config = db_task.get('trigger_config', {})
+        if trigger_config:
+            logger.info(f"🎯 觸發器配置:")
+            logger.info(f"   🎯 觸發器類型: {trigger_config.get('trigger_type', 'N/A')}")
+            logger.info(f"   📊 最大股票數: {trigger_config.get('max_stocks', 'N/A')}")
+            logger.info(f"   👥 KOL分配: {trigger_config.get('kol_assignment', 'N/A')}")
+            logger.info(f"   📈 股票排序: {trigger_config.get('stock_sorting', 'N/A')}")
+        
+        # 生成配置
+        generation_config = db_task.get('generation_config', {})
+        if generation_config:
+            logger.info(f"🎨 生成配置:")
+            logger.info(f"   📝 發文類型: {generation_config.get('posting_type', 'N/A')}")
+            logger.info(f"   📏 內容長度: {generation_config.get('content_length', 'N/A')}")
+            logger.info(f"   🎨 內容風格: {generation_config.get('content_style', 'N/A')}")
+            logger.info(f"   📰 新聞連結: {generation_config.get('enable_news_links', 'N/A')}")
+        
+        # 批次資訊
+        batch_info = db_task.get('batch_info', {})
+        if batch_info:
+            logger.info(f"📦 批次資訊:")
+            logger.info(f"   📊 總發文數: {batch_info.get('total_posts', 'N/A')}")
+            logger.info(f"   ✅ 已發布數: {batch_info.get('published_posts', 'N/A')}")
+            logger.info(f"   📈 成功率: {batch_info.get('success_rate', 'N/A')}%")
+            logger.info(f"   🏢 股票代碼: {batch_info.get('stock_codes', 'N/A')}")
+            logger.info(f"   👥 KOL名稱: {batch_info.get('kol_names', 'N/A')}")
+        
+        if current_status not in ['pending', 'cancelled', 'active']:
+            logger.error(f"❌ 排程任務狀態不正確 - Task ID: {task_id}, 期望: pending, cancelled 或 active, 實際: {current_status}")
             return False
+        
+        if current_status == 'active':
+            logger.info(f"ℹ️ 排程任務已經是 active 狀態，直接啟動執行循環 - Task ID: {task_id}")
+            # 直接啟動執行循環，不改變狀態
+        else:
+            logger.info(f"✅ 任務狀態檢查通過，狀態有效")
         
         logger.info(f"✅ 任務狀態檢查通過，狀態有效")
         
@@ -458,8 +650,8 @@ class ScheduleService:
                     
                     if not should_execute:
                         logger.debug(f"⏰ 排程未到執行時間 - Task ID: {task_id}, 時間: {current_time}")
-                        # 等待 1 小時後再檢查
-                        await asyncio.sleep(3600)
+                        # 等待 1 分鐘後再檢查，確保不會錯過執行時間
+                        await asyncio.sleep(60)
                         continue
                     
                     # 🔥 關鍵修復：檢查今日是否已執行過，避免重複執行
@@ -541,10 +733,10 @@ class ScheduleService:
                         # 工作日每日執行批次腳本
                         await self._execute_weekday_daily_schedule(task_id, current_task)
                     
-                    # 更新統計數據
-                    await self.db_service.increment_schedule_stats(
-                        task_id, run_count=1, success_count=1
-                    )
+                    # 🔥 注意：統計數據已在具體執行方法中更新，這裡不需要重複更新
+                    # await self.db_service.increment_schedule_stats(
+                    #     task_id, run_count=1, success_count=1
+                    # )
                     
                     # 計算下次執行時間
                     next_run_time = await self._calculate_next_run_time(current_task)
@@ -649,35 +841,100 @@ class ScheduleService:
     async def _publish_posts_immediately(self, task_id: str, post_ids: List[str]):
         """立即發布所有貼文"""
         logger.info(f"📝 立即發布 {len(post_ids)} 篇貼文")
-        # 這裡應該調用實際的發布服務
-        # 暫時只是模擬
+        
+        success_count = 0
         for post_id in post_ids:
-            logger.info(f"📝 發布貼文 - Post ID: {post_id}")
-            # 記錄貼文與排程的關聯
-            await self.db_service.add_generated_post(task_id, post_id)
-            await asyncio.sleep(0.1)  # 模擬發布時間
+            try:
+                logger.info(f"📝 發布貼文 - Post ID: {post_id}")
+                
+                # 調用實際的發布服務
+                from publish_service import publish_service
+                from main import get_post_record_service
+                
+                # 獲取貼文記錄
+                post_service = get_post_record_service()
+                post_record = post_service.get_post_record(post_id)
+                
+                if not post_record:
+                    logger.error(f"❌ 找不到貼文記錄 - Post ID: {post_id}")
+                    continue
+                
+                if post_record.status not in ["approved", "draft"]:
+                    logger.error(f"❌ 貼文狀態不正確，無法發文 - Post ID: {post_id}, 狀態: {post_record.status}")
+                    continue
+                
+                # 實際發布到 CMoney
+                publish_result = await publish_service.publish_post(post_record)
+                
+                if publish_result.get("success"):
+                    logger.info(f"✅ 貼文發布成功 - Post ID: {post_id}")
+                    success_count += 1
+                else:
+                    logger.error(f"❌ 貼文發布失敗 - Post ID: {post_id}, 錯誤: {publish_result.get('error')}")
+                
+                # 記錄貼文與排程的關聯
+                await self.db_service.add_generated_post(task_id, post_id)
+                
+            except Exception as e:
+                logger.error(f"❌ 發布貼文異常 - Post ID: {post_id}, 錯誤: {e}")
         
         # 更新統計數據
         await self.db_service.increment_schedule_stats(
-            task_id, posts_generated=len(post_ids)
+            task_id, posts_generated=len(post_ids), success_count=success_count
         )
+        
+        logger.info(f"📊 發布完成 - 成功: {success_count}/{len(post_ids)}")
     
     async def _publish_posts_with_interval(self, task_id: str, post_ids: List[str], interval_seconds: int):
         """按間隔發布貼文"""
         logger.info(f"📝 按間隔 {interval_seconds} 秒發布 {len(post_ids)} 篇貼文")
-        # 這裡應該調用實際的發布服務
-        # 暫時只是模擬
+        
+        success_count = 0
         for i, post_id in enumerate(post_ids):
-            logger.info(f"📝 發布貼文 {i+1}/{len(post_ids)} - Post ID: {post_id}")
-            # 記錄貼文與排程的關聯
-            await self.db_service.add_generated_post(task_id, post_id)
-            if i < len(post_ids) - 1:  # 不是最後一篇
-                await asyncio.sleep(interval_seconds)
+            try:
+                logger.info(f"📝 發布貼文 {i+1}/{len(post_ids)} - Post ID: {post_id}")
+                
+                # 調用實際的發布服務
+                from publish_service import publish_service
+                from main import get_post_record_service
+                
+                # 獲取貼文記錄
+                post_service = get_post_record_service()
+                post_record = post_service.get_post_record(post_id)
+                
+                if not post_record:
+                    logger.error(f"❌ 找不到貼文記錄 - Post ID: {post_id}")
+                    continue
+                
+                if post_record.status not in ["approved", "draft"]:
+                    logger.error(f"❌ 貼文狀態不正確，無法發文 - Post ID: {post_id}, 狀態: {post_record.status}")
+                    continue
+                
+                # 實際發布到 CMoney
+                publish_result = await publish_service.publish_post(post_record)
+                
+                if publish_result.get("success"):
+                    logger.info(f"✅ 貼文發布成功 - Post ID: {post_id}")
+                    success_count += 1
+                else:
+                    logger.error(f"❌ 貼文發布失敗 - Post ID: {post_id}, 錯誤: {publish_result.get('error')}")
+                
+                # 記錄貼文與排程的關聯
+                await self.db_service.add_generated_post(task_id, post_id)
+                
+                if i < len(post_ids) - 1:  # 不是最後一篇
+                    logger.info(f"⏳ 等待 {interval_seconds} 秒後發布下一篇...")
+                    await asyncio.sleep(interval_seconds)
+                
+            except Exception as e:
+                logger.error(f"❌ 發布貼文異常 - Post ID: {post_id}, 錯誤: {e}")
         
         # 更新統計數據
         await self.db_service.increment_schedule_stats(
-            task_id, posts_generated=len(post_ids)
+            task_id, posts_generated=len(post_ids), success_count=success_count
         )
+        
+        logger.info(f"📊 間隔發布完成 - 成功: {success_count}/{len(post_ids)}")
     
     async def _execute_weekday_daily_schedule(self, task_id: str, db_task: Dict[str, Any]):
         """執行工作日每日排程"""
@@ -767,12 +1024,21 @@ class ScheduleService:
                 logger.info(f"      📝 標題: {title[:50]}..." if len(title) > 50 else f"      📝 標題: {title}")
             
             # 4. 按間隔發布貼文（受 auto_posting 控制）
-            if db_task.get('auto_posting'):
+            auto_posting_value = db_task.get('auto_posting')
+            logger.info(f"🔍 調試 auto_posting 值: {auto_posting_value} (類型: {type(auto_posting_value)})")
+            
+            if auto_posting_value:
                 logger.info(f"🚀 開始按間隔發布貼文 (間隔: {db_task['interval_seconds']} 秒)...")
                 await self._publish_posts_with_interval(task_id, [post['post_id'] for post in posts], db_task['interval_seconds'])
                 logger.info(f"🚀 貼文發布完成")
             else:
                 logger.info("🛑 自動發文關閉，僅生成貼文不發布")
+            
+            # 🔥 更新統計數據 - 記錄生成的貼文數量
+            await self.db_service.increment_schedule_stats(
+                task_id, run_count=1, success_count=1, posts_generated=len(posts)
+            )
+            logger.info(f"📊 已更新排程統計: 生成 {len(posts)} 篇貼文")
             
             # 記錄執行成功
             logger.info(f"✅ 工作日排程執行成功完成 - Task ID: {task_id}")
@@ -829,6 +1095,7 @@ class ScheduleService:
             logger.error(f"❌ 股票篩選服務調用失敗: {e}")
             # 返回模擬數據作為備用
             mock_stocks = [
+                {"stock_code": "841", "stock_name": "大江", "change_percent": 9.8},
                 {"stock_code": "2330", "stock_name": "台積電", "change_percent": 5.2},
                 {"stock_code": "2317", "stock_name": "鴻海", "change_percent": 3.8},
                 {"stock_code": "2454", "stock_name": "聯發科", "change_percent": 4.1},
@@ -1016,7 +1283,8 @@ class ScheduleService:
                     'primary_sort': (db_task.get('generation_config') or {}).get('stock_sorting', 'five_day_change_desc')
                 }
             },
-            'batch_info': db_task.get('batch_info') or {}
+            'batch_info': db_task.get('batch_info') or {},
+            'generation_config': db_task.get('generation_config') or {}
         }
     
     async def get_all_tasks(self) -> List[Dict[str, Any]]:
@@ -1053,6 +1321,10 @@ class ScheduleService:
             daily_execution_time = task.get('daily_execution_time')
             weekdays_only = task.get('weekdays_only', True)
             timezone = task.get('timezone', 'Asia/Taipei')
+            
+            logger.info(f"🔍 檢查執行時間 - Task ID: {task.get('schedule_id')}")
+            logger.info(f"   📅 daily_execution_time: {repr(daily_execution_time)}")
+            logger.info(f"   🌍 timezone: {timezone}")
             
             # 獲取當前時間
             tz = pytz.timezone(timezone)
@@ -1095,22 +1367,35 @@ class ScheduleService:
                                 return True
                     else:
                         # 單一時間點
+                        logger.info(f"   🕐 解析單一時間點: {daily_execution_time}")
                         execution_time = datetime.strptime(daily_execution_time.strip(), '%H:%M').time()
                         current_time = now.time()
+                        
+                        logger.info(f"   🕐 執行時間: {execution_time}")
+                        logger.info(f"   🕐 當前時間: {current_time}")
                         
                         # 嚴格按照設定時間執行，不允許提前執行
                         current_seconds = current_time.hour * 3600 + current_time.minute * 60 + current_time.second
                         execution_seconds = execution_time.hour * 3600 + execution_time.minute * 60
                         
-                        # 只允許在設定時間之後的 2 分鐘內執行（不允許提前）
-                        if current_seconds >= execution_seconds and current_seconds <= execution_seconds + 120:
+                        logger.info(f"   🕐 當前秒數: {current_seconds}")
+                        logger.info(f"   🕐 執行秒數: {execution_seconds}")
+                        
+                        # 只允許在設定時間之後的 1 分鐘內執行（不允許提前）
+                        if current_seconds >= execution_seconds and current_seconds <= execution_seconds + 60:
+                            logger.info(f"   ✅ 時間檢查通過，應該執行")
                             return True
+                        else:
+                            logger.info(f"   ❌ 時間檢查失敗，不執行")
+                            return False
                 except ValueError as e:
                     logger.error(f"❌ 解析執行時間失敗: {daily_execution_time}, Error: {e}")
+                    logger.error(f"❌ 當前時間: {now}, 時區: {timezone}")
                     return False
             
-            # 如果沒有設定執行時間，則立即執行
-            return True
+            # 如果沒有設定執行時間，則不執行（等待設定）
+            logger.warning(f"⚠️ 排程沒有設定執行時間，跳過執行 - Task ID: {task['schedule_id']}")
+            return False
             
         except Exception as e:
             logger.error(f"❌ 檢查執行時間失敗: {e}")
@@ -1120,6 +1405,14 @@ class ScheduleService:
         """計算下次執行時間 - 時區固定台北時間，明天同一時間執行"""
         try:
             daily_execution_time = task.get('daily_execution_time')
+            task_id = task.get('schedule_id', 'Unknown')
+            
+            logger.info(f"⏰ 開始計算下次執行時間 - Task ID: {task_id}")
+            logger.info(f"   📝 執行時間設定: {daily_execution_time}")
+            
+            if not daily_execution_time:
+                logger.error(f"❌ 沒有設定執行時間 - Task ID: {task_id}")
+                return None
             
             if not daily_execution_time:
                 # 如果沒有設定執行時間，返回 None（會等待 1 小時）

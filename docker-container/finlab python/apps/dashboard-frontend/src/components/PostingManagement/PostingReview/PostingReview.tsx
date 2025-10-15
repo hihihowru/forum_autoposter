@@ -448,7 +448,7 @@ const PostingReview: React.FC = () => {
                           拒絕
                         </Button>
                       ),
-                      safePost.status === 'approved' && (
+                      (safePost.status === 'approved' || safePost.status === 'draft') && (
                         <Button
                           key="publish"
                           type="text"

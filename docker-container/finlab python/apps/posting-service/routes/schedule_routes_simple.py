@@ -20,6 +20,16 @@ class CreateScheduleRequest(BaseModel):
     schedule_type: str  # 'immediate', '24hour_batch', '5min_batch'
     interval_seconds: int = 30
     batch_duration_hours: Optional[int] = None
+    # 排程配置參數
+    schedule_name: Optional[str] = None
+    schedule_description: Optional[str] = None
+    daily_execution_time: Optional[str] = None
+    weekdays_only: bool = True
+    max_posts_per_hour: int = 2
+    timezone: str = 'Asia/Taipei'
+    generation_config: Optional[Dict[str, Any]] = None
+    batch_info: Optional[Dict[str, Any]] = None
+    auto_posting: bool = False
     # 來源追蹤參數
     source_type: Optional[str] = None  # 'batch_history' | 'self_learning'
     source_batch_id: Optional[str] = None
@@ -57,6 +67,16 @@ async def create_schedule_task(request: CreateScheduleRequest):
             schedule_type=request.schedule_type,
             interval_seconds=request.interval_seconds,
             batch_duration_hours=request.batch_duration_hours,
+            # 排程配置參數
+            schedule_name=request.schedule_name,
+            schedule_description=request.schedule_description,
+            daily_execution_time=request.daily_execution_time,
+            weekdays_only=request.weekdays_only,
+            max_posts_per_hour=request.max_posts_per_hour,
+            timezone=request.timezone,
+            generation_config=request.generation_config,
+            batch_info=request.batch_info,
+            auto_posting=request.auto_posting,
             # 來源追蹤參數
             source_type=request.source_type,
             source_batch_id=request.source_batch_id,
@@ -75,6 +95,7 @@ async def create_schedule_task(request: CreateScheduleRequest):
         logger.error(f"創建排程任務失敗: {e}")
         return ScheduleResponse(
             success=False,
+            task_id=None,
             message=f"創建排程任務失敗: {str(e)}"
         )
 
@@ -93,6 +114,7 @@ async def start_schedule_task(task_id: str, background_tasks: BackgroundTasks):
         else:
             return ScheduleResponse(
                 success=False,
+                task_id=task_id,
                 message="啟動排程任務失敗"
             )
             
@@ -100,6 +122,7 @@ async def start_schedule_task(task_id: str, background_tasks: BackgroundTasks):
         logger.error(f"啟動排程任務失敗: {e}")
         return ScheduleResponse(
             success=False,
+            task_id=task_id,
             message=f"啟動排程任務失敗: {str(e)}"
         )
 
@@ -107,7 +130,7 @@ async def start_schedule_task(task_id: str, background_tasks: BackgroundTasks):
 async def get_schedule_status(task_id: str):
     """獲取排程任務狀態"""
     try:
-        status = schedule_service.get_task_status(task_id)
+        status = await schedule_service.get_task_status(task_id)
         
         if status:
             return ScheduleStatusResponse(
@@ -169,6 +192,10 @@ async def get_daily_stats():
         manual_tasks = len([t for t in tasks if t.get('source') == 'manual'])
         self_learning_tasks = len([t for t in tasks if t.get('source') == 'self_learning'])
         
+        # 🔥 新增：計算貼文統計
+        total_posts_generated = sum([t.get('total_posts_generated', 0) for t in tasks])
+        # total_posts_published = sum([t.get('total_posts_published', 0) for t in tasks])  # 🔥 暫時註解
+        
         return {
             "success": True,
             "data": {
@@ -178,7 +205,9 @@ async def get_daily_stats():
                 "failed_tasks": failed_tasks,
                 "manual_tasks": manual_tasks,
                 "self_learning_tasks": self_learning_tasks,
-                "success_rate": total_tasks > 0 and round((completed_tasks / total_tasks) * 100, 2) or 0
+                "success_rate": total_tasks > 0 and round((completed_tasks / total_tasks) * 100, 2) or 0,
+                "total_posts_generated": total_posts_generated  # 🔥 新增：總生成貼文數
+                # "total_posts_published": total_posts_published   # 🔥 暫時註解：總發布貼文數
             },
             "timestamp": datetime.now().isoformat()
         }
@@ -204,7 +233,7 @@ async def get_daily_stats():
 async def cancel_schedule_task(task_id: str):
     """取消排程任務"""
     try:
-        success = schedule_service.cancel_task(task_id)
+        success = await schedule_service.cancel_task(task_id)
         
         if success:
             return ScheduleResponse(
@@ -215,6 +244,7 @@ async def cancel_schedule_task(task_id: str):
         else:
             return ScheduleResponse(
                 success=False,
+                task_id=task_id,
                 message="取消排程任務失敗"
             )
             
@@ -222,7 +252,36 @@ async def cancel_schedule_task(task_id: str):
         logger.error(f"取消排程任務失敗: {e}")
         return ScheduleResponse(
             success=False,
+            task_id=task_id,
             message=f"取消排程任務失敗: {str(e)}"
+        )
+
+@router.put("/tasks/{task_id}", response_model=ScheduleResponse)
+async def update_schedule_task(task_id: str, request: Dict[str, Any]):
+    """更新排程任務"""
+    try:
+        # 更新資料庫中的排程任務
+        success = await schedule_service.db_service.update_schedule_task(task_id, request)
+        
+        if success:
+            return ScheduleResponse(
+                success=True,
+                task_id=task_id,
+                message="排程任務已更新"
+            )
+        else:
+            return ScheduleResponse(
+                success=False,
+                task_id=task_id,
+                message="更新排程任務失敗"
+            )
+            
+    except Exception as e:
+        logger.error(f"更新排程任務失敗: {e}")
+        return ScheduleResponse(
+            success=False,
+            task_id=task_id,
+            message=f"更新排程任務失敗: {str(e)}"
         )
 
 @router.post("/execute/{task_id}", response_model=ScheduleResponse)
@@ -243,6 +302,7 @@ async def execute_schedule_now(task_id: str):
         else:
             return ScheduleResponse(
                 success=False,
+                task_id=task_id,
                 message="排程任務執行失敗"
             )
             
@@ -250,6 +310,7 @@ async def execute_schedule_now(task_id: str):
         logger.error(f"立即執行排程任務失敗: {e}")
         return ScheduleResponse(
             success=False,
+            task_id=task_id,
             message=f"立即執行失敗: {str(e)}"
         )
 
@@ -275,6 +336,7 @@ async def stop_all_active_tasks():
         
         return ScheduleResponse(
             success=True,
+            task_id=None,
             message=f"已停止 {stopped_count} 個活躍排程任務"
         )
         
@@ -282,5 +344,128 @@ async def stop_all_active_tasks():
         logger.error(f"停止所有活躍排程失敗: {e}")
         return ScheduleResponse(
             success=False,
+            task_id=None,
             message=f"停止排程失敗: {str(e)}"
+        )
+
+@router.post("/scheduler/start")
+async def start_background_scheduler():
+    """啟動背景排程器"""
+    try:
+        logger.info("🚀 手動啟動背景排程器")
+        
+        # 檢查背景排程器是否已在運行
+        if schedule_service.background_scheduler_running:
+            logger.warning("⚠️ 背景排程器已在運行中")
+            return ScheduleResponse(
+                success=True,
+                task_id=None,
+                message="背景排程器已在運行中"
+            )
+        
+        # 啟動背景排程器
+        import asyncio
+        background_task = asyncio.create_task(schedule_service.start_background_scheduler())
+        
+        logger.info("✅ 背景排程器啟動成功")
+        return ScheduleResponse(
+            success=True,
+            task_id=None,
+            message="背景排程器已啟動"
+        )
+        
+    except Exception as e:
+        logger.error(f"啟動背景排程器失敗: {e}")
+        return ScheduleResponse(
+            success=False,
+            task_id=None,
+            message=f"啟動背景排程器失敗: {str(e)}"
+        )
+
+@router.post("/scheduler/stop")
+async def stop_background_scheduler():
+    """停止背景排程器"""
+    try:
+        logger.info("🛑 手動停止背景排程器")
+        
+        # 停止背景排程器
+        schedule_service.background_scheduler_running = False
+        
+        # 停止所有運行中的任務
+        for task_id, task in schedule_service.running_tasks.items():
+            if not task.done():
+                task.cancel()
+                logger.info(f"🛑 已停止任務: {task_id}")
+        
+        # 清空運行中的任務列表
+        schedule_service.running_tasks.clear()
+        
+        logger.info("✅ 背景排程器已停止")
+        return ScheduleResponse(
+            success=True,
+            task_id=None,
+            message="背景排程器已停止"
+        )
+        
+    except Exception as e:
+        logger.error(f"停止背景排程器失敗: {e}")
+        return ScheduleResponse(
+            success=False,
+            task_id=None,
+            message=f"停止背景排程器失敗: {str(e)}"
+        )
+
+@router.get("/scheduler/status")
+async def get_scheduler_status():
+    """獲取背景排程器狀態"""
+    try:
+        return {
+            "success": True,
+            "data": {
+                "scheduler_running": schedule_service.background_scheduler_running,
+                "running_tasks_count": len(schedule_service.running_tasks),
+                "running_tasks": list(schedule_service.running_tasks.keys())
+            }
+        }
+    except Exception as e:
+        logger.error(f"獲取背景排程器狀態失敗: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+class AutoPostingRequest(BaseModel):
+    enabled: bool
+
+@router.post("/{task_id}/auto-posting")
+async def toggle_auto_posting(task_id: str, request: AutoPostingRequest):
+    """切換排程的自動發文功能"""
+    try:
+        enabled = request.enabled
+        logger.info(f"🔄 切換排程 {task_id} 自動發文: {enabled}")
+        
+        # 更新排程的自動發文設定
+        success = await schedule_service.db_service.update_schedule_auto_posting(task_id, enabled)
+        
+        if success:
+            logger.info(f"✅ 排程 {task_id} 自動發文設定更新成功: {enabled}")
+            return ScheduleResponse(
+                success=True,
+                task_id=task_id,
+                message=f"自動發文已{'開啟' if enabled else '關閉'}"
+            )
+        else:
+            logger.error(f"❌ 排程 {task_id} 自動發文設定更新失敗")
+            return ScheduleResponse(
+                success=False,
+                task_id=task_id,
+                message="更新自動發文設定失敗"
+            )
+        
+    except Exception as e:
+        logger.error(f"切換自動發文失敗: {e}")
+        return ScheduleResponse(
+            success=False,
+            task_id=task_id,
+            message=f"切換自動發文失敗: {str(e)}"
         )

@@ -279,7 +279,8 @@ class PostRecordService:
 
     def create_post_record(self, post_data: PostRecordCreate) -> PostRecordInDB:
         post_id = str(uuid.uuid4())
-        now = datetime.now()
+        from timezone_utils import get_taiwan_utcnow
+        now = get_taiwan_utcnow()
         
         # 調試：檢查post_data的屬性
         print(f"🔍 PostRecordCreate屬性: {post_data.__dict__}")
@@ -454,3 +455,9 @@ class PostRecordService:
             del self.db[post_id]
             return True
         return False
+
+# 添加 get_post_record_service 函數以修復導入錯誤
+def get_post_record_service():
+    """獲取PostgreSQL服務實例（延遲初始化）"""
+    from postgresql_service import PostgreSQLPostRecordService
+    return PostgreSQLPostRecordService()
