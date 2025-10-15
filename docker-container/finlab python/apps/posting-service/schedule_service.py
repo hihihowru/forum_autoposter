@@ -1187,6 +1187,10 @@ class ScheduleService:
             from main import manual_post_content
             from main import PostingRequest
             
+            # 獲取排程任務的 auto_posting 設定
+            db_task = await self.db_service.get_schedule_task(task_id)
+            auto_posting = db_task.get('auto_posting', False) if db_task else False
+            
             # 構建 PostingRequest
             posting_request = PostingRequest(
                 stock_code=assignment["stock_code"],
@@ -1197,7 +1201,7 @@ class ScheduleService:
                 target_audience=generation_config.get('target_audience', 'active_traders'),
                 content_length=generation_config.get('content_length', 'medium'),
                 max_words=generation_config.get('max_words', 1000),
-                auto_post=False,  # 排程系統不自動發文
+                auto_post=auto_posting,  # 根據排程任務的 auto_posting 設定決定是否自動發文
                 batch_mode=True,
                 session_id=0,  # 排程系統使用 0 作為 session_id
                 trigger_type=generation_config.get('trigger_type', 'limit_up_after_hours'),
