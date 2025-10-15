@@ -17,4 +17,8 @@ COPY . .
 
 EXPOSE 8000
 
+# Create database tables
+RUN python -c "from src.main import Base, engine; Base.metadata.create_all(bind=engine)"
+
+# Start the application
 CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
