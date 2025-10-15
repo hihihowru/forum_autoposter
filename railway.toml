@@ -9,10 +9,9 @@ NODE_VERSION = "18.x"
 [[services]]
 name = "backend"
 port = 8080
-workingDirectory = "/"
 
 [services.build]
-base_dockerfile = "docker-container/finlab python/apps/dashboard-backend/Dockerfile"
+base_dockerfile = "Dockerfile.backend"
 
 [services.start]
 command = "uvicorn src.main:app --host 0.0.0.0 --port 8080"
