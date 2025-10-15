@@ -1123,7 +1123,8 @@ export class PostingManagementAPI {
         params.sortBy = triggerConfig.stockFilterCriteria.join(',');
       }
       
-      const apiUrl = createApiUrl(API_ENDPOINTS.AFTER_HOURS_LIMIT_UP, 'OHLC');
+      // 直接使用正確的 URL
+      const apiUrl = 'https://forumautoposter-production.up.railway.app/after_hours_limit_up';
       console.log('🚀 調用 API:', apiUrl);
       
       const response = await axios.get(apiUrl, {
