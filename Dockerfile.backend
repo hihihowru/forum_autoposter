@@ -20,7 +20,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 COPY ["docker-container/finlab python/apps/dashboard-backend/", "./"]
 
 # Set environment variables
-ENV PYTHONPATH="/"
+ENV PYTHONPATH="/app"
 ENV PORT=8080
 
 # Expose the port the app runs on
