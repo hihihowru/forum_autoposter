@@ -13,10 +13,16 @@ app = FastAPI()
 # 添加 CORS 中間件
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 允許所有來源
+    allow_origins=[
+        "https://forum-autoposter-dz27.vercel.app",
+        "https://forum-autoposter-dz27-git-test-will-cs-projects-2b6e293d.vercel.app",
+        "https://forum-autoposter-dz27-p6dtkgkw9-will-cs-projects-2b6e293d.vercel.app",
+        "http://localhost:3000",
+        "http://localhost:5173"
+    ],
     allow_credentials=True,
-    allow_methods=["*"],  # 允許所有方法
-    allow_headers=["*"],  # 允許所有標頭
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
 )
 
 @app.on_event("startup")

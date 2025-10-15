@@ -18,12 +18,12 @@ const getApiConfig = () => {
     };
   }
   
-  // 生產環境 - 使用環境變數或默認 Railway URL
+  // 生產環境 - 使用統一的 API 網關
   const railwayBaseUrl = import.meta.env.VITE_RAILWAY_URL || 'https://forumautoposter-production.up.railway.app';
   
   return {
     BASE_URL: railwayBaseUrl,
-    OHLC_API: railwayBaseUrl, // Railway 會處理路由
+    OHLC_API: railwayBaseUrl, // 通過 API 網關路由
     TRENDING_API: railwayBaseUrl,
     ANALYZE_API: railwayBaseUrl,
     FINANCIAL_API: railwayBaseUrl,
