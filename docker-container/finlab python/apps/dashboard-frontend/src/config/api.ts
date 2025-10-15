@@ -19,7 +19,7 @@ const getApiConfig = () => {
   }
   
   // 生產環境 - 使用統一的 API 網關
-  const railwayBaseUrl = import.meta.env.VITE_RAILWAY_URL || 'https://forumautoposter-production.up.railway.app';
+  const railwayBaseUrl = import.meta.env.VITE_API_BASE_URL || 'https://forumautoposter-production.up.railway.app';
   
   return {
     BASE_URL: railwayBaseUrl,

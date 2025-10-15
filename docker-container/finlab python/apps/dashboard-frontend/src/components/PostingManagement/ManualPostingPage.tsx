@@ -51,7 +51,7 @@ const ManualPostingPage: React.FC = () => {
   const [formData, setFormData] = useState<{ [key: string]: ManualPostingFormData }>({});
   
   // API 基礎 URL
-  const API_BASE = `${import.meta.env.DEV ? 'http://localhost:8005' : import.meta.env.VITE_RAILWAY_URL || 'https://forumautoposter-production.up.railway.app'}/api/manual-posting`;
+  const API_BASE = `${import.meta.env.DEV ? 'http://localhost:8005' : import.meta.env.VITE_API_BASE_URL || 'https://forumautoposter-production.up.railway.app'}/api/manual-posting`;
 
   // 初始化
   useEffect(() => {

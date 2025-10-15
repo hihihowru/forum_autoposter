@@ -64,7 +64,7 @@ const StockFilterDisplay: React.FC<StockFilterDisplayProps> = ({
       // 這裡可以調用多個 API 來獲取完整的股票數據
       const promises = stockCodes.map(async (code) => {
         // 獲取基本 OHLC 數據
-        const ohlcResponse = await fetch(`${import.meta.env.DEV ? 'http://localhost:8005' : import.meta.env.VITE_RAILWAY_URL || 'https://forumautoposter-production.up.railway.app'}/get_ohlc?stock_id=${code}`);
+        const ohlcResponse = await fetch(`${import.meta.env.DEV ? 'http://localhost:8005' : import.meta.env.VITE_API_BASE_URL || 'https://forumautoposter-production.up.railway.app'}/get_ohlc?stock_id=${code}`);
         const ohlcData = await ohlcResponse.json();
         
         if (ohlcData.error) {
