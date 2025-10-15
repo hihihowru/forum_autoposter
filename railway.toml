@@ -1,20 +1,33 @@
 [build]
-builder = "DOCKERFILE"
+builder = "NIXPACKS"
 
 [deploy]
-startCommand = "uvicorn src.main:app --host 0.0.0.0 --port 8000"
+startCommand = "uvicorn src.main:app --host 0.0.0.0 --port ${PORT}"
 
 [build.environment]
 PYTHON_VERSION = "3.11"
+NODE_VERSION = "18.x"
 
+# Backend Service
 [[services]]
-name = "dashboard-backend"
+name = "backend"
 port = 8000
 
+# Frontend Service
+[[services]]
+name = "frontend"
+port = 3000
+root = "docker-container/finlab python/apps/dashboard-frontend"
+[services.build]
+  base_dockerfile = "Dockerfile.frontend"
+  command = "npm install && npm run build"
+[services.start]
+  command = "npm run preview -- --host"
+
+# Shared Environment Variables
 [env]
 DATABASE_URL = { type = "string", required = true }
-PORT = "8000"
-PYTHONPATH = "/app"
+VITE_API_BASE_URL = "https://${RAILWAY_STATIC_URL}"  # Will point to backend URL
 
 [healthcheck]
 timeout = 60
