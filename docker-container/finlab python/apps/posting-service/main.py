@@ -118,8 +118,16 @@ app.add_middleware(
 # 包含路由模組
 from routes import main_router
 from routes.schedule_routes_simple import router as schedule_router
+from routes.intraday_trigger_route import router as intraday_router
+
+# 包含主路由
 app.include_router(main_router)
+
+# 包含排程路由
 app.include_router(schedule_router, prefix="/api/schedule")
+
+# 包含盤中觸發器路由 - 確保使用正確的前綴
+app.include_router(intraday_router, prefix="/api")  # 這會使端點變成 /api/intraday-trigger/execute
 
 # API 端點配置
 TRENDING_API_URL = os.getenv("TRENDING_API_URL", "http://localhost:8004")
