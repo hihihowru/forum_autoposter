@@ -7,11 +7,15 @@ port = 8080
 base_dockerfile = "Dockerfile.backend"
 
 [services.start]
-command = "uvicorn src.main:app --host 0.0.0.0 --port 8080"
+command = "cd /app && uvicorn src.main:app --host 0.0.0.0 --port 8080"
 
 [services.env]
-PYTHONPATH = "/"
+PYTHONPATH = "/app"
 DATABASE_URL = { type = "string", required = true }
+
+# Set the working directory for the service
+[services.deployment]
+working_directory = "/app"
 
 # Frontend Build
 [build]
