@@ -8,12 +8,11 @@ NODE_VERSION = "18.x"
 # Backend Service
 [[services]]
 name = "backend"
-port = 8080  # Changed to match the actual port in the logs
+port = 8080
 workingDirectory = "/"
 
-# Explicitly set the start command for the backend
 [services.start]
-command = "uvicorn src.main:app --host 0.0.0.0 --port 8080"  # Updated port to 8080
+command = "uvicorn src.main:app --host 0.0.0.0 --port 8080"
 
 [services.env]
 PYTHONPATH = "/"
@@ -29,14 +28,10 @@ root = "docker-container/finlab python/apps/dashboard-frontend"
 command = "npm install && npm run build"
 
 [services.start]
-command = "npm run preview -- --host"
-
-[deploy]
-startCommand = "npm run preview -- --host"
-public = true
-
-[services.start]
 command = "npm run preview -- --host --port 3000"
 
 [services.env]
-VITE_API_BASE_URL = "https://${RAILWAY_STATIC_URL}"
+VITE_API_BASE_URL = { type = "string", required = true }
+
+[deploy]
+public = true
