@@ -18,11 +18,11 @@ class IntradayTriggerAPI {
       console.log('🚀 [前端] 執行盤中觸發器:', config);
       console.log('🌐 [前端] 請求 URL:', `/intraday-trigger/execute`);
       
-      // 直接調用 Railway 後端
-      const response = await axios.post(
+      // 直接調用 Railway 後端 - 改為 GET 方法獲取股票列表
+      const response = await axios.get(
         `https://forumautoposter-production.up.railway.app/intraday-trigger/execute`,
-        config,
         {
+          params: config,  // 將配置作為查詢參數
           headers: {
             'Content-Type': 'application/json'
           },
