@@ -1059,10 +1059,16 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
       }
 
       // 調用真實的 API - 根據觸發器類型選擇不同的端點
+      console.log('🔍 TriggerSelector v1.2 - 調用 API');
+      console.log('  triggerKey:', value.triggerConfig?.triggerKey);
+      console.log('  queryParams:', queryParams);
+      
       let result;
       if (value.triggerConfig?.triggerKey === 'limit_down_after_hours') {
+        console.log('📞 調用 getAfterHoursLimitDownStocks');
         result = await PostingManagementAPI.getAfterHoursLimitDownStocks(queryParams);
       } else {
+        console.log('📞 調用 getAfterHoursLimitUpStocks');
         result = await PostingManagementAPI.getAfterHoursLimitUpStocks(queryParams);
       }
       

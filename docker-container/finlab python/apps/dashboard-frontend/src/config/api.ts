@@ -6,7 +6,7 @@
 // 環境變數配置
 const getApiConfig = () => {
   // 開發環境
-  if (import.meta.env.DEV) {
+  if ((import.meta as any).env.DEV) {
     return {
       BASE_URL: 'http://localhost:8001',
       OHLC_API: 'http://localhost:8005',
@@ -19,7 +19,7 @@ const getApiConfig = () => {
   }
   
   // 生產環境 - 使用統一的 API 網關
-  const railwayBaseUrl = import.meta.env.VITE_API_BASE_URL || 'https://forumautoposter-production.up.railway.app';
+  const railwayBaseUrl = (import.meta as any).env.VITE_API_BASE_URL || 'https://forumautoposter-production.up.railway.app';
   
   return {
     BASE_URL: railwayBaseUrl,
@@ -63,7 +63,7 @@ export const API_ENDPOINTS = {
 
 // 創建完整的 API URL
 export const createApiUrl = (endpoint: string, service: 'OHLC' | 'BASE' | 'TRENDING' | 'ANALYZE' | 'FINANCIAL' | 'SUMMARY' | 'DASHBOARD' = 'BASE') => {
-  let baseUrl = API_CONFIG[`${service}_API`] || API_CONFIG.BASE_URL;
+  let baseUrl = API_CONFIG[`${service}_API` as keyof typeof API_CONFIG] || API_CONFIG.BASE_URL;
   
   // 確保 baseUrl 有正確的協議
   if (!baseUrl.startsWith('http')) {

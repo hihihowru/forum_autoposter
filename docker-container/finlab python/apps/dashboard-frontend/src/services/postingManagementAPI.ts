@@ -1102,6 +1102,9 @@ export class PostingManagementAPI {
   // ==================== 觸發器數據 ====================
   
   static async getAfterHoursLimitUpStocks(triggerConfig: any): Promise<any> {
+    console.log('🚀 PostingManagementAPI v1.3 - getAfterHoursLimitUpStocks 被調用');
+    console.log('  triggerConfig:', triggerConfig);
+    
     try {
       // 🔥 暫時回到直接調用 ohlc-api，但傳遞排序參數
       const params: any = {
