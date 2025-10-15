@@ -20,13 +20,22 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# 配置 CORS - 允許所有 Vercel 域名
+# 配置 CORS - 使用 ChatGPT 建議的配置
+FIXED_ORIGINS = [
+    "https://forum-autoposter-dz27.vercel.app",   # prod
+    "http://localhost:3000",                       # 本機開發
+    "http://localhost:5173",                       # Vite 開發服務器
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 暫時允許所有域名
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
+    allow_origins=FIXED_ORIGINS,
+    # 放行所有 *.vercel.app 的 Preview 網域
+    allow_origin_regex=r"^https:\/\/.*\.vercel\.app$",
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
+    allow_credentials=True,   # 需要前端帶 cookie/會話時務必開
+    max_age=86400,            # 預檢快取（可選）
 )
 
 # ==================== 健康檢查 ====================
@@ -133,6 +142,31 @@ async def get_industries():
     }
     
     logger.info(f"返回 industries 數據: {len(result['data'])} 條記錄")
+    return result
+
+# ==================== 盤中觸發器功能 ====================
+
+@app.post("/intraday-trigger/execute")
+async def execute_intraday_trigger(request_data: dict):
+    """執行盤中觸發器"""
+    logger.info(f"收到盤中觸發器請求: {request_data}")
+    
+    # 模擬執行結果
+    result = {
+        "success": True,
+        "message": "盤中觸發器執行成功",
+        "session_id": "intraday_session_123",
+        "posts_generated": 3,
+        "timestamp": datetime.now().isoformat(),
+        "data": {
+            "triggered_stocks": [
+                {"stock_code": "2330", "stock_name": "台積電", "change_percent": 5.2},
+                {"stock_code": "2454", "stock_name": "聯發科", "change_percent": 3.8}
+            ]
+        }
+    }
+    
+    logger.info(f"返回盤中觸發器結果: {result}")
     return result
 
 if __name__ == "__main__":
