@@ -3,9 +3,10 @@
  */
 
 import axios from 'axios';
+import { API_CONFIG, createApiUrl, API_ENDPOINTS } from '../config/api';
 
-const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8001';
-const POSTING_SERVICE_URL = 'http://localhost:8001'; // posting-service
+const API_BASE_URL = API_CONFIG.BASE_URL;
+const POSTING_SERVICE_URL = API_CONFIG.BASE_URL; // posting-service
 
 // 創建axios實例
 const apiClient = axios.create({
@@ -1112,7 +1113,7 @@ export class PostingManagementAPI {
         params.sortBy = triggerConfig.stockFilterCriteria.join(',');
       }
       
-      const response = await axios.get('http://localhost:8005/after_hours_limit_up', {
+      const response = await axios.get(createApiUrl(API_ENDPOINTS.AFTER_HOURS_LIMIT_UP, 'OHLC'), {
         params,
         timeout: 30000,
         headers: {
@@ -1180,7 +1181,7 @@ export class PostingManagementAPI {
         params.sortBy = triggerConfig.stockFilterCriteria.join(',');
       }
       
-      const response = await axios.get('http://localhost:8005/after_hours_limit_down', {
+      const response = await axios.get(createApiUrl(API_ENDPOINTS.AFTER_HOURS_LIMIT_DOWN, 'OHLC'), {
         params,
         timeout: 30000,
         headers: {
@@ -1582,7 +1583,7 @@ export const PostingAPIUtils = {
   // 獲取所有產業類別
   async getAllIndustries(): Promise<any> {
     try {
-      const response = await axios.get('http://localhost:8005/industries', {
+      const response = await axios.get(createApiUrl(API_ENDPOINTS.INDUSTRIES, 'OHLC'), {
         timeout: 10000
       });
       return response.data;
@@ -1603,7 +1604,7 @@ export const PostingAPIUtils = {
         params.industries = industries.join(',');
       }
       
-      const response = await axios.get('http://localhost:8005/stocks_by_industry', {
+      const response = await axios.get(createApiUrl(API_ENDPOINTS.STOCKS_BY_INDUSTRY, 'OHLC'), {
         params,
         timeout: 30000
       });
