@@ -24,12 +24,12 @@ DATABASE_URL = { type = "string", required = true }
 [[static]]
 directory = "docker-container/finlab python/apps/dashboard-frontend/dist"
 
-[build]
-command = "cd docker-container/finlab\ python/apps/dashboard-frontend && npm install && npm run build"
-
 [build.environment]
 VITE_API_BASE_URL = { type = "string", required = true, value = "/api" }
 NODE_ENV = "production"
+
+[build.commands]
+build = "cd docker-container/finlab\ python/apps/dashboard-frontend && npm install && npm run build"
 
 [deploy]
 public = true
