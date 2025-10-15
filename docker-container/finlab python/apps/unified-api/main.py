@@ -146,27 +146,26 @@ async def get_industries():
 
 # ==================== 盤中觸發器功能 ====================
 
-@app.post("/intraday-trigger/execute")
-async def execute_intraday_trigger(request_data: dict):
-    """執行盤中觸發器"""
-    logger.info(f"收到盤中觸發器請求: {request_data}")
+@app.get("/intraday-trigger/execute")
+async def get_intraday_trigger_stocks(endpoint: str = Query(..., description="數據源端點"), processing: str = Query("", description="處理配置")):
+    """獲取盤中觸發器股票列表"""
+    logger.info(f"收到盤中觸發器請求: endpoint={endpoint}, processing={processing}")
     
-    # 模擬執行結果
+    # 模擬盤中觸發器股票數據
     result = {
         "success": True,
-        "message": "盤中觸發器執行成功",
-        "session_id": "intraday_session_123",
-        "posts_generated": 3,
-        "timestamp": datetime.now().isoformat(),
-        "data": {
-            "triggered_stocks": [
-                {"stock_code": "2330", "stock_name": "台積電", "change_percent": 5.2},
-                {"stock_code": "2454", "stock_name": "聯發科", "change_percent": 3.8}
-            ]
-        }
+        "stocks": ["2330", "2454", "2317", "2412"],
+        "data": [
+            {"stock_code": "2330", "stock_name": "台積電", "change_percent": 5.2, "volume": 15000000},
+            {"stock_code": "2454", "stock_name": "聯發科", "change_percent": 3.8, "volume": 8000000},
+            {"stock_code": "2317", "stock_name": "鴻海", "change_percent": 2.1, "volume": 12000000},
+            {"stock_code": "2412", "stock_name": "中華電", "change_percent": 1.5, "volume": 5000000}
+        ],
+        "message": "盤中觸發器股票列表獲取成功",
+        "timestamp": datetime.now().isoformat()
     }
     
-    logger.info(f"返回盤中觸發器結果: {result}")
+    logger.info(f"返回盤中觸發器股票列表: {len(result['stocks'])} 支股票")
     return result
 
 if __name__ == "__main__":
