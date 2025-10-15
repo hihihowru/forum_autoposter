@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# 統一 API 服務啟動腳本 - 簡化版本
+# 統一 API 服務啟動腳本 - 最簡化版本
 echo "🚀 啟動 Forum Autoposter Unified API..."
 
 # 設置環境變數
@@ -24,10 +24,19 @@ fi
 echo "📁 當前目錄內容:"
 ls -la
 
-echo "📦 檢查依賴是否已安裝..."
-pip list | grep fastapi || echo "⚠️ FastAPI 未安裝，嘗試安裝..."
-pip install --no-cache-dir -r requirements.txt
+# 檢查 Python 和依賴
+echo "🐍 Python 版本:"
+python --version
+
+echo "📦 檢查 FastAPI:"
+python -c "import fastapi; print('FastAPI version:', fastapi.__version__)" || {
+    echo "❌ FastAPI 未安裝，嘗試安裝..."
+    pip install --no-cache-dir -r requirements.txt
+}
 
 # 啟動服務
 echo "🌟 啟動統一 API 服務在端口 $PORT..."
-exec uvicorn main:app --host 0.0.0.0 --port $PORT --log-level info
+echo "🔗 服務將在 http://0.0.0.0:$PORT 上運行"
+
+# 使用 exec 確保正確的進程處理
+exec python -m uvicorn main:app --host 0.0.0.0 --port $PORT --log-level info
