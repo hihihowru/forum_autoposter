@@ -1,3 +1,4 @@
+# Backend Service Configuration
 [build]
 builder = "nixpacks"
 
@@ -20,16 +21,17 @@ command = "uvicorn src.main:app --host 0.0.0.0 --port 8080"
 PYTHONPATH = "/"
 DATABASE_URL = { type = "string", required = true }
 
-# Frontend Static Files
-[[static]]
-directory = "docker-container/finlab python/apps/dashboard-frontend/dist"
+# Frontend Configuration
+[build.commands]
+build = "cd docker-container/finlab\ python/apps/dashboard-frontend && npm install && npm run build"
 
 [build.environment]
 VITE_API_BASE_URL = { type = "string", required = true, value = "/api" }
 NODE_ENV = "production"
 
-[build.commands]
-build = "cd docker-container/finlab\ python/apps/dashboard-frontend && npm install && npm run build"
+# Static Files
+[[static]]
+directory = "docker-container/finlab python/apps/dashboard-frontend/dist"
 
 [deploy]
 public = true
