@@ -78,17 +78,28 @@ const PostDetail: React.FC = () => {
           // 嘗試從互動分析 API 獲取互動數據
           try {
             const interactionResponse = await fetch('/api/dashboard/interaction-analysis');
-            const interactionData = await interactionResponse.json();
+            const interactionData = await interactionResponse.json() as {
+              interaction_data?: Record<string, Array<{
+                article_id: string;
+                likes_count: number;
+                comments_count: number;
+                total_interactions: number;
+                engagement_rate: number;
+              }>>;
+            };
             
             // 在所有時間週期中查找該貼文的互動數據
             const allInteractions = Object.values(interactionData.interaction_data || {}).flat();
-            const interaction = allInteractions.find((i: any) => i.article_id === post.platform_post_id);
+            const interaction = allInteractions.find(i => i.article_id === (post as PostDetailData).platform_post_id);
             
             if (interaction) {
-              post.likes_count = interaction.likes_count;
-              post.comments_count = interaction.comments_count;
-              post.total_interactions = interaction.total_interactions;
-              post.engagement_rate = interaction.engagement_rate;
+              setPostData(prev => ({
+                ...prev!,
+                likes_count: interaction.likes_count,
+                comments_count: interaction.comments_count,
+                total_interactions: interaction.total_interactions,
+                engagement_rate: interaction.engagement_rate
+              }));
             }
           } catch (e) {
             console.warn('無法獲取互動數據:', e);
