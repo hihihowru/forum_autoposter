@@ -23,6 +23,14 @@ export default ({ mode }) => {
     server: {
       port: 3000,
       open: true,
+      proxy: {
+        '/api': {
+          target: 'https://forumautoposter-production.up.railway.app',
+          changeOrigin: true,
+          secure: true,
+          rewrite: (path) => path.replace(/^\/api/, '')
+        },
+      },
     },
   });
 };
