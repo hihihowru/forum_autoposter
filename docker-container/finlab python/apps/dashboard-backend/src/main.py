@@ -2,31 +2,44 @@
 發文管理系統後端主應用
 """
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.ext.declarative import declarative_base
 import os
 from dotenv import load_dotenv
+from pathlib import Path
 
 # 加載環境變量
-load_dotenv('/Users/williamchen/Documents/n8n-migration-project/.env')
+env_path = Path('.') / '.env'
+load_dotenv(env_path)
 
 # 導入API路由
 from src.api.posting_management import router as posting_router
 
-# 數據庫配置
-DATABASE_URL = os.getenv(
-    "DATABASE_URL", 
-    "postgresql://postgres:password@localhost:5432/posting_management"
-)
+# 數據庫配置 - 處理 Railway 的 DATABASE_URL 格式
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:password@localhost:5432/posting_management")
+if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
 # 創建FastAPI應用
 app = FastAPI(
     title="發文管理系統API",
     description="發文管理系統後端API服務",
-    version="1.0.0"
+    version="1.0.0",
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
+    openapi_url="/api/openapi.json"
+)
+
+# 添加 CORS 中間件
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # 配置CORS
@@ -75,4 +88,5 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)

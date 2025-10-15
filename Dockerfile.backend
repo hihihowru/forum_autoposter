@@ -1,12 +1,18 @@
 FROM python:3.11-slim
 
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH="/app" \
+    PORT=8080
+
 # Set working directory
 WORKDIR /app
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
-    curl \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first to leverage Docker cache
@@ -19,12 +25,12 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy the rest of the application
 COPY ["docker-container/finlab python/apps/dashboard-backend/", "./"]
 
-# Set environment variables
-ENV PYTHONPATH="/app"
-ENV PORT=8080
+# Create a non-root user and switch to it
+RUN useradd -m appuser && chown -R appuser:appuser /app
+USER appuser
 
 # Expose the port the app runs on
 EXPOSE 8080
 
 # Command to run the application
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8080", "--reload"]
