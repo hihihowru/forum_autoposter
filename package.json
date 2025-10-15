@@ -1,0 +1,10 @@
+{
+  "name": "forum-autoposter",
+  "version": "1.0.0",
+  "description": "Forum Autoposter with Vercel API routes",
+  "scripts": {
+    "build": "cd docker-container/finlab\\ python/apps/dashboard-frontend && npm run build"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
