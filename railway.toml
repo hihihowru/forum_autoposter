@@ -11,8 +11,9 @@ name = "backend"
 port = 8000
 workingDirectory = "/"
 
-[services.deploy]
-startCommand = "uvicorn src.main:app --host 0.0.0.0 --port 8000"
+# Explicitly set the start command for the backend
+[services.start]
+command = "uvicorn src.main:app --host 0.0.0.0 --port 8000"
 
 [services.env]
 PYTHONPATH = "/"
