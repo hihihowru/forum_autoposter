@@ -2,7 +2,7 @@
 builder = "nixpacks"
 
 [deploy]
-startCommand = "cd docker-container/finlab\ python/apps/dashboard-backend && python -c \"import os; port = os.environ.get('PORT', '8000'); os.system(f'uvicorn src.main:app --host 0.0.0.0 --port {port}')\""
+startCommand = "python -c \"import os; port = os.environ.get('PORT', '8000'); os.chdir('docker-container/finlab python/apps/dashboard-backend'); os.system(f'uvicorn src.main:app --host 0.0.0.0 --port {port}')\""
 
 [build.environment]
 PYTHON_VERSION = "3.11"
