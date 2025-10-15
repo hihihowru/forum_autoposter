@@ -20,18 +20,14 @@ command = "uvicorn src.main:app --host 0.0.0.0 --port 8080"
 PYTHONPATH = "/"
 DATABASE_URL = { type = "string", required = true }
 
-# Frontend Service
-[[services]]
-name = "web"
-port = 3000
+# Frontend Static Files
+[[static]]
+directory = "docker-container/finlab python/apps/dashboard-frontend/dist"
 
-[services.build]
-base_dockerfile = "Dockerfile.simple"
+[build]
+command = "cd docker-container/finlab\ python/apps/dashboard-frontend && npm install && npm run build"
 
-[services.start]
-command = "serve -s dist -l 3000"
-
-[services.env]
+[build.environment]
 VITE_API_BASE_URL = { type = "string", required = true, value = "/api" }
 NODE_ENV = "production"
 
