@@ -1,5 +1,5 @@
 """
-統一的 API 服務 - 最簡化版本
+統一的 API 服務 - 最簡化穩定版本
 確保 Railway 部署成功
 """
 
@@ -7,7 +7,6 @@ from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 from datetime import datetime
-from typing import Optional
 
 # 配置日誌
 logging.basicConfig(level=logging.INFO)
@@ -20,22 +19,13 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# 配置 CORS - 使用 ChatGPT 建議的配置
-FIXED_ORIGINS = [
-    "https://forum-autoposter-dz27.vercel.app",   # prod
-    "http://localhost:3000",                       # 本機開發
-    "http://localhost:5173",                       # Vite 開發服務器
-]
-
+# 配置 CORS - 最簡單的配置
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=FIXED_ORIGINS,
-    # 放行所有 *.vercel.app 的 Preview 網域
-    allow_origin_regex=r"^https:\/\/.*\.vercel\.app$",
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
-    allow_credentials=True,   # 需要前端帶 cookie/會話時務必開
-    max_age=86400,            # 預檢快取（可選）
+    allow_origins=["*"],  # 暫時允許所有域名
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
 )
 
 # ==================== 健康檢查 ====================
@@ -147,7 +137,7 @@ async def get_industries():
 # ==================== 盤中觸發器功能 ====================
 
 @app.get("/intraday-trigger/execute")
-async def get_intraday_trigger_stocks(endpoint: str = Query(..., description="數據源端點"), processing: str = Query("", description="處理配置")):
+async def get_intraday_trigger_stocks(endpoint: str = Query("", description="數據源端點"), processing: str = Query("", description="處理配置")):
     """獲取盤中觸發器股票列表"""
     logger.info(f"收到盤中觸發器請求: endpoint={endpoint}, processing={processing}")
     
