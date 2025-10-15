@@ -1,33 +1,33 @@
-# 使用Python 3.11官方鏡像
 FROM python:3.11-slim
 
-# 設置工作目錄
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
 WORKDIR /app
 
-# 安裝系統依賴
-RUN apt-get update && apt-get install -y \
-    gcc \
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# 複製requirements文件
-COPY requirements.txt .
+# Copy requirements first to leverage Docker cache
+COPY docker-container/finlab\ python/apps/dashboard-backend/requirements.txt .
 
-# 安裝Python依賴
-RUN pip install --no-cache-dir -r requirements.txt
+# Install Python dependencies
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
-# 複製應用代碼
-COPY . .
+# Copy the application code
+COPY docker-container/finlab\ python/apps/dashboard-backend/ .
 
-# 創建credentials目錄
-RUN mkdir -p credentials
+# Set environment variables
+ENV PYTHONPATH=/app
 
-# 設置環境變數
-ENV PYTHONPATH=/app/src
-ENV PYTHONUNBUFFERED=1
+# Expose the port the app runs on
+EXPOSE 8000
 
-# 創建非root用戶
-RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
-USER appuser
+# Command to run the application
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
 # 健康檢查
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
