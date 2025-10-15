@@ -708,7 +708,7 @@ const PostReviewPage: React.FC<PostReviewPageProps> = ({ sessionId, onBack }) =>
                   </Tooltip>
                 )}
                 
-                {record.status === 'approved' && (
+                {(record.status === 'approved' || record.status === 'draft') && (
                   <Popconfirm
                     title="確定發布到CMoney？"
                     onConfirm={() => handlePublish(record)}
