@@ -1,11 +1,3 @@
-# Backend Service Configuration
-[build]
-builder = "nixpacks"
-
-[build.environment]
-PYTHON_VERSION = "3.11"
-NODE_VERSION = "18.x"
-
 # Backend Service
 [[services]]
 name = "backend"
@@ -21,13 +13,18 @@ command = "uvicorn src.main:app --host 0.0.0.0 --port 8080"
 PYTHONPATH = "/"
 DATABASE_URL = { type = "string", required = true }
 
-# Frontend Configuration
-[build.commands]
-build = "cd docker-container/finlab\ python/apps/dashboard-frontend && npm install && npm run build"
+# Frontend Build
+[build]
+builder = "nixpacks"
 
 [build.environment]
-VITE_API_BASE_URL = { type = "string", required = true, value = "/api" }
+PYTHON_VERSION = "3.11"
+NODE_VERSION = "18.x"
+VITE_API_BASE_URL = "/api"
 NODE_ENV = "production"
+
+[build.commands]
+build = "cd docker-container/finlab\ python/apps/dashboard-frontend && npm install && npm run build"
 
 # Static Files
 [[static]]
