@@ -1,0 +1,93 @@
+#!/usr/bin/env python3
+"""
+發文所有 KOL 並記錄 articleid
+"""
+
+import os
+import sys
+import asyncio
+from dotenv import load_dotenv
+
+# 載入環境變數
+load_dotenv()
+
+# 添加專案根目錄到 Python 路徑
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+from src.services.publish.publish_service import PublishService
+from src.clients.google.sheets_client import GoogleSheetsClient
+
+async def main():
+    """發文所有 KOL 的主流程"""
+    
+    print("=== 發文所有 KOL ===\n")
+    
+    # 初始化服務
+    sheets_client = GoogleSheetsClient(
+        credentials_file=os.getenv('GOOGLE_CREDENTIALS_FILE'),
+        spreadsheet_id=os.getenv('GOOGLE_SHEETS_ID')
+    )
+    
+    publish_service = PublishService(sheets_client)
+    
+    try:
+        # 步驟1: 手動登入前3個 KOL
+        print("步驟1: 登入前3個 KOL...")
+        test_kols = [
+            {"serial": 200, "email": "forum_200@cmoney.com.tw", "password": "N9t1kY3x"},
+            {"serial": 201, "email": "forum_201@cmoney.com.tw", "password": "m7C1lR4t"},
+            {"serial": 202, "email": "forum_202@cmoney.com.tw", "password": "x2U9nW5p"}
+        ]
+        
+        success_count = 0
+        for kol in test_kols:
+            print(f"登入 KOL {kol['serial']}...")
+            success = await publish_service.login_kol(kol['serial'], kol['email'], kol['password'])
+            if success:
+                print(f"✅ KOL {kol['serial']} 登入成功")
+                success_count += 1
+            else:
+                print(f"❌ KOL {kol['serial']} 登入失敗")
+        
+        if success_count == 0:
+            print("❌ 沒有 KOL 登入成功，無法繼續")
+            return
+        
+        print(f"✅ {success_count}/3 個 KOL 登入成功")
+        
+        # 步驟2: 獲取準備發文的記錄
+        print("\n步驟2: 獲取準備發文的記錄...")
+        ready_posts = publish_service.get_ready_to_post_records()
+        
+        if not ready_posts:
+            print("❌ 沒有找到準備發文的記錄")
+            return
+        
+        print(f"✅ 找到 {len(ready_posts)} 篇準備發文的記錄")
+        
+        # 只取已登入的 KOL 的記錄
+        logged_in_serials = [kol['serial'] for kol in test_kols]
+        filtered_posts = [post for post in ready_posts if post['kol_serial'] in logged_in_serials]
+        
+        print(f"✅ 過濾後找到 {len(filtered_posts)} 篇已登入 KOL 的準備發文記錄")
+        
+        # 顯示準備發文的記錄
+        for i, post in enumerate(filtered_posts, 1):
+            print(f"  {i}. {post['kol_nickname']} (Serial: {post['kol_serial']})")
+            print(f"     標題: {post['title']}")
+            print(f"     內容長度: {len(post['content'])} 字")
+            print()
+        
+        # 步驟3: 開始間隔發文
+        print("步驟3: 開始間隔發文...")
+        await publish_service.publish_posts_with_interval(filtered_posts, interval_minutes=2)
+        
+        print("\n✅ 發文流程完成！")
+        
+    except Exception as e:
+        print(f"❌ 發文流程失敗: {e}")
+        import traceback
+        traceback.print_exc()
+
+if __name__ == "__main__":
+    asyncio.run(main())

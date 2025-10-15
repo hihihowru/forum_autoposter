@@ -1,0 +1,135 @@
+services:
+  # 微服務架構
+  ohlc-api:
+    build: ./apps/ohlc-api
+    ports:
+      - "8005:8001"
+    volumes:
+      - ./apps/ohlc-api:/app
+    working_dir: /app
+    environment:
+      - FINLAB_API_KEY=${FINLAB_API_KEY}
+    command: uvicorn main:app --host 0.0.0.0 --port 8001 --reload
+
+  analyze-api:
+    build: ./apps/analyze-api
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./apps/analyze-api:/app
+    working_dir: /app
+    command: uvicorn main:app --host 0.0.0.0 --port 8002 --reload
+
+  summary-api:
+    build: ./apps/summary-api
+    ports:
+      - "8003:8003"
+    volumes:
+      - ./apps/summary-api:/app
+    working_dir: /app
+    command: uvicorn main:app --host 0.0.0.0 --port 8003 --reload
+
+  trending-api:
+    build: ./apps/trending-api
+    ports:
+      - "8004:8004"
+    volumes:
+      - ./apps/trending-api:/app
+    working_dir: /app
+    command: uvicorn main:app --host 0.0.0.0 --port 8004 --reload
+
+  posting-service:
+    build: ./apps/posting-service
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./apps/posting-service:/app
+    working_dir: /app
+    environment:
+      - SERPER_API_KEY=${SERPER_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  trainer:
+    build: ./apps/trainer
+    ports:
+      - "8006:8006"
+    volumes:
+      - ./apps/trainer:/app
+    working_dir: /app
+    command: uvicorn main:app --host 0.0.0.0 --port 8006 --reload
+
+  # Dashboard API 服務
+  dashboard-api:
+    build: ./apps/dashboard-api
+    ports:
+      - "8007:8007"
+    volumes:
+      - ./apps/dashboard-api:/app
+      - ../../credentials:/app/credentials
+      - ../../src:/app/src
+    working_dir: /app
+    environment:
+      - GOOGLE_CREDENTIALS_FILE=/app/credentials/google-service-account.json
+
+  # 自動發文服務
+  auto-publisher:
+    build: ./apps/auto-publisher
+    volumes:
+      - ./apps/auto-publisher:/app
+      - ../../../credentials:/app/credentials
+      - ../../../src:/app/src
+      - ../../../.env:/app/.env
+    working_dir: /app
+    environment:
+      - GOOGLE_CREDENTIALS_FILE=/app/credentials/google-service-account.json
+      - GOOGLE_SHEETS_ID=148CUhBxqE-BZDPTKaAmOJG6m52CxB4KrxD9p5LikN2s
+    restart: unless-stopped
+
+  # Dashboard 前端服務
+  dashboard-frontend:
+    build: ./apps/dashboard-frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./apps/dashboard-frontend:/app
+      - /app/node_modules
+    working_dir: /app
+    depends_on:
+      - dashboard-api
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8007
+
+  # 新增的微服務
+  revenue-api:
+    build: ./apps/revenue-api
+    ports:
+      - "8008:8008"
+    volumes:
+      - ./apps/revenue-api:/app
+    working_dir: /app
+    environment:
+      - FINLAB_API_KEY=${FINLAB_API_KEY}
+    command: uvicorn main:app --host 0.0.0.0 --port 8008 --reload
+
+  financial-api:
+    build: ./apps/financial-api
+    ports:
+      - "8009:8009"
+    volumes:
+      - ./apps/financial-api:/app
+    working_dir: /app
+    environment:
+      - FINLAB_API_KEY=${FINLAB_API_KEY}
+    command: uvicorn main:app --host 0.0.0.0 --port 8009 --reload
+
+  fundamental-analyzer:
+    build: ./apps/fundamental-analyzer
+    ports:
+      - "8010:8010"
+    volumes:
+      - ./apps/fundamental-analyzer:/app
+    working_dir: /app
+    environment:
+      - FINLAB_API_KEY=${FINLAB_API_KEY}
+    command: uvicorn main:app --host 0.0.0.0 --port 8010 --reload

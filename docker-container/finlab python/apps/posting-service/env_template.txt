@@ -1,0 +1,89 @@
+# ===========================================
+# 環境變數模板文件
+# ===========================================
+# 請複製此文件為 .env 並填入實際的 API keys 和密碼
+# 絕對不要將 .env 文件提交到版本控制系統！
+
+# ===========================================
+# OpenAI API 配置
+# ===========================================
+OPENAI_API_KEY=sk-proj-your-openai-api-key-here
+
+# ===========================================
+# Serper API 配置
+# ===========================================
+SERPER_API_KEY=your-serper-api-key-here
+
+# ===========================================
+# 數據庫配置
+# ===========================================
+POSTGRES_HOST=postgres-db
+POSTGRES_PORT=5432
+POSTGRES_DB=posting_management
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=your-postgres-password-here
+
+# ===========================================
+# KOL 憑證配置
+# ===========================================
+# 每個 KOL 的 CMoney 登入憑證
+# 格式: KOL_{serial}_EMAIL 和 KOL_{serial}_PASSWORD
+
+# KOL-200 (川川哥)
+KOL_200_EMAIL=forum_200@cmoney.com.tw
+KOL_200_PASSWORD=your-kol-200-password-here
+
+# KOL-201
+KOL_201_EMAIL=forum_201@cmoney.com.tw
+KOL_201_PASSWORD=your-kol-201-password-here
+
+# KOL-202
+KOL_202_EMAIL=forum_202@cmoney.com.tw
+KOL_202_PASSWORD=your-kol-202-password-here
+
+# KOL-203
+KOL_203_EMAIL=forum_203@cmoney.com.tw
+KOL_203_PASSWORD=your-kol-203-password-here
+
+# KOL-204
+KOL_204_EMAIL=forum_204@cmoney.com.tw
+KOL_204_PASSWORD=your-kol-204-password-here
+
+# KOL-205
+KOL_205_EMAIL=forum_205@cmoney.com.tw
+KOL_205_PASSWORD=your-kol-205-password-here
+
+# KOL-206
+KOL_206_EMAIL=forum_206@cmoney.com.tw
+KOL_206_PASSWORD=your-kol-206-password-here
+
+# KOL-207
+KOL_207_EMAIL=forum_207@cmoney.com.tw
+KOL_207_PASSWORD=your-kol-207-password-here
+
+# KOL-208
+KOL_208_EMAIL=forum_208@cmoney.com.tw
+KOL_208_PASSWORD=your-kol-208-password-here
+
+# ===========================================
+# 預設 KOL 憑證 (回退用)
+# ===========================================
+DEFAULT_KOL_EMAIL=forum_200@cmoney.com.tw
+DEFAULT_KOL_PASSWORD=your-default-kol-password-here
+
+# ===========================================
+# 其他 API 配置
+# ===========================================
+# 如果有其他 API keys，請在此添加
+# EXAMPLE_API_KEY=your-example-api-key-here
+
+# ===========================================
+# 安全注意事項
+# ===========================================
+# 1. 絕對不要將此文件提交到 Git
+# 2. 定期更換 API keys 和密碼
+# 3. 使用強密碼
+# 4. 限制 API keys 的權限範圍
+# 5. 監控 API 使用情況
+
+

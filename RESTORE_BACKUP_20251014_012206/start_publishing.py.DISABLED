@@ -1,0 +1,92 @@
+#!/usr/bin/env python3
+"""
+開始發文腳本
+"""
+import asyncio
+import sys
+import os
+from dotenv import load_dotenv
+
+# 添加 src 到路徑
+sys.path.append('./src')
+
+from services.publish.publish_service import PublishService
+from clients.google.sheets_client import GoogleSheetsClient
+
+async def main():
+    """主函數"""
+    print("=== 開始發文流程 ===")
+    
+    # 載入環境變數
+    load_dotenv()
+    
+    # 初始化服務
+    credentials_file = os.getenv('GOOGLE_CREDENTIALS_FILE', 'credentials/google-service-account.json')
+    spreadsheet_id = os.getenv('GOOGLE_SHEETS_ID', '148CUhBxqE-BZDPTKaAmOJG6m52CxB4KrxD9p5LikN2s')
+    
+    sheets_client = GoogleSheetsClient(credentials_file, spreadsheet_id)
+    publish_service = PublishService(sheets_client)
+    
+    try:
+        # 步驟1: 登入所有 KOL
+        print("步驟1: 登入所有 KOL...")
+        login_success = await publish_service.login_all_kols()
+        
+        if not login_success:
+            print("❌ KOL 登入失敗，無法繼續發文")
+            return
+        
+        print("✅ 所有 KOL 登入成功")
+        
+        # 步驟2: 獲取準備發文的記錄
+        print("步驟2: 獲取準備發文的記錄...")
+        ready_posts = publish_service.get_ready_to_post_records()
+        
+        if not ready_posts:
+            print("❌ 沒有找到準備發文的記錄")
+            return
+        
+        print(f"✅ 找到 {len(ready_posts)} 篇準備發文的記錄")
+        
+        # 顯示準備發文的記錄
+        for i, post in enumerate(ready_posts, 1):
+            print(f"  {i}. {post['kol_nickname']} (Serial: {post['kol_serial']})")
+            print(f"     標題: {post['title']}")
+            print(f"     內容長度: {len(post['content'])} 字")
+            print()
+        
+        # 步驟3: 確認發文
+        print("步驟3: 確認發文...")
+        confirm = input(f"是否開始發文？將間隔 2 分鐘發文 (y/N): ").strip().lower()
+        
+        if confirm != 'y':
+            print("取消發文")
+            return
+        
+        # 步驟4: 開始間隔發文
+        print("步驟4: 開始間隔發文...")
+        results = await publish_service.publish_posts_with_interval(ready_posts, interval_minutes=2)
+        
+        # 步驟5: 顯示結果
+        print("步驟5: 發文結果...")
+        success_count = sum(1 for r in results if r['success'])
+        print(f"發文完成: {success_count}/{len(results)} 成功")
+        
+        for result in results:
+            status = "✅ 成功" if result['success'] else "❌ 失敗"
+            print(f"  {result['kol_serial']}: {status}")
+            if result['success']:
+                print(f"    Article ID: {result['article_id']}")
+                print(f"    Article URL: {result['article_url']}")
+            else:
+                print(f"    錯誤: {result['error_message']}")
+        
+        print("🎉 發文流程完成！")
+        
+    except Exception as e:
+        print(f"❌ 發文流程異常: {e}")
+        import traceback
+        traceback.print_exc()
+
+if __name__ == "__main__":
+    asyncio.run(main())

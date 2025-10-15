@@ -1,0 +1,16 @@
+docker-container/finlab python/apps/dashboard-backend/src/api/posting_management.py
+docker-container/finlab python/apps/dashboard-backend/src/main.pydocker-container/finlab python/apps/dashboard-frontend/src/components/PostingManagement/BatchHistory/BatchHistoryPage.tsx
+docker-container/finlab python/apps/dashboard-backend/src/services/posting_service.py
+docker-container/finlab python/apps/dashboard-frontend/src/App.tsx
+docker-container/finlab python/apps/dashboard-frontend/src/components/Dashboard/InteractionAnalysis.tsx
+docker-container/finlab python/apps/dashboard-frontend/src/components/KOL/KOLManagementPage.tsx
+docker-container/finlab python/apps/dashboard-frontend/src/components/Layout/Sidebar.tsx
+docker-container/finlab python/apps/dashboard-frontend/src/components/PostingManagement/BatchHistory/BatchHistoryPage.tsx
+docker-container/finlab python/apps/dashboard-frontend/src/components/PostingManagement/PostingGenerator/PostingGenerator.tsx
+docker-container/finlab python/apps/dashboard-frontend/src/components/PostingManagement/PostingGenerator/TriggerSelector.tsx
+docker-container/finlab python/apps/dashboard-frontend/src/components/PostingManagement/ScheduleManagement/ScheduleConfigModal.tsx
+docker-container/finlab python/apps/dashboard-frontend/src/components/PostingManagement/ScheduleManagement/ScheduleManagementPage.tsx
+docker-container/finlab python/apps/dashboard-frontend/src/pages/SelfLearningPage.tsx
+docker-container/finlab python/apps/dashboard-frontend/src/services/postingManagementAPI.ts
+docker-container/finlab python/apps/posting-service/main.py
+docker-container/finlab python/apps/posting-service/postgresql_service.py

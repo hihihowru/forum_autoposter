@@ -1,0 +1,25 @@
+On branch main
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   docker-container/finlab python/apps/dashboard-frontend/src/App.tsx
+	modified:   docker-container/finlab python/apps/dashboard-frontend/src/components/Dashboard/ContentManagement.tsx
+	modified:   docker-container/finlab python/apps/dashboard-frontend/src/components/Dashboard/InteractionAnalysis.tsx
+	modified:   docker-container/finlab python/apps/dashboard-frontend/src/components/KOL/PostHistory.tsx
+	modified:   docker-container/finlab python/apps/dashboard-frontend/src/components/Layout/Sidebar.tsx
+	modified:   docker-container/finlab python/apps/dashboard-frontend/src/services/postingManagementAPI.ts
+	modified:   docker-container/finlab python/apps/posting-service/__pycache__/main.cpython-311.pyc
+	modified:   docker-container/finlab python/apps/posting-service/main.py
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	docker-container/finlab python/apps/dashboard-frontend/src/components/PostingManagement/BatchHistory/
+	docker-container/finlab python/apps/dashboard-frontend/src/components/PostingManagement/ManualPostingPage.tsx
+	docker-container/finlab python/apps/dashboard-frontend/src/components/PostingManagement/ScheduleManagement/
+	docker-container/finlab python/apps/dashboard-frontend/src/pages/SelfLearningPage.tsx
+	docker-container/finlab python/apps/posting-service/routes/intraday_trigger_route.py
+	"docs/\346\211\213\345\213\225\347\231\274\346\226\207\345\212\237\350\203\275\350\252\252\346\230\216.md"
+	find_restore_lost_files.sh
+	n8n-migration-project_DIAG_20251013_113216/
+
+no changes added to commit (use "git add" and/or "git commit -a")

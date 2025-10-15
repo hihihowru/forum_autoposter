@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>手動發文管理</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+
+        .submitted-posts {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .submitted-posts h2 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+        }
+
+        .post-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            gap: 15px;
+        }
+
+        .post-item:last-child {
+            border-bottom: none;
+        }
+
+        .post-time {
+            color: #666;
+            font-size: 12px;
+            min-width: 150px;
+        }
+
+        .post-kol {
+            color: #3498db;
+            font-weight: bold;
+            min-width: 100px;
+        }
+
+        .post-title {
+            flex: 1;
+            color: #333;
+        }
+
+        .kol-posting-area {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .kol-posting-row {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .kol-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #3498db;
+        }
+
+        .kol-name {
+            font-size: 18px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .kol-info {
+            margin-left: 10px;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .selector {
+            position: relative;
+        }
+
+        .selector-input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .selector-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #ddd;
+            border-top: none;
+            border-radius: 0 0 4px 4px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+        }
+
+        .selector-item {
+            padding: 10px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+        }
+
+        .selector-item:hover {
+            background-color: #f8f9fa;
+        }
+
+        .selector-item:last-child {
+            border-bottom: none;
+        }
+
+        .selected-items {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 5px;
+        }
+
+        .selected-item {
+            background: #3498db;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .selected-item .remove {
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .btn-primary {
+            background: #3498db;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #2980b9;
+        }
+
+        .btn-secondary {
+            background: #95a5a6;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #7f8c8d;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+
+        .error {
+            background: #e74c3c;
+            color: white;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+
+        .success {
+            background: #27ae60;
+            color: white;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>手動發文管理</h1>
+            <p>類似水軍操作軟體，支援多KOL同時發文</p>
+        </div>
+
+        <div class="submitted-posts">
+            <h2>已發佈貼文</h2>
+            <div id="recent-posts">
+                <div class="loading">載入中...</div>
+            </div>
+        </div>
+
+        <div class="kol-posting-area" id="kol-posting-area">
+            <div class="loading">載入 KOL 列表...</div>
+        </div>
+    </div>
+
+    <script>
+        // API 基礎 URL
+        const API_BASE = 'http://localhost:8005/api/manual-posting';
+
+        // 全域變數
+        let kols = [];
+        let stocks = [];
+        let trendingTopics = [];
+
+        // 初始化
+        async function init() {
+            try {
+                await Promise.all([
+                    loadKOLs(),
+                    loadStocks(),
+                    loadTrendingTopics(),
+                    loadRecentPosts()
+                ]);
+                renderKOLPostingArea();
+            } catch (error) {
+                console.error('初始化失敗:', error);
+                showError('初始化失敗: ' + error.message);
+            }
+        }
+
+        // 載入 KOL 列表
+        async function loadKOLs() {
+            try {
+                const response = await fetch(`${API_BASE}/kols`);
+                if (!response.ok) throw new Error('載入 KOL 失敗');
+                kols = await response.json();
+                console.log('載入 KOL:', kols.length);
+            } catch (error) {
+                console.error('載入 KOL 失敗:', error);
+                throw error;
+            }
+        }
+
+        // 載入股票列表
+        async function loadStocks() {
+            try {
+                const response = await fetch(`${API_BASE}/stocks`);
+                if (!response.ok) throw new Error('載入股票失敗');
+                stocks = await response.json();
+                console.log('載入股票:', stocks.length);
+            } catch (error) {
+                console.error('載入股票失敗:', error);
+                throw error;
+            }
+        }
+
+        // 載入熱門話題
+        async function loadTrendingTopics() {
+            try {
+                const response = await fetch(`${API_BASE}/trending-topics`);
+                if (!response.ok) throw new Error('載入熱門話題失敗');
+                trendingTopics = await response.json();
+                console.log('載入熱門話題:', trendingTopics.length);
+            } catch (error) {
+                console.error('載入熱門話題失敗:', error);
+                throw error;
+            }
+        }
+
+        // 載入最近發文
+        async function loadRecentPosts() {
+            try {
+                const response = await fetch(`${API_BASE}/recent-posts?limit=10`);
+                if (!response.ok) throw new Error('載入發文記錄失敗');
+                const data = await response.json();
+                renderRecentPosts(data.posts);
+            } catch (error) {
+                console.error('載入發文記錄失敗:', error);
+                document.getElementById('recent-posts').innerHTML = '<div class="error">載入發文記錄失敗</div>';
+            }
+        }
+
+        // 渲染最近發文
+        function renderRecentPosts(posts) {
+            const container = document.getElementById('recent-posts');
+            if (posts.length === 0) {
+                container.innerHTML = '<div class="loading">暫無發文記錄</div>';
+                return;
+            }
+
+            container.innerHTML = posts.map(post => `
+                <div class="post-item">
+                    <div class="post-time">${formatDateTime(post.created_at)}</div>
+                    <div class="post-kol">${post.kol_nickname}</div>
+                    <div class="post-title">${post.title}</div>
+                </div>
+            `).join('');
+        }
+
+        // 渲染 KOL 發文區域
+        function renderKOLPostingArea() {
+            const container = document.getElementById('kol-posting-area');
+            container.innerHTML = kols.map(kol => `
+                <div class="kol-posting-row">
+                    <div class="kol-header">
+                        <div class="kol-name">${kol.nickname}</div>
+                        <div class="kol-info">(KOL-${kol.serial}) - ${kol.persona}</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>標題:</label>
+                        <input type="text" id="title-${kol.serial}" placeholder="輸入標題...">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>內容:</label>
+                        <textarea id="content-${kol.serial}" placeholder="輸入內容..." rows="4"></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>股票標籤:</label>
+                        <div class="selector">
+                            <input type="text" class="selector-input" id="stock-search-${kol.serial}" 
+                                   placeholder="搜尋股票代號或名稱..." oninput="searchStocks('${kol.serial}', this.value)">
+                            <div class="selector-dropdown" id="stock-dropdown-${kol.serial}"></div>
+                            <div class="selected-items" id="selected-stocks-${kol.serial}"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>熱門話題:</label>
+                        <div class="selector">
+                            <input type="text" class="selector-input" id="topic-search-${kol.serial}" 
+                                   placeholder="搜尋熱門話題..." oninput="searchTopics('${kol.serial}', this.value)">
+                            <div class="selector-dropdown" id="topic-dropdown-${kol.serial}"></div>
+                            <div class="selected-items" id="selected-topics-${kol.serial}"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button class="btn btn-primary" onclick="submitPost('${kol.serial}')">送出</button>
+                        <button class="btn btn-secondary" onclick="clearForm('${kol.serial}')">清空</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // 搜尋股票
+        async function searchStocks(kolSerial, query) {
+            const dropdown = document.getElementById(`stock-dropdown-${kolSerial}`);
+            if (!query) {
+                dropdown.style.display = 'none';
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/stocks/search?q=${encodeURIComponent(query)}`);
+                if (!response.ok) throw new Error('搜尋股票失敗');
+                const results = await response.json();
+                
+                dropdown.innerHTML = results.map(stock => `
+                    <div class="selector-item" onclick="selectStock('${kolSerial}', '${stock.code}', '${stock.name}')">
+                        ${stock.code} ${stock.name}
+                    </div>
+                `).join('');
+                dropdown.style.display = 'block';
+            } catch (error) {
+                console.error('搜尋股票失敗:', error);
+            }
+        }
+
+        // 搜尋話題
+        function searchTopics(kolSerial, query) {
+            const dropdown = document.getElementById(`topic-dropdown-${kolSerial}`);
+            if (!query) {
+                dropdown.style.display = 'none';
+                return;
+            }
+
+            const results = trendingTopics.filter(topic => 
+                topic.title.toLowerCase().includes(query.toLowerCase())
+            );
+
+            dropdown.innerHTML = results.map(topic => `
+                <div class="selector-item" onclick="selectTopic('${kolSerial}', '${topic.id}', '${topic.title}')">
+                    ${topic.title}
+                </div>
+            `).join('');
+            dropdown.style.display = 'block';
+        }
+
+        // 選擇股票
+        function selectStock(kolSerial, code, name) {
+            const container = document.getElementById(`selected-stocks-${kolSerial}`);
+            const existing = container.querySelector(`[data-code="${code}"]`);
+            if (existing) return;
+
+            const item = document.createElement('div');
+            item.className = 'selected-item';
+            item.setAttribute('data-code', code);
+            item.innerHTML = `${code} ${name} <span class="remove" onclick="removeStock('${kolSerial}', '${code}')">×</span>`;
+            container.appendChild(item);
+
+            // 清空搜尋框和下拉選單
+            document.getElementById(`stock-search-${kolSerial}`).value = '';
+            document.getElementById(`stock-dropdown-${kolSerial}`).style.display = 'none';
+        }
+
+        // 選擇話題
+        function selectTopic(kolSerial, id, title) {
+            const container = document.getElementById(`selected-topics-${kolSerial}`);
+            const existing = container.querySelector(`[data-id="${id}"]`);
+            if (existing) return;
+
+            const item = document.createElement('div');
+            item.className = 'selected-item';
+            item.setAttribute('data-id', id);
+            item.innerHTML = `${title} <span class="remove" onclick="removeTopic('${kolSerial}', '${id}')">×</span>`;
+            container.appendChild(item);
+
+            // 清空搜尋框和下拉選單
+            document.getElementById(`topic-search-${kolSerial}`).value = '';
+            document.getElementById(`topic-dropdown-${kolSerial}`).style.display = 'none';
+        }
+
+        // 移除股票
+        function removeStock(kolSerial, code) {
+            const item = document.querySelector(`#selected-stocks-${kolSerial} [data-code="${code}"]`);
+            if (item) item.remove();
+        }
+
+        // 移除話題
+        function removeTopic(kolSerial, id) {
+            const item = document.querySelector(`#selected-topics-${kolSerial} [data-id="${id}"]`);
+            if (item) item.remove();
+        }
+
+        // 提交發文
+        async function submitPost(kolSerial) {
+            const title = document.getElementById(`title-${kolSerial}`).value.trim();
+            const content = document.getElementById(`content-${kolSerial}`).value.trim();
+            
+            if (!title) {
+                alert('請輸入標題');
+                return;
+            }
+            
+            if (!content) {
+                alert('請輸入內容');
+                return;
+            }
+
+            // 獲取選中的股票
+            const selectedStocks = Array.from(document.querySelectorAll(`#selected-stocks-${kolSerial} .selected-item`))
+                .map(item => item.getAttribute('data-code'));
+
+            // 獲取選中的話題
+            const selectedTopics = Array.from(document.querySelectorAll(`#selected-topics-${kolSerial} .selected-item`))
+                .map(item => item.getAttribute('data-id'));
+
+            try {
+                const response = await fetch(`${API_BASE}/submit`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        kol_serial: parseInt(kolSerial),
+                        title: title,
+                        content: content,
+                        stock_codes: selectedStocks,
+                        trending_topics: selectedTopics
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert(`發文成功！Post ID: ${result.post_id}`);
+                    clearForm(kolSerial);
+                    loadRecentPosts(); // 重新載入最近發文
+                } else {
+                    alert(`發文失敗: ${result.message}`);
+                }
+            } catch (error) {
+                console.error('提交發文失敗:', error);
+                alert('提交發文失敗: ' + error.message);
+            }
+        }
+
+        // 清空表單
+        function clearForm(kolSerial) {
+            document.getElementById(`title-${kolSerial}`).value = '';
+            document.getElementById(`content-${kolSerial}`).value = '';
+            document.getElementById(`stock-search-${kolSerial}`).value = '';
+            document.getElementById(`topic-search-${kolSerial}`).value = '';
+            document.getElementById(`selected-stocks-${kolSerial}`).innerHTML = '';
+            document.getElementById(`selected-topics-${kolSerial}`).innerHTML = '';
+            document.getElementById(`stock-dropdown-${kolSerial}`).style.display = 'none';
+            document.getElementById(`topic-dropdown-${kolSerial}`).style.display = 'none';
+        }
+
+        // 顯示錯誤
+        function showError(message) {
+            const container = document.getElementById('kol-posting-area');
+            container.innerHTML = `<div class="error">${message}</div>`;
+        }
+
+        // 格式化日期時間
+        function formatDateTime(dateString) {
+            if (!dateString) return '';
+            const date = new Date(dateString);
+            return date.toLocaleString('zh-TW');
+        }
+
+        // 點擊外部關閉下拉選單
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.selector')) {
+                document.querySelectorAll('.selector-dropdown').forEach(dropdown => {
+                    dropdown.style.display = 'none';
+                });
+            }
+        });
+
+        // 頁面載入完成後初始化
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

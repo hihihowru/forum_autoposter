@@ -1,0 +1,126 @@
+# 雲端部署配置
+# 支援 AWS, GCP, Azure 等雲端平台
+
+# AWS 部署配置
+aws:
+  # RDS PostgreSQL
+  database:
+    engine: postgresql
+    instance_class: db.t3.micro
+    allocated_storage: 20
+    max_allocated_storage: 100
+    backup_retention_period: 7
+    multi_az: false
+    publicly_accessible: false
+    vpc_security_group_ids: ["sg-xxxxxxxxx"]
+    
+  # ElastiCache Redis
+  cache:
+    node_type: cache.t3.micro
+    num_cache_nodes: 1
+    engine: redis
+    port: 6379
+    
+  # ECS 或 EC2 部署
+  compute:
+    instance_type: t3.small
+    min_capacity: 1
+    max_capacity: 3
+    desired_capacity: 2
+    
+  # S3 存儲
+  storage:
+    bucket_name: posting-management-data
+    region: ap-northeast-1
+
+# GCP 部署配置
+gcp:
+  # Cloud SQL PostgreSQL
+  database:
+    tier: db-f1-micro
+    disk_size: 20
+    disk_type: SSD
+    backup_enabled: true
+    region: asia-east1
+    
+  # Memorystore Redis
+  cache:
+    tier: basic
+    memory_size_gb: 1
+    region: asia-east1
+    
+  # Cloud Run 或 GKE
+  compute:
+    cpu: 1
+    memory: 2Gi
+    min_instances: 1
+    max_instances: 10
+    
+  # Cloud Storage
+  storage:
+    bucket_name: posting-management-data
+    location: asia-east1
+
+# Azure 部署配置
+azure:
+  # Azure Database for PostgreSQL
+  database:
+    sku_name: B_Gen5_1
+    storage_mb: 20480
+    backup_retention_days: 7
+    geo_redundant_backup: false
+    
+  # Azure Cache for Redis
+  cache:
+    sku_name: Basic
+    family: C
+    capacity: 0
+    
+  # App Service 或 AKS
+  compute:
+    sku: B1
+    min_instances: 1
+    max_instances: 10
+    
+  # Blob Storage
+  storage:
+    account_name: postingmanagement
+    container_name: data
+    location: eastasia
+
+# 環境變數配置
+environments:
+  development:
+    DATABASE_URL: "postgresql://postgres:password@localhost:5432/posting_management"
+    REDIS_URL: "redis://localhost:6379"
+    API_BASE_URL: "http://localhost:8000"
+    
+  staging:
+    DATABASE_URL: "postgresql://user:pass@staging-db:5432/posting_management"
+    REDIS_URL: "redis://staging-redis:6379"
+    API_BASE_URL: "https://staging-api.posting-management.com"
+    
+  production:
+    DATABASE_URL: "postgresql://user:pass@prod-db:5432/posting_management"
+    REDIS_URL: "redis://prod-redis:6379"
+    API_BASE_URL: "https://api.posting-management.com"
+
+# 備份配置
+backup:
+  # 數據庫備份
+  database:
+    schedule: "0 2 * * *"  # 每天凌晨2點
+    retention_days: 30
+    storage_location: "s3://backup-bucket/database/"
+    
+  # 應用數據備份
+  application:
+    schedule: "0 3 * * *"  # 每天凌晨3點
+    retention_days: 7
+    storage_location: "s3://backup-bucket/application/"
+    
+  # 災難恢復
+  disaster_recovery:
+    rto: "4 hours"  # 恢復時間目標
+    rpo: "1 hour"   # 恢復點目標
+    backup_frequency: "hourly"

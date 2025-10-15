@@ -1,0 +1,11 @@
+[0;34m[00:46:05][0m 開始還原程序 - 目標時間: 2025-10-13 08:55:00 之前
+[0;34m[00:46:05][0m 專案目錄: /Users/williamchen/Documents/n8n-migration-project
+[0;34m[00:46:05][0m 歷史目錄: /Users/williamchen/Documents/n8n-migration-project/.history
+[0;34m[00:46:05][0m 備份目錄: /Users/williamchen/Documents/n8n-migration-project/RESTORE_BACKUP_20251014_004605
+[0;34m[00:46:05][0m 掃描歷史檔案...
+[0;34m[00:46:05][0m 還原完成!
+[0;32m✅ 總共找到: 51 個歷史檔案[0m
+[0;32m✅ 成功還原: 0 個檔案[0m
+[1;33m⚠️  跳過: 0 個檔案[0m
+[0;34m[00:46:05][0m 備份位置: /Users/williamchen/Documents/n8n-migration-project/RESTORE_BACKUP_20251014_004605
+[0;34m[00:46:05][0m 詳細日誌: /Users/williamchen/Documents/n8n-migration-project/restore_log.txt

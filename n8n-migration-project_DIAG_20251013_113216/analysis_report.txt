@@ -1,0 +1,24 @@
+Git 檔案救援分析報告
+生成時間：Mon Oct 13 11:32:22 CST 2025
+專案：.
+===========================================
+
+📊 統計摘要：
+- 歷史檔案路徑總數：     990
+- 疑似被刪除檔案：     530
+- 疑似被覆蓋檔案：     201
+- 當前工作目錄檔案：   36180
+
+📁 輸出檔案說明：
+- maybe_deleted_paths.txt: 歷史中出現但目前不存在的檔案
+- maybe_overwritten_paths.txt: 目前存在但近期修改的檔案
+- history_candidates_relative.txt: 所有歷史檔案路徑
+- working_tree_now.txt: 當前專案中存在的檔案
+- git_status_now.txt: 當前 Git 狀態
+- git_tracked_now.txt: Git 追蹤的檔案清單
+
+🔧 還原建議：
+1. 在 Cursor 中按 Cmd+Shift+P，搜尋 'Local History'
+2. 開啟 'Local History: Find Entry to Restore'
+3. 根據 maybe_deleted_paths.txt 中的檔案名稱搜尋
+4. 選擇合適的時間點進行還原

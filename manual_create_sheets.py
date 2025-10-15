@@ -1,0 +1,30 @@
+#!/usr/bin/env python3
+"""
+手動創建新的 Google Sheets 指南
+"""
+
+print("🔄 手動創建新的 Google Sheets 指南")
+print()
+print("📝 請按照以下步驟操作：")
+print()
+print("1. 前往 Google Sheets: https://sheets.google.com")
+print("2. 點擊「+ 新增」創建新的 Google Sheets")
+print("3. 將工作表命名為「AIGC 工作記錄 - 新版本」")
+print("4. 創建以下分頁：")
+print("   - 貼文紀錄表")
+print("   - KOL 角色紀錄表")
+print("5. 複製新的 Google Sheets ID（從 URL 中獲取）")
+print()
+print("📋 URL 格式：https://docs.google.com/spreadsheets/d/[SHEETS_ID]/edit")
+print("📋 請將 [SHEETS_ID] 部分複製下來")
+print()
+print("🔧 然後更新以下配置：")
+print("1. 更新 .env 文件中的 GOOGLE_SHEETS_ID")
+print("2. 更新 src/core/main_workflow_engine.py 中的 new_sheets_id")
+print("3. 更新其他相關文件中的 Google Sheets ID")
+print()
+print("💡 提示：")
+print("- 確保 Google Sheets 的權限設置為「任何有連結的人都可以編輯」")
+print("- 或者將 Service Account 郵箱添加為編輯者")
+print()
+print("✅ 完成後，請提供新的 Google Sheets ID，我將幫您更新配置")
