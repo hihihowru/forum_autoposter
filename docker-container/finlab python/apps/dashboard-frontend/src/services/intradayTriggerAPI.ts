@@ -18,9 +18,9 @@ class IntradayTriggerAPI {
       console.log('🚀 [前端] 執行盤中觸發器:', config);
       console.log('🌐 [前端] 請求 URL:', `/intraday-trigger/execute`);
       
-      // 使用相對路徑，通過 Vite 代理訪問後端
+      // 直接調用 Railway 後端
       const response = await axios.post(
-        `/intraday-trigger/execute`,
+        `https://forumautoposter-production.up.railway.app/intraday-trigger/execute`,
         config,
         {
           headers: {
