@@ -6,13 +6,13 @@ import axios from 'axios';
 import { API_CONFIG, createApiUrl, API_ENDPOINTS } from '../config/api';
 
 // 調試：輸出實際的 API URL
-console.log('🔍 API 配置調試 (使用 Vercel Proxy):');
+console.log('🔍 API 配置調試 (直接調用 Railway):');
 console.log('  API_CONFIG.BASE_URL:', API_CONFIG.BASE_URL);
 console.log('  API_CONFIG.OHLC_API:', API_CONFIG.OHLC_API);
 
-// 創建axios實例 - 使用 Vercel Proxy
+// 創建axios實例 - 直接調用 Railway
 const apiClient = axios.create({
-  baseURL: API_CONFIG.BASE_URL,  // 現在是 '/api/proxy'
+  baseURL: API_CONFIG.BASE_URL,  // 現在是 Railway URL
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
@@ -1118,9 +1118,9 @@ export class PostingManagementAPI {
         params.sortBy = triggerConfig.stockFilterCriteria.join(',');
       }
       
-      // 使用 Vercel Proxy 調用 API
+      // 直接調用 Railway API
       const apiUrl = createApiUrl(API_ENDPOINTS.AFTER_HOURS_LIMIT_UP, 'OHLC');
-      console.log('🚀 調用 API (通過 Vercel Proxy):', apiUrl);
+      console.log('🚀 調用 API (直接調用 Railway):', apiUrl);
       
       const response = await apiClient.get(API_ENDPOINTS.AFTER_HOURS_LIMIT_UP, {
         params,

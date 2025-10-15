@@ -18,9 +18,9 @@ class IntradayTriggerAPI {
     try {
       console.log('🚀 [前端] 執行盤中觸發器:', config);
       
-      // 使用 Vercel Proxy 調用 API
+      // 直接調用 Railway API
       const apiUrl = createApiUrl(API_ENDPOINTS.INTRADAY_TRIGGER);
-      console.log('🌐 [前端] 請求 URL (通過 Vercel Proxy):', apiUrl);
+      console.log('🌐 [前端] 請求 URL (直接調用 Railway):', apiUrl);
       
       const response = await axios.get(apiUrl, {
         params: config,  // 將配置作為查詢參數

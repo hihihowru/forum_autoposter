@@ -1,7 +1,7 @@
 /**
  * API 配置
  * 統一管理所有 API 端點
- * 使用 Vercel Proxy 解決 CORS 問題
+ * 直接調用 Railway 後端
  */
 
 // 環境變數配置
@@ -19,15 +19,17 @@ const getApiConfig = () => {
     };
   }
   
-  // 生產環境 - 使用 Vercel Proxy
+  // 生產環境 - 直接調用 Railway
+  const railwayBaseUrl = 'https://forumautoposter-production.up.railway.app';
+  
   return {
-    BASE_URL: '/api/proxy',  // 使用 Vercel API Route
-    OHLC_API: '/api/proxy',  // 通過 Vercel Proxy 路由
-    TRENDING_API: '/api/proxy',
-    ANALYZE_API: '/api/proxy',
-    FINANCIAL_API: '/api/proxy',
-    SUMMARY_API: '/api/proxy',
-    DASHBOARD_API: '/api/proxy',
+    BASE_URL: railwayBaseUrl,
+    OHLC_API: railwayBaseUrl,
+    TRENDING_API: railwayBaseUrl,
+    ANALYZE_API: railwayBaseUrl,
+    FINANCIAL_API: railwayBaseUrl,
+    SUMMARY_API: railwayBaseUrl,
+    DASHBOARD_API: railwayBaseUrl,
   };
 };
 
@@ -67,9 +69,9 @@ export const API_ENDPOINTS = {
 export const createApiUrl = (endpoint: string, service: 'OHLC' | 'BASE' | 'TRENDING' | 'ANALYZE' | 'FINANCIAL' | 'SUMMARY' | 'DASHBOARD' = 'BASE') => {
   let baseUrl = API_CONFIG[`${service}_API` as keyof typeof API_CONFIG] || API_CONFIG.BASE_URL;
   
-  // 確保 baseUrl 有正確的協議（僅在開發環境需要）
-  if ((import.meta as any).env.DEV && !baseUrl.startsWith('http')) {
-    baseUrl = `http://${baseUrl}`;
+  // 確保 baseUrl 有正確的協議
+  if (!baseUrl.startsWith('http')) {
+    baseUrl = `https://${baseUrl}`;
   }
   
   const fullUrl = `${baseUrl}${endpoint}`;
