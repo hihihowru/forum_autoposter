@@ -9,11 +9,12 @@ import type {
 
 // 創建 axios 實例
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
   timeout: 30000, // 增加到 30 秒
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true, // 如果需要跨域攜帶 cookie
 });
 
 // 請求攔截器
