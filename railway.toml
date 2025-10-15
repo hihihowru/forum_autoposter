@@ -30,7 +30,9 @@ base_dockerfile = "Dockerfile.frontend"
 command = "nginx -g 'daemon off;'"
 
 [services.env]
-VITE_API_BASE_URL = { type = "string", required = true }
+VITE_API_BASE_URL = { type = "string", required = true, value = "/api" }
 
 [deploy]
 public = true
+startCommand = "nginx -g 'daemon off;'"
+
