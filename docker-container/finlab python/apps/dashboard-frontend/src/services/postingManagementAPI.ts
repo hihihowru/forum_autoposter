@@ -5,18 +5,22 @@
 import axios from 'axios';
 import { API_CONFIG, createApiUrl, API_ENDPOINTS } from '../config/api';
 
-const API_BASE_URL = API_CONFIG.BASE_URL;
-const POSTING_SERVICE_URL = API_CONFIG.BASE_URL; // posting-service
-
 // 調試：輸出實際的 API URL
 console.log('🔍 API 配置調試:');
 console.log('  VITE_API_BASE_URL:', import.meta.env.VITE_API_BASE_URL);
 console.log('  API_CONFIG.BASE_URL:', API_CONFIG.BASE_URL);
 console.log('  API_CONFIG.OHLC_API:', API_CONFIG.OHLC_API);
 
+// 確保 baseURL 有正確的協議
+const baseURL = API_CONFIG.BASE_URL.startsWith('http') 
+  ? API_CONFIG.BASE_URL 
+  : `https://${API_CONFIG.BASE_URL}`;
+
+console.log('  Final baseURL:', baseURL);
+
 // 創建axios實例
 const apiClient = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: baseURL,
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
