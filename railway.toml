@@ -8,12 +8,12 @@ NODE_VERSION = "18.x"
 # Backend Service
 [[services]]
 name = "backend"
-port = 8000
+port = 8080  # Changed to match the actual port in the logs
 workingDirectory = "/"
 
 # Explicitly set the start command for the backend
 [services.start]
-command = "uvicorn src.main:app --host 0.0.0.0 --port 8000"
+command = "uvicorn src.main:app --host 0.0.0.0 --port 8080"  # Updated port to 8080
 
 [services.env]
 PYTHONPATH = "/"
@@ -21,13 +21,19 @@ DATABASE_URL = { type = "string", required = true }
 
 # Frontend Service
 [[services]]
-name = "frontend"
+name = "web"
 port = 3000
 root = "docker-container/finlab python/apps/dashboard-frontend"
 
 [services.build]
-base_dockerfile = "Dockerfile.frontend"
 command = "npm install && npm run build"
+
+[services.start]
+command = "npm run preview -- --host"
+
+[deploy]
+startCommand = "npm run preview -- --host"
+public = true
 
 [services.start]
 command = "npm run preview -- --host --port 3000"
