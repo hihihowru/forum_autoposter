@@ -55,17 +55,36 @@ def startup_event():
     else:
         logger.warning("❌ 未找到 FINLAB_API_KEY 環境變數")
 
-    # 載入股票映射表
+    # 載入股票映射表（先嘗試靜態文件）
     try:
         stock_mapping_path = '/app/stock_mapping.json'
         if os.path.exists(stock_mapping_path):
             with open(stock_mapping_path, 'r', encoding='utf-8') as f:
                 stock_mapping = json.load(f)
-            logger.info(f"✅ 載入股票映射表成功: {len(stock_mapping)} 支股票")
+            logger.info(f"✅ 載入靜態股票映射表成功: {len(stock_mapping)} 支股票")
         else:
-            logger.warning(f"⚠️ 股票映射表不存在: {stock_mapping_path}")
+            logger.warning(f"⚠️ 靜態股票映射表不存在: {stock_mapping_path}")
     except Exception as e:
-        logger.error(f"❌ 載入股票映射表失敗: {e}")
+        logger.error(f"❌ 載入靜態股票映射表失敗: {e}")
+
+    # 從 FinLab 動態載入完整公司資訊
+    try:
+        if api_key:
+            logger.info("📊 正在從 FinLab 載入完整公司資訊...")
+            company_info = data.get('company_basic_info')
+            if company_info is not None and not company_info.empty:
+                # 轉換為字典格式
+                for stock_id in company_info['stock_id']:
+                    stock_data = company_info[company_info['stock_id'] == stock_id].iloc[0]
+                    stock_mapping[stock_id] = {
+                        'company_name': stock_data.get('公司簡稱', stock_data.get('公司名稱', f'股票{stock_id}')),
+                        'industry': stock_data.get('產業類別', '未知產業')
+                    }
+                logger.info(f"✅ 從 FinLab 載入完整公司資訊成功: {len(stock_mapping)} 支股票")
+            else:
+                logger.warning("⚠️ 無法從 FinLab 取得公司資訊")
+    except Exception as e:
+        logger.error(f"❌ 從 FinLab 載入公司資訊失敗: {e}")
 
 def ensure_finlab_login():
     """確保 FinLab 已登入"""
