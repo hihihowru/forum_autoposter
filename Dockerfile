@@ -13,8 +13,8 @@ RUN apt-get update && apt-get install -y \
 # 複製所有應用代碼（包括 unified-api 和啟動腳本）
 COPY . .
 
-# 複製並安裝 unified-api 的依賴
-COPY "docker-container/finlab python/apps/unified-api/requirements.txt" /tmp/requirements.txt
+# 複製並安裝 unified-api 的依賴（使用 JSON array 語法處理空格路徑）
+COPY ["docker-container/finlab python/apps/unified-api/requirements.txt", "/tmp/requirements.txt"]
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
 # 創建credentials目錄
