@@ -7,16 +7,15 @@ WORKDIR /app
 # 安裝系統依賴
 RUN apt-get update && apt-get install -y \
     gcc \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# 複製requirements文件
-COPY requirements.txt .
-
-# 安裝Python依賴
-RUN pip install --no-cache-dir -r requirements.txt
-
-# 複製應用代碼
+# 複製所有應用代碼（包括 unified-api 和啟動腳本）
 COPY . .
+
+# 複製並安裝 unified-api 的依賴
+COPY "docker-container/finlab python/apps/unified-api/requirements.txt" /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
 # 創建credentials目錄
 RUN mkdir -p credentials
@@ -31,10 +30,10 @@ USER appuser
 
 # 健康檢查
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:$PORT/health || exit 1
+    CMD curl -f http://localhost:${PORT}/health || exit 1
 
 # 暴露端口
 EXPOSE $PORT
 
-# 啟動命令
-CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "$PORT"]
+# 使用啟動腳本（它會 cd 到正確的目錄並啟動服務）
+CMD ["sh", "start-unified-api.sh"]
