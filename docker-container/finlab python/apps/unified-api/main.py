@@ -633,19 +633,31 @@ async def get_intraday_trigger_stocks(
                 raise HTTPException(status_code=500, detail=f"CMoney API 請求失敗: {response.status_code}")
 
             # 解析響應數據
-            data = response.json()
-            logger.info(f"📊 [盤中觸發器] 收到數據: {len(data)} 筆記錄")
+            raw_data = response.json()
+            logger.info(f"📊 [盤中觸發器] 收到數據: {len(raw_data)} 筆記錄")
 
-            # 提取股票代碼 (第8個欄位，索引為7)
-            stocks = [item[7] for item in data if len(item) > 7 and item[7]]
+            # 提取股票代碼並映射到股票名稱和產業
+            stock_codes = [item[7] for item in raw_data if len(item) > 7 and item[7]]
 
-            logger.info(f"✅ [盤中觸發器] 執行成功，獲取 {len(stocks)} 支股票: {stocks}")
+            # 構建包含股票名稱和產業的完整數據
+            stocks_with_info = []
+            for stock_code in stock_codes:
+                stock_name = get_stock_name(stock_code)
+                stock_industry = get_stock_industry(stock_code)
+                stocks_with_info.append({
+                    "stock_code": stock_code,
+                    "stock_name": stock_name,
+                    "industry": stock_industry
+                })
+
+            logger.info(f"✅ [盤中觸發器] 執行成功，獲取 {len(stocks_with_info)} 支股票")
+            logger.info(f"📋 [盤中觸發器] 股票列表: {[f'{s["stock_code"]}({s["stock_name"]})' for s in stocks_with_info[:5]]}...")
 
             return {
                 "success": True,
-                "stocks": stocks,
-                "data": data,
-                "count": len(stocks)
+                "stocks": stocks_with_info,  # 返回包含名稱和產業的完整信息
+                "data": raw_data,  # 保留原始 CMoney 數據
+                "count": len(stocks_with_info)
             }
 
     except httpx.TimeoutException:
