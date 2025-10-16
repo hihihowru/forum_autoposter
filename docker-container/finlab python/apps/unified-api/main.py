@@ -495,10 +495,24 @@ def get_forum_200_credentials():
     email = os.getenv("FORUM_200_EMAIL")
     password = os.getenv("FORUM_200_PASSWORD")
     member_id = os.getenv("FORUM_200_MEMBER_ID", "9505546")  # 預設值
-    
+
+    # 記錄環境變數狀態（不記錄實際值以保護隱私）
+    logger.info(f"📋 [憑證檢查] FORUM_200_EMAIL 存在: {email is not None}")
+    logger.info(f"📋 [憑證檢查] FORUM_200_PASSWORD 存在: {password is not None}")
+    logger.info(f"📋 [憑證檢查] FORUM_200_MEMBER_ID: {member_id}")
+
     if not email or not password:
-        raise Exception("缺少 FORUM_200_EMAIL 或 FORUM_200_PASSWORD 環境變數")
-    
+        # 更詳細的錯誤訊息
+        missing = []
+        if not email:
+            missing.append("FORUM_200_EMAIL")
+        if not password:
+            missing.append("FORUM_200_PASSWORD")
+        error_msg = f"缺少環境變數: {', '.join(missing)}"
+        logger.error(f"❌ {error_msg}")
+        raise Exception(error_msg)
+
+    logger.info(f"✅ [憑證檢查] 成功載入 forum_200 憑證: {email}")
     return {
         "email": email,
         "password": password,
