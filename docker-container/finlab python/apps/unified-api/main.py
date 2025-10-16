@@ -820,6 +820,30 @@ async def get_interaction_analysis():
     logger.info("返回互動分析數據")
     return result
 
+# ==================== Posts API 功能 ====================
+
+@app.get("/posts")
+async def get_posts(
+    skip: int = Query(0, description="跳過的記錄數"),
+    limit: int = Query(1000, description="返回的記錄數"),
+    status: str = Query(None, description="狀態篩選")
+):
+    """獲取貼文列表（模擬數據）"""
+    logger.info(f"收到 get_posts 請求: skip={skip}, limit={limit}, status={status}")
+
+    # 返回空數據（因為這是一個純前端展示頁面，實際數據在 posting-service）
+    result = {
+        "success": True,
+        "posts": [],
+        "count": 0,
+        "skip": skip,
+        "limit": limit,
+        "timestamp": datetime.now().isoformat()
+    }
+
+    logger.info("返回 posts 數據（空）")
+    return result
+
 # ==================== Trending API 功能 ====================
 
 @app.get("/trending")
