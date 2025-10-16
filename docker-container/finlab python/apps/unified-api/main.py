@@ -124,18 +124,15 @@ async def after_hours_limit_up(
     
     result = {
         "success": True,
-        "message": "API Gateway is working - this is a mock response",
-        "data": filtered_data[:limit],
-        "count": len(filtered_data[:limit]),
-        "limit": limit,
-        "filters_applied": {
-            "changeThreshold": changeThreshold,
-            "sortBy": sortBy
-        },
-        "timestamp": datetime.now().isoformat()
+        "total_count": len(filtered_data[:limit]),
+        "stocks": filtered_data[:limit],
+        "date": datetime.now().strftime("%Y-%m-%d"),
+        "changeThreshold": changeThreshold,
+        "timestamp": datetime.now().isoformat(),
+        "source": "mock"
     }
-    
-    logger.info(f"返回 after_hours_limit_up 數據: {len(result['data'])} 條記錄")
+
+    logger.info(f"返回 after_hours_limit_up 數據: {len(result['stocks'])} 條記錄")
     return result
 
 @app.get("/after_hours_limit_down")
@@ -173,21 +170,18 @@ async def after_hours_limit_down(
     filtered_data = mock_ohlc
     if changeThreshold:
         filtered_data = [stock for stock in filtered_data if stock["change_percent"] <= changeThreshold]
-    
+
     result = {
         "success": True,
-        "message": "API Gateway is working - this is a mock response",
-        "data": filtered_data[:limit],
-        "count": len(filtered_data[:limit]),
-        "limit": limit,
-        "filters_applied": {
-            "changeThreshold": changeThreshold,
-            "sortBy": sortBy
-        },
-        "timestamp": datetime.now().isoformat()
+        "total_count": len(filtered_data[:limit]),
+        "stocks": filtered_data[:limit],
+        "date": datetime.now().strftime("%Y-%m-%d"),
+        "changeThreshold": changeThreshold,
+        "timestamp": datetime.now().isoformat(),
+        "source": "mock"
     }
-    
-    logger.info(f"返回 after_hours_limit_down 數據: {len(result['data'])} 條記錄")
+
+    logger.info(f"返回 after_hours_limit_down 數據: {len(result['stocks'])} 條記錄")
     return result
 
 @app.get("/industries")
