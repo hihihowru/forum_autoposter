@@ -48,6 +48,14 @@ stock_mapping = {}
 def startup_event():
     """啟動時初始化 FinLab"""
     global stock_mapping
+
+    # 檢查所有關鍵環境變數
+    logger.info("🔍 [啟動檢查] 開始檢查環境變數...")
+    logger.info(f"🔍 [啟動檢查] FINLAB_API_KEY 存在: {os.getenv('FINLAB_API_KEY') is not None}")
+    logger.info(f"🔍 [啟動檢查] FORUM_200_EMAIL 存在: {os.getenv('FORUM_200_EMAIL') is not None}")
+    logger.info(f"🔍 [啟動檢查] FORUM_200_PASSWORD 存在: {os.getenv('FORUM_200_PASSWORD') is not None}")
+    logger.info(f"🔍 [啟動檢查] PORT: {os.getenv('PORT', '未設定')}")
+
     api_key = os.getenv("FINLAB_API_KEY")
     if api_key:
         finlab.login(api_key)
