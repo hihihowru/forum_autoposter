@@ -28,10 +28,15 @@ ls -la
 echo "🐍 Python 版本:"
 python --version
 
-echo "📦 檢查 FastAPI:"
+echo "📦 檢查依賴..."
 python -c "import fastapi; print('FastAPI version:', fastapi.__version__)" || {
-    echo "❌ FastAPI 未安裝，嘗試安裝..."
+    echo "❌ FastAPI 未安裝"
     pip install --no-cache-dir -r requirements.txt
+}
+
+python -c "import httpx; print('httpx version:', httpx.__version__)" || {
+    echo "❌ httpx 未安裝，強制重新安裝所有依賴..."
+    pip install --no-cache-dir --force-reinstall -r requirements.txt
 }
 
 # 啟動服務
