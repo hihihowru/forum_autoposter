@@ -19,6 +19,9 @@ COPY main.py .
 # 複製股票映射表
 COPY ../../stock_mapping.json /app/stock_mapping.json
 
+# 複製 post_records 數據
+COPY ../../post_records_1788.json /app/post_records_1788.json
+
 # 暴露端口（Railway 會自動設置 PORT 環境變數）
 EXPOSE $PORT
 

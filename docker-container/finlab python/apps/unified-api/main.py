@@ -52,7 +52,12 @@ db_connection = None
 def create_post_records_table():
     """創建 post_records 表（如果不存在）"""
     try:
+        if not db_connection:
+            logger.error("❌ 數據庫連接不存在，無法創建表")
+            return
+            
         with db_connection.cursor() as cursor:
+            logger.info("🔍 檢查 post_records 表是否存在...")
             # 檢查表是否存在
             cursor.execute("""
                 SELECT EXISTS (
@@ -62,9 +67,10 @@ def create_post_records_table():
                 );
             """)
             table_exists = cursor.fetchone()[0]
+            logger.info(f"📊 表存在狀態: {table_exists}")
             
             if not table_exists:
-                logger.info("📋 創建 post_records 表...")
+                logger.info("📋 開始創建 post_records 表...")
                 cursor.execute("""
                     CREATE TABLE post_records (
                         post_id VARCHAR PRIMARY KEY,
@@ -94,14 +100,14 @@ def create_post_records_table():
                         shares INTEGER DEFAULT 0,
                         topic_id VARCHAR,
                         topic_title VARCHAR,
-                        technical_analysis JSONB,
-                        serper_data JSONB,
+                        technical_analysis TEXT,
+                        serper_data TEXT,
                         quality_score FLOAT,
                         ai_detection_score FLOAT,
                         risk_level VARCHAR,
-                        generation_params JSONB,
-                        commodity_tags JSONB,
-                        alternative_versions JSONB
+                        generation_params TEXT,
+                        commodity_tags TEXT,
+                        alternative_versions TEXT
                     );
                 """)
                 db_connection.commit()
@@ -111,6 +117,9 @@ def create_post_records_table():
                 
     except Exception as e:
         logger.error(f"❌ 創建 post_records 表失敗: {e}")
+        logger.error(f"❌ 錯誤詳情: {type(e).__name__}: {str(e)}")
+        import traceback
+        logger.error(f"❌ 完整錯誤堆疊: {traceback.format_exc()}")
         raise
 
 @app.on_event("startup")
@@ -130,6 +139,7 @@ def startup_event():
     try:
         database_url = os.getenv("DATABASE_URL")
         if database_url:
+            logger.info(f"🔗 嘗試連接數據庫: {database_url[:20]}...")
             # Railway PostgreSQL URL 格式轉換（postgresql:// -> postgres://）
             if database_url.startswith("postgres://"):
                 database_url = database_url.replace("postgres://", "postgresql://", 1)
@@ -138,11 +148,16 @@ def startup_event():
             logger.info("✅ PostgreSQL 數據庫連接成功")
             
             # 創建 post_records 表（如果不存在）
+            logger.info("📋 開始創建 post_records 表...")
             create_post_records_table()
+            logger.info("✅ post_records 表創建完成")
         else:
             logger.warning("⚠️ 未找到 DATABASE_URL 環境變數，將無法查詢貼文數據")
     except Exception as e:
         logger.error(f"❌ PostgreSQL 數據庫連接失敗: {e}")
+        logger.error(f"❌ 錯誤詳情: {type(e).__name__}: {str(e)}")
+        import traceback
+        logger.error(f"❌ 完整錯誤堆疊: {traceback.format_exc()}")
 
     api_key = os.getenv("FINLAB_API_KEY")
     if api_key:
@@ -784,10 +799,84 @@ async def create_posting(request: Request):
         body = await request.json()
         logger.info(f"貼文內容: {body}")
 
+        # 生成唯一的 post_id
+        import uuid
+        post_id = str(uuid.uuid4())
+        
+        # 準備插入數據
+        post_data = {
+            'post_id': post_id,
+            'created_at': datetime.now(),
+            'updated_at': datetime.now(),
+            'session_id': body.get('session_id', 1),
+            'kol_serial': body.get('kol_serial', 200),
+            'kol_nickname': body.get('kol_nickname', 'KOL-200'),
+            'kol_persona': body.get('kol_persona', '分析師'),
+            'stock_code': body.get('stock_code', ''),
+            'stock_name': body.get('stock_name', ''),
+            'title': body.get('title', ''),
+            'content': body.get('content', ''),
+            'content_md': body.get('content_md', ''),
+            'status': body.get('status', 'draft'),
+            'reviewer_notes': body.get('reviewer_notes'),
+            'approved_by': body.get('approved_by'),
+            'approved_at': body.get('approved_at'),
+            'scheduled_at': body.get('scheduled_at'),
+            'published_at': body.get('published_at'),
+            'cmoney_post_id': body.get('cmoney_post_id'),
+            'cmoney_post_url': body.get('cmoney_post_url'),
+            'publish_error': body.get('publish_error'),
+            'views': body.get('views', 0),
+            'likes': body.get('likes', 0),
+            'comments': body.get('comments', 0),
+            'shares': body.get('shares', 0),
+            'topic_id': body.get('topic_id'),
+            'topic_title': body.get('topic_title'),
+            'technical_analysis': json.dumps(body.get('technical_analysis', {})) if body.get('technical_analysis') else None,
+            'serper_data': json.dumps(body.get('serper_data', {})) if body.get('serper_data') else None,
+            'quality_score': body.get('quality_score'),
+            'ai_detection_score': body.get('ai_detection_score'),
+            'risk_level': body.get('risk_level'),
+            'generation_params': json.dumps(body.get('generation_params', {})) if body.get('generation_params') else None,
+            'commodity_tags': json.dumps(body.get('commodity_tags', [])) if body.get('commodity_tags') else None,
+            'alternative_versions': json.dumps(body.get('alternative_versions', {})) if body.get('alternative_versions') else None
+        }
+        
+        # 插入到數據庫
+        if db_connection:
+            with db_connection.cursor() as cursor:
+                insert_sql = """
+                    INSERT INTO post_records (
+                        post_id, created_at, updated_at, session_id, kol_serial, kol_nickname, 
+                        kol_persona, stock_code, stock_name, title, content, content_md, 
+                        status, reviewer_notes, approved_by, approved_at, scheduled_at, 
+                        published_at, cmoney_post_id, cmoney_post_url, publish_error, 
+                        views, likes, comments, shares, topic_id, topic_title, 
+                        technical_analysis, serper_data, quality_score, ai_detection_score, 
+                        risk_level, generation_params, commodity_tags, alternative_versions
+                    ) VALUES (
+                        %(post_id)s, %(created_at)s, %(updated_at)s, %(session_id)s, 
+                        %(kol_serial)s, %(kol_nickname)s, %(kol_persona)s, %(stock_code)s, 
+                        %(stock_name)s, %(title)s, %(content)s, %(content_md)s, %(status)s, 
+                        %(reviewer_notes)s, %(approved_by)s, %(approved_at)s, %(scheduled_at)s, 
+                        %(published_at)s, %(cmoney_post_id)s, %(cmoney_post_url)s, 
+                        %(publish_error)s, %(views)s, %(likes)s, %(comments)s, %(shares)s, 
+                        %(topic_id)s, %(topic_title)s, %(technical_analysis)s, %(serper_data)s, 
+                        %(quality_score)s, %(ai_detection_score)s, %(risk_level)s, 
+                        %(generation_params)s, %(commodity_tags)s, %(alternative_versions)s
+                    )
+                """
+                
+                cursor.execute(insert_sql, post_data)
+                db_connection.commit()
+                logger.info(f"✅ 貼文已插入數據庫: {post_id}")
+        else:
+            logger.warning("⚠️ 數據庫連接不存在，無法保存貼文")
+
         result = {
             "success": True,
             "message": "貼文創建成功",
-            "post_id": "post_12345",
+            "post_id": post_id,
             "data": body,
             "timestamp": datetime.now().isoformat()
         }
@@ -1087,6 +1176,373 @@ async def generate_content(
 
     logger.info(f"生成內容完成: {topic}")
     return result
+
+# ==================== 數據庫管理功能 ====================
+
+@app.post("/admin/import-1788-posts")
+async def import_1788_posts():
+    """導入 1788 筆 post_records 數據（管理員功能）"""
+    try:
+        if not db_connection:
+            return {"error": "數據庫連接不存在"}
+        
+        # 讀取 JSON 數據文件
+        json_file_path = '/app/post_records_1788.json'
+        if not os.path.exists(json_file_path):
+            return {"error": "post_records_1788.json 文件不存在"}
+        
+        with open(json_file_path, 'r', encoding='utf-8') as f:
+            records = json.load(f)
+        
+        logger.info(f"📊 從 JSON 文件加載 {len(records)} 筆記錄")
+        
+        with db_connection.cursor() as cursor:
+            # 清空現有數據
+            cursor.execute("DELETE FROM post_records")
+            logger.info("🗑️ 清空現有數據")
+            
+            # 批量插入數據
+            insert_sql = """
+                INSERT INTO post_records (
+                    post_id, created_at, updated_at, session_id, kol_serial, kol_nickname, 
+                    kol_persona, stock_code, stock_name, title, content, content_md, 
+                    status, reviewer_notes, approved_by, approved_at, scheduled_at, 
+                    published_at, cmoney_post_id, cmoney_post_url, publish_error, 
+                    views, likes, comments, shares, topic_id, topic_title, 
+                    technical_analysis, serper_data, quality_score, ai_detection_score, 
+                    risk_level, generation_params, commodity_tags, alternative_versions
+                ) VALUES (
+                    %(post_id)s, %(created_at)s, %(updated_at)s, %(session_id)s, 
+                    %(kol_serial)s, %(kol_nickname)s, %(kol_persona)s, %(stock_code)s, 
+                    %(stock_name)s, %(title)s, %(content)s, %(content_md)s, %(status)s, 
+                    %(reviewer_notes)s, %(approved_by)s, %(approved_at)s, %(scheduled_at)s, 
+                    %(published_at)s, %(cmoney_post_id)s, %(cmoney_post_url)s, 
+                    %(publish_error)s, %(views)s, %(likes)s, %(comments)s, %(shares)s, 
+                    %(topic_id)s, %(topic_title)s, %(technical_analysis)s, %(serper_data)s, 
+                    %(quality_score)s, %(ai_detection_score)s, %(risk_level)s, 
+                    %(generation_params)s, %(commodity_tags)s, %(alternative_versions)s
+                )
+            """
+            
+            # 轉換記錄格式
+            records_dict = []
+            for record in records:
+                record_dict = dict(record)
+                
+                # 處理 datetime 字符串
+                for datetime_field in ['created_at', 'updated_at', 'approved_at', 'scheduled_at', 'published_at']:
+                    if record_dict.get(datetime_field):
+                        if isinstance(record_dict[datetime_field], str):
+                            try:
+                                record_dict[datetime_field] = datetime.fromisoformat(record_dict[datetime_field].replace('Z', '+00:00'))
+                            except:
+                                record_dict[datetime_field] = None
+                        elif not isinstance(record_dict[datetime_field], datetime):
+                            record_dict[datetime_field] = None
+                    else:
+                        record_dict[datetime_field] = None
+                
+                # 處理 JSON 字段 - 確保是字符串格式
+                for json_field in ['technical_analysis', 'serper_data', 'generation_params', 'commodity_tags', 'alternative_versions']:
+                    if record_dict.get(json_field):
+                        if isinstance(record_dict[json_field], (dict, list)):
+                            # 如果是字典或列表，轉換為 JSON 字符串
+                            try:
+                                record_dict[json_field] = json.dumps(record_dict[json_field], ensure_ascii=False)
+                            except:
+                                record_dict[json_field] = None
+                        elif isinstance(record_dict[json_field], str):
+                            # 如果已經是字符串，保持不變
+                            pass
+                        else:
+                            record_dict[json_field] = None
+                    else:
+                        record_dict[json_field] = None
+                
+                records_dict.append(record_dict)
+            
+            # 批量插入
+            logger.info(f"📥 開始插入 {len(records_dict)} 筆記錄...")
+            cursor.executemany(insert_sql, records_dict)
+            db_connection.commit()
+            
+            logger.info(f"✅ 成功導入 {len(records_dict)} 筆記錄")
+            
+            # 驗證導入結果
+            cursor.execute("SELECT COUNT(*) FROM post_records")
+            count = cursor.fetchone()[0]
+            
+            # 顯示狀態統計
+            cursor.execute("SELECT status, COUNT(*) FROM post_records GROUP BY status")
+            status_stats = cursor.fetchall()
+            
+            return {
+                "success": True,
+                "message": f"成功導入 {len(records_dict)} 筆記錄",
+                "total_count": count,
+                "status_stats": {status: count for status, count in status_stats},
+                "timestamp": datetime.now().isoformat()
+            }
+            
+    except Exception as e:
+        logger.error(f"❌ 導入 1788 筆記錄失敗: {e}")
+        return {"error": str(e)}
+
+@app.post("/test/insert-sample-data")
+async def insert_sample_data():
+    """插入樣本數據到 post_records 表（測試功能）"""
+    try:
+        if not db_connection:
+            return {"error": "數據庫連接不存在"}
+        
+        with db_connection.cursor() as cursor:
+            # 創建樣本記錄
+            sample_records = [
+                {
+                    'post_id': 'test-001',
+                    'created_at': datetime.now(),
+                    'updated_at': datetime.now(),
+                    'session_id': 1,
+                    'kol_serial': 200,
+                    'kol_nickname': 'KOL-200',
+                    'kol_persona': '技術分析專家',
+                    'stock_code': '2330',
+                    'stock_name': '台積電',
+                    'title': '台積電(2330) 技術面分析與操作建議',
+                    'content': '台積電今日表現強勢，技術指標顯示多頭趨勢明確。建議關注580元支撐位，突破600元可考慮加碼。',
+                    'content_md': '## 台積電(2330) 技術面分析\n\n台積電今日表現強勢，技術指標顯示多頭趨勢明確。',
+                    'status': 'draft',
+                    'reviewer_notes': None,
+                    'approved_by': None,
+                    'approved_at': None,
+                    'scheduled_at': None,
+                    'published_at': None,
+                    'cmoney_post_id': None,
+                    'cmoney_post_url': None,
+                    'publish_error': None,
+                    'views': 0,
+                    'likes': 0,
+                    'comments': 0,
+                    'shares': 0,
+                    'topic_id': 'tech_analysis',
+                    'topic_title': '技術分析',
+                    'technical_analysis': '{"rsi": 65, "macd": "bullish", "support": 580}',
+                    'serper_data': '{"search_volume": 1000, "trend": "up"}',
+                    'quality_score': 8.5,
+                    'ai_detection_score': 0.95,
+                    'risk_level': 'medium',
+                    'generation_params': '{"model": "gpt-4", "temperature": 0.7}',
+                    'commodity_tags': '["半導體", "科技股", "龍頭股"]',
+                    'alternative_versions': '{"version_1": "短線操作", "version_2": "長線投資"}'
+                },
+                {
+                    'post_id': 'test-002',
+                    'created_at': datetime.now(),
+                    'updated_at': datetime.now(),
+                    'session_id': 1,
+                    'kol_serial': 201,
+                    'kol_nickname': 'KOL-201',
+                    'kol_persona': '基本面分析師',
+                    'stock_code': '2317',
+                    'stock_name': '鴻海',
+                    'title': '鴻海(2317) 財報分析與投資價值評估',
+                    'content': '鴻海最新財報顯示營收成長穩定，獲利能力持續改善。本益比合理，適合長期投資。',
+                    'content_md': '## 鴻海(2317) 財報分析\n\n鴻海最新財報顯示營收成長穩定。',
+                    'status': 'approved',
+                    'reviewer_notes': '內容品質良好，建議發布',
+                    'approved_by': 'admin',
+                    'approved_at': datetime.now(),
+                    'scheduled_at': None,
+                    'published_at': None,
+                    'cmoney_post_id': None,
+                    'cmoney_post_url': None,
+                    'publish_error': None,
+                    'views': 150,
+                    'likes': 12,
+                    'comments': 3,
+                    'shares': 2,
+                    'topic_id': 'fundamental_analysis',
+                    'topic_title': '基本面分析',
+                    'technical_analysis': '{"pe_ratio": 12.5, "pb_ratio": 1.2, "roe": 8.5}',
+                    'serper_data': '{"search_volume": 800, "trend": "stable"}',
+                    'quality_score': 9.0,
+                    'ai_detection_score': 0.98,
+                    'risk_level': 'low',
+                    'generation_params': '{"model": "gpt-4", "temperature": 0.5}',
+                    'commodity_tags': '["電子製造", "代工", "蘋果概念股"]',
+                    'alternative_versions': '{"version_1": "保守投資", "version_2": "價值投資"}'
+                }
+            ]
+            
+            # 插入記錄
+            insert_sql = """
+                INSERT INTO post_records (
+                    post_id, created_at, updated_at, session_id, kol_serial, kol_nickname, 
+                    kol_persona, stock_code, stock_name, title, content, content_md, 
+                    status, reviewer_notes, approved_by, approved_at, scheduled_at, 
+                    published_at, cmoney_post_id, cmoney_post_url, publish_error, 
+                    views, likes, comments, shares, topic_id, topic_title, 
+                    technical_analysis, serper_data, quality_score, ai_detection_score, 
+                    risk_level, generation_params, commodity_tags, alternative_versions
+                ) VALUES (
+                    %(post_id)s, %(created_at)s, %(updated_at)s, %(session_id)s, 
+                    %(kol_serial)s, %(kol_nickname)s, %(kol_persona)s, %(stock_code)s, 
+                    %(stock_name)s, %(title)s, %(content)s, %(content_md)s, %(status)s, 
+                    %(reviewer_notes)s, %(approved_by)s, %(approved_at)s, %(scheduled_at)s, 
+                    %(published_at)s, %(cmoney_post_id)s, %(cmoney_post_url)s, 
+                    %(publish_error)s, %(views)s, %(likes)s, %(comments)s, %(shares)s, 
+                    %(topic_id)s, %(topic_title)s, %(technical_analysis)s, %(serper_data)s, 
+                    %(quality_score)s, %(ai_detection_score)s, %(risk_level)s, 
+                    %(generation_params)s, %(commodity_tags)s, %(alternative_versions)s
+                )
+            """
+            
+            cursor.executemany(insert_sql, sample_records)
+            db_connection.commit()
+            
+            logger.info(f"✅ 成功插入 {len(sample_records)} 筆樣本記錄")
+            
+            # 驗證插入結果
+            cursor.execute("SELECT COUNT(*) FROM post_records")
+            count = cursor.fetchone()[0]
+            
+            # 顯示狀態統計
+            cursor.execute("SELECT status, COUNT(*) FROM post_records GROUP BY status")
+            status_stats = cursor.fetchall()
+            
+            return {
+                "success": True,
+                "message": f"成功插入 {len(sample_records)} 筆樣本記錄",
+                "total_count": count,
+                "status_stats": {status: count for status, count in status_stats},
+                "timestamp": datetime.now().isoformat()
+            }
+            
+    except Exception as e:
+        logger.error(f"❌ 插入樣本數據失敗: {e}")
+        return {"error": str(e)}
+
+@app.post("/admin/create-post-records-table")
+async def create_table_manually():
+    """手動創建 post_records 表（管理員功能）"""
+    try:
+        if not db_connection:
+            return {"error": "數據庫連接不存在"}
+        
+        create_post_records_table()
+        return {
+            "success": True,
+            "message": "post_records 表創建成功",
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"❌ 手動創建表失敗: {e}")
+        return {"error": str(e)}
+
+@app.post("/admin/import-post-records")
+async def import_post_records():
+    """導入 post_records 數據（管理員功能）"""
+    try:
+        # 讀取 JSON 數據文件
+        json_file_path = '/app/post_records_1788.json'
+        if not os.path.exists(json_file_path):
+            return {"error": "post_records_1788.json 文件不存在"}
+        
+        with open(json_file_path, 'r', encoding='utf-8') as f:
+            records = json.load(f)
+        
+        logger.info(f"📊 從 JSON 文件加載 {len(records)} 筆記錄")
+        
+        with db_connection.cursor() as cursor:
+            # 清空現有數據
+            cursor.execute("DELETE FROM post_records")
+            logger.info("🗑️ 清空現有數據")
+            
+            # 批量插入數據
+            insert_sql = """
+                INSERT INTO post_records (
+                    post_id, created_at, updated_at, session_id, kol_serial, kol_nickname, 
+                    kol_persona, stock_code, stock_name, title, content, content_md, 
+                    status, reviewer_notes, approved_by, approved_at, scheduled_at, 
+                    published_at, cmoney_post_id, cmoney_post_url, publish_error, 
+                    views, likes, comments, shares, topic_id, topic_title, 
+                    technical_analysis, serper_data, quality_score, ai_detection_score, 
+                    risk_level, generation_params, commodity_tags, alternative_versions
+                ) VALUES (
+                    %(post_id)s, %(created_at)s, %(updated_at)s, %(session_id)s, 
+                    %(kol_serial)s, %(kol_nickname)s, %(kol_persona)s, %(stock_code)s, 
+                    %(stock_name)s, %(title)s, %(content)s, %(content_md)s, %(status)s, 
+                    %(reviewer_notes)s, %(approved_by)s, %(approved_at)s, %(scheduled_at)s, 
+                    %(published_at)s, %(cmoney_post_id)s, %(cmoney_post_url)s, 
+                    %(publish_error)s, %(views)s, %(likes)s, %(comments)s, %(shares)s, 
+                    %(topic_id)s, %(topic_title)s, %(technical_analysis)s, %(serper_data)s, 
+                    %(quality_score)s, %(ai_detection_score)s, %(risk_level)s, 
+                    %(generation_params)s, %(commodity_tags)s, %(alternative_versions)s
+                )
+            """
+            
+            # 轉換記錄格式
+            records_dict = []
+            for record in records:
+                record_dict = dict(record)
+                
+                # 處理 datetime 字符串
+                for datetime_field in ['created_at', 'updated_at', 'approved_at', 'scheduled_at', 'published_at']:
+                    if record_dict.get(datetime_field):
+                        if isinstance(record_dict[datetime_field], str):
+                            try:
+                                record_dict[datetime_field] = datetime.fromisoformat(record_dict[datetime_field].replace('Z', '+00:00'))
+                            except:
+                                record_dict[datetime_field] = None
+                        elif not isinstance(record_dict[datetime_field], datetime):
+                            record_dict[datetime_field] = None
+                    else:
+                        record_dict[datetime_field] = None
+                
+                # 處理 JSON 字段 - 轉換為 TEXT
+                for json_field in ['technical_analysis', 'serper_data', 'generation_params', 'commodity_tags', 'alternative_versions']:
+                    if record_dict.get(json_field):
+                        if isinstance(record_dict[json_field], (dict, list)):
+                            # 如果是字典或列表，轉換為 JSON 字符串
+                            try:
+                                record_dict[json_field] = json.dumps(record_dict[json_field], ensure_ascii=False)
+                            except:
+                                record_dict[json_field] = None
+                        elif isinstance(record_dict[json_field], str):
+                            # 如果已經是字符串，保持不變
+                            pass
+                        else:
+                            record_dict[json_field] = None
+                    else:
+                        record_dict[json_field] = None
+                
+                records_dict.append(record_dict)
+            
+            # 批量插入
+            cursor.executemany(insert_sql, records_dict)
+            db_connection.commit()
+            
+            logger.info(f"✅ 成功導入 {len(records_dict)} 筆記錄")
+            
+            # 驗證導入結果
+            cursor.execute("SELECT COUNT(*) FROM post_records")
+            count = cursor.fetchone()[0]
+            
+            # 顯示狀態統計
+            cursor.execute("SELECT status, COUNT(*) FROM post_records GROUP BY status")
+            status_stats = cursor.fetchall()
+            
+            return {
+                "success": True,
+                "message": f"成功導入 {len(records_dict)} 筆記錄",
+                "total_count": count,
+                "status_stats": {status: count for status, count in status_stats},
+                "timestamp": datetime.now().isoformat()
+            }
+            
+    except Exception as e:
+        logger.error(f"❌ 導入 post_records 失敗: {e}")
+        return {"error": str(e)}
 
 if __name__ == "__main__":
     import uvicorn
