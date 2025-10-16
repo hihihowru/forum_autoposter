@@ -1504,6 +1504,28 @@ async def drop_and_recreate_table():
         logger.error(f"❌ 刪除並重新創建表失敗: {e}")
         return {"error": str(e)}
 
+@app.post("/admin/reset-database")
+async def reset_database():
+    """重置數據庫（管理員功能）"""
+    try:
+        if not db_connection:
+            return {"error": "數據庫連接不存在"}
+        
+        with db_connection.cursor() as cursor:
+            # 刪除現有表
+            cursor.execute("DROP TABLE IF EXISTS post_records CASCADE")
+            db_connection.commit()
+            logger.info("🗑️ 刪除現有 post_records 表")
+            
+        return {
+            "success": True,
+            "message": "數據庫已重置，表已刪除",
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"❌ 重置數據庫失敗: {e}")
+        return {"error": str(e)}
+
 @app.post("/admin/import-post-records")
 async def import_post_records():
     """導入 post_records 數據（管理員功能）"""
