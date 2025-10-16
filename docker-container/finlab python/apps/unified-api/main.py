@@ -41,20 +41,39 @@ app.add_middleware(
 
 import finlab
 from finlab import data
+import psycopg2
+from psycopg2.extras import RealDictCursor
 
 stock_mapping = {}
+db_connection = None
 
 @app.on_event("startup")
 def startup_event():
-    """啟動時初始化 FinLab"""
-    global stock_mapping
+    """啟動時初始化 FinLab 和數據庫連接"""
+    global stock_mapping, db_connection
 
     # 檢查所有關鍵環境變數
     logger.info("🔍 [啟動檢查] 開始檢查環境變數...")
     logger.info(f"🔍 [啟動檢查] FINLAB_API_KEY 存在: {os.getenv('FINLAB_API_KEY') is not None}")
     logger.info(f"🔍 [啟動檢查] FORUM_200_EMAIL 存在: {os.getenv('FORUM_200_EMAIL') is not None}")
     logger.info(f"🔍 [啟動檢查] FORUM_200_PASSWORD 存在: {os.getenv('FORUM_200_PASSWORD') is not None}")
+    logger.info(f"🔍 [啟動檢查] DATABASE_URL 存在: {os.getenv('DATABASE_URL') is not None}")
     logger.info(f"🔍 [啟動檢查] PORT: {os.getenv('PORT', '未設定')}")
+
+    # 初始化數據庫連接
+    try:
+        database_url = os.getenv("DATABASE_URL")
+        if database_url:
+            # Railway PostgreSQL URL 格式轉換（postgresql:// -> postgres://）
+            if database_url.startswith("postgres://"):
+                database_url = database_url.replace("postgres://", "postgresql://", 1)
+
+            db_connection = psycopg2.connect(database_url)
+            logger.info("✅ PostgreSQL 數據庫連接成功")
+        else:
+            logger.warning("⚠️ 未找到 DATABASE_URL 環境變數，將無法查詢貼文數據")
+    except Exception as e:
+        logger.error(f"❌ PostgreSQL 數據庫連接失敗: {e}")
 
     api_key = os.getenv("FINLAB_API_KEY")
     if api_key:
@@ -825,24 +844,71 @@ async def get_interaction_analysis():
 @app.get("/posts")
 async def get_posts(
     skip: int = Query(0, description="跳過的記錄數"),
-    limit: int = Query(1000, description="返回的記錄數"),
+    limit: int = Query(10000, description="返回的記錄數"),
     status: str = Query(None, description="狀態篩選")
 ):
-    """獲取貼文列表（模擬數據）"""
+    """獲取貼文列表（從 PostgreSQL 數據庫）"""
     logger.info(f"收到 get_posts 請求: skip={skip}, limit={limit}, status={status}")
 
-    # 返回空數據（因為這是一個純前端展示頁面，實際數據在 posting-service）
-    result = {
-        "success": True,
-        "posts": [],
-        "count": 0,
-        "skip": skip,
-        "limit": limit,
-        "timestamp": datetime.now().isoformat()
-    }
+    try:
+        if not db_connection:
+            logger.warning("數據庫連接不可用，返回空數據")
+            return {
+                "success": True,
+                "posts": [],
+                "count": 0,
+                "skip": skip,
+                "limit": limit,
+                "timestamp": datetime.now().isoformat()
+            }
 
-    logger.info("返回 posts 數據（空）")
-    return result
+        # 查詢 post_records 表
+        with db_connection.cursor(cursor_factory=RealDictCursor) as cursor:
+            # 構建查詢
+            query = "SELECT * FROM post_records"
+            params = []
+
+            if status:
+                query += " WHERE status = %s"
+                params.append(status)
+
+            query += " ORDER BY created_at DESC LIMIT %s OFFSET %s"
+            params.extend([limit, skip])
+
+            logger.info(f"執行 SQL 查詢: {query} with params: {params}")
+            cursor.execute(query, params)
+            posts = cursor.fetchall()
+
+            # 獲取總數
+            count_query = "SELECT COUNT(*) as count FROM post_records"
+            if status:
+                count_query += " WHERE status = %s"
+                cursor.execute(count_query, [status] if status else [])
+            else:
+                cursor.execute(count_query)
+
+            total_count = cursor.fetchone()['count']
+
+            logger.info(f"查詢到 {len(posts)} 條貼文數據，總數: {total_count}")
+
+            return {
+                "success": True,
+                "posts": [dict(post) for post in posts],
+                "count": total_count,
+                "skip": skip,
+                "limit": limit,
+                "timestamp": datetime.now().isoformat()
+            }
+
+    except Exception as e:
+        logger.error(f"查詢貼文數據失敗: {e}")
+        return {
+            "success": False,
+            "posts": [],
+            "count": 0,
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
 
 # ==================== Trending API 功能 ====================
 
