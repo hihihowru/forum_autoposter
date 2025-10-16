@@ -667,7 +667,9 @@ async def get_intraday_trigger_stocks(
                 })
 
             logger.info(f"✅ [盤中觸發器] 執行成功，獲取 {len(stocks_with_info)} 支股票")
-            logger.info(f"📋 [盤中觸發器] 股票列表: {[f'{s["stock_code"]}({s["stock_name"]})' for s in stocks_with_info[:5]]}...")
+            # 提取股票列表避免 f-string 嵌套問題
+            stock_list = [f"{s['stock_code']}({s['stock_name']})" for s in stocks_with_info[:5]]
+            logger.info(f"📋 [盤中觸發器] 股票列表: {stock_list}...")
 
             return {
                 "success": True,
