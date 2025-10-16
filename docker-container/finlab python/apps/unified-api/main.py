@@ -76,7 +76,7 @@ def create_post_records_table():
                         post_id VARCHAR PRIMARY KEY,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        session_id INTEGER,
+                        session_id BIGINT,
                         kol_serial INTEGER NOT NULL,
                         kol_nickname VARCHAR NOT NULL,
                         kol_persona VARCHAR,
