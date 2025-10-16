@@ -692,9 +692,9 @@ async def get_intraday_trigger_stocks(
 
             return {
                 "success": True,
-                "stocks": stocks_with_info,  # 返回包含名稱和產業的完整信息
+                "stocks": stock_codes,  # 返回股票代碼字符串數組，與前端期望格式一致
                 "data": raw_data,  # 保留原始 CMoney 數據
-                "count": len(stocks_with_info)
+                "count": len(stock_codes)
             }
 
     except httpx.TimeoutException:
