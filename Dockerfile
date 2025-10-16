@@ -13,8 +13,8 @@ RUN apt-get update && apt-get install -y \
 # 複製所有應用代碼（包括 unified-api 和啟動腳本）
 COPY . .
 
-# 複製股票映射表到正確位置
-COPY ["docker-container/finlab python/stock_mapping.json", "/app/stock_mapping.json"]
+# 複製股票映射表到正確位置（COPY . . 已經複製了，這裡只是確保位置正確）
+RUN cp "docker-container/finlab python/stock_mapping.json" /app/stock_mapping.json || echo "stock_mapping.json not found, will use fallback"
 
 # 複製並安裝 unified-api 的依賴（使用 JSON array 語法處理空格路徑）
 COPY ["docker-container/finlab python/apps/unified-api/requirements.txt", "/tmp/requirements.txt"]
