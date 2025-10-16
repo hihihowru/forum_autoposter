@@ -6,11 +6,18 @@ export interface IntradayTriggerConfig {
   processing: any[];
 }
 
+export interface StockInfo {
+  stock_code: string;
+  stock_name: string;
+  industry: string;
+}
+
 export interface IntradayTriggerResult {
   success: boolean;
-  stocks: string[];
+  stocks: string[] | StockInfo[];  // 支持兩種格式：舊格式（字符串數組）和新格式（對象數組）
   data: any[];
   error?: string;
+  count?: number;
 }
 
 class IntradayTriggerAPI {

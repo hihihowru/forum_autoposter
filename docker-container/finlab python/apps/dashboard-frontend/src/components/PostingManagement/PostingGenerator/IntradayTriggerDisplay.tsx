@@ -26,43 +26,55 @@ const IntradayTriggerDisplay: React.FC<IntradayTriggerDisplayProps> = ({
   const executeTrigger = async () => {
     setLoading(true);
     setError(null);
-    
+
     try {
       // 確保傳遞正確的觸發器配置格式
       if (!triggerConfig || !triggerConfig.endpoint || !triggerConfig.processing) {
         throw new Error('缺少必要的觸發器配置 (endpoint 或 processing)');
       }
-      
+
       console.log('🚀 [前端] 執行盤中觸發器，triggerConfig:', triggerConfig);
       const result = await IntradayTriggerAPI.executeTrigger(triggerConfig);
-      
+
       if (result.success) {
-        // 根據設定的檔數限制股票數量
-        const limitedStocks = result.stocks.slice(0, stockLimit);
-        setStocks(limitedStocks);
-        
-        // 獲取股票名稱
-        const stockNamePromises = limitedStocks.map(async (stockCode: string) => {
-          try {
-            const stockName = await PostingManagementAPI.getStockName(stockCode);
-            // 確保返回的是字符串
-            return typeof stockName === 'string' ? stockName : `股票${stockCode}`;
-          } catch (error) {
-            console.warn(`獲取股票 ${stockCode} 名稱失敗:`, error);
-            return `股票${stockCode}`;
-          }
-        });
-        
-        const stockNames = await Promise.all(stockNamePromises);
-        // 確保所有名稱都是字符串
-        const validStockNames = stockNames.map(name => 
-          typeof name === 'string' ? name : `股票${limitedStocks[stockNames.indexOf(name)]}`
-        );
-        setStockNames(validStockNames);
-        
-        // 不自動選取所有股票，讓用戶自己選擇
-        // onStockSelect(limitedStocks, stockNames);
-        message.success(`成功獲取 ${limitedStocks.length} 支股票（限制 ${stockLimit} 檔），請手動選擇需要的股票`);
+        // 檢查 stocks 格式：新格式（對象數組）還是舊格式（字符串數組）
+        const isNewFormat = result.stocks.length > 0 && typeof result.stocks[0] === 'object';
+
+        let stockCodes: string[];
+        let stockNamesArray: string[];
+
+        if (isNewFormat) {
+          // 新格式：後端已經返回完整的股票信息
+          const stockInfoArray = result.stocks as Array<{stock_code: string; stock_name: string; industry: string}>;
+          const limitedStockInfo = stockInfoArray.slice(0, stockLimit);
+
+          stockCodes = limitedStockInfo.map(s => s.stock_code);
+          stockNamesArray = limitedStockInfo.map(s => s.stock_name || `股票${s.stock_code}`);
+
+          console.log('✅ [前端] 使用後端返回的股票名稱:', stockNamesArray);
+        } else {
+          // 舊格式：只有股票代碼，需要額外查詢名稱
+          const limitedStocks = (result.stocks as string[]).slice(0, stockLimit);
+          stockCodes = limitedStocks;
+
+          // 獲取股票名稱
+          const stockNamePromises = limitedStocks.map(async (stockCode: string) => {
+            try {
+              const stockName = await PostingManagementAPI.getStockName(stockCode);
+              return typeof stockName === 'string' ? stockName : `股票${stockCode}`;
+            } catch (error) {
+              console.warn(`獲取股票 ${stockCode} 名稱失敗:`, error);
+              return `股票${stockCode}`;
+            }
+          });
+
+          stockNamesArray = await Promise.all(stockNamePromises);
+        }
+
+        setStocks(stockCodes);
+        setStockNames(stockNamesArray);
+
+        message.success(`成功獲取 ${stockCodes.length} 支股票（限制 ${stockLimit} 檔），請手動選擇需要的股票`);
       } else {
         setError(result.error || '執行失敗');
         message.error('觸發器執行失敗');
