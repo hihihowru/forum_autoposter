@@ -16,6 +16,8 @@ import sys
 import os
 import pandas as pd
 import numpy as np
+import psycopg2
+from psycopg2.extras import RealDictCursor
 
 # 配置日誌
 logging.basicConfig(level=logging.INFO)
@@ -47,6 +49,70 @@ from psycopg2.extras import RealDictCursor
 stock_mapping = {}
 db_connection = None
 
+def create_post_records_table():
+    """創建 post_records 表（如果不存在）"""
+    try:
+        with db_connection.cursor() as cursor:
+            # 檢查表是否存在
+            cursor.execute("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_schema = 'public' 
+                    AND table_name = 'post_records'
+                );
+            """)
+            table_exists = cursor.fetchone()[0]
+            
+            if not table_exists:
+                logger.info("📋 創建 post_records 表...")
+                cursor.execute("""
+                    CREATE TABLE post_records (
+                        post_id VARCHAR PRIMARY KEY,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        session_id INTEGER,
+                        kol_serial INTEGER NOT NULL,
+                        kol_nickname VARCHAR NOT NULL,
+                        kol_persona VARCHAR,
+                        stock_code VARCHAR NOT NULL,
+                        stock_name VARCHAR NOT NULL,
+                        title VARCHAR NOT NULL,
+                        content TEXT NOT NULL,
+                        content_md TEXT,
+                        status VARCHAR DEFAULT 'draft',
+                        reviewer_notes TEXT,
+                        approved_by VARCHAR,
+                        approved_at TIMESTAMP,
+                        scheduled_at TIMESTAMP,
+                        published_at TIMESTAMP,
+                        cmoney_post_id VARCHAR,
+                        cmoney_post_url VARCHAR,
+                        publish_error TEXT,
+                        views INTEGER DEFAULT 0,
+                        likes INTEGER DEFAULT 0,
+                        comments INTEGER DEFAULT 0,
+                        shares INTEGER DEFAULT 0,
+                        topic_id VARCHAR,
+                        topic_title VARCHAR,
+                        technical_analysis JSONB,
+                        serper_data JSONB,
+                        quality_score FLOAT,
+                        ai_detection_score FLOAT,
+                        risk_level VARCHAR,
+                        generation_params JSONB,
+                        commodity_tags JSONB,
+                        alternative_versions JSONB
+                    );
+                """)
+                db_connection.commit()
+                logger.info("✅ post_records 表創建成功")
+            else:
+                logger.info("✅ post_records 表已存在")
+                
+    except Exception as e:
+        logger.error(f"❌ 創建 post_records 表失敗: {e}")
+        raise
+
 @app.on_event("startup")
 def startup_event():
     """啟動時初始化 FinLab 和數據庫連接"""
@@ -70,6 +136,9 @@ def startup_event():
 
             db_connection = psycopg2.connect(database_url)
             logger.info("✅ PostgreSQL 數據庫連接成功")
+            
+            # 創建 post_records 表（如果不存在）
+            create_post_records_table()
         else:
             logger.warning("⚠️ 未找到 DATABASE_URL 環境變數，將無法查詢貼文數據")
     except Exception as e:
