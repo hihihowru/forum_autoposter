@@ -268,8 +268,17 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
           description: '按成交額排序的漲幅股票',
           triggerType: 'intraday',
           apiConfig: {
-            endpoint: 'https://asterisk-chipsapi.cmoney.tw/api/quotes',
-            processing: []
+            endpoint: 'https://asterisk-chipsapi.cmoney.tw/AdditionInformationRevisit/api/GetAll/StockCalculation',
+            processing: [
+              {"ParameterJson":"{ \"TargetPropertyNamePath\" : [ \"TotalTransactionAmount\"]}","ProcessType":"DescOrder"},
+              {"ProcessType":"EqualValueFilter","ParameterJson":"{\"TargetPropertyNamePath\": [\"Commodity\", \"IsChipsKPopularStocksSortSubject\"], \"Value\": true}"},
+              {"ProcessType":"LessThanColumnsFilter","ParameterJson":"{\"TargetPropertyNamePath\": [\"StrikePrice\"], \"ComparePropertyNamePath\": [\"Commodity\" , \"LimitUp\"]}"},
+              {"ProcessType":"MoreThanValueFilter","ParameterJson":"{\"TargetPropertyNamePath\": [\"ChangeRange\"], \"Value\": 0 }"},
+              {"ParameterJson":"{\"TargetPropertyNamePath\": [\"ChangeRange\"]}","ProcessType":"DescOrder"},
+              {"ProcessType":"ThenDescOrder","ParameterJson":"{\"TargetPropertyNamePath\": [\"TotalVolume\"]}"},
+              {"ParameterJson":"{\"TargetPropertyNamePath\": [\"CommKey\"]}","ProcessType":"ThenAscOrder"},
+              {"ProcessType":"TakeCount","ParameterJson":"{\"Count\":20}"}
+            ]
           }
         },
         {
@@ -279,8 +288,14 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
           description: '按成交量排序的熱門股票',
           triggerType: 'intraday',
           apiConfig: {
-            endpoint: 'https://asterisk-chipsapi.cmoney.tw/api/quotes',
-            processing: []
+            endpoint: 'https://asterisk-chipsapi.cmoney.tw/AdditionInformationRevisit/api/GetAll/StockCalculation',
+            processing: [
+              {"ProcessType":"EqualValueFilter","ParameterJson":"{\"TargetPropertyNamePath\": [\"Commodity\", \"IsChipsKPopularStocksSortSubject\"], \"Value\": true}"},
+              {"ProcessType":"DescOrder","ParameterJson":"{\"TargetPropertyNamePath\" :[\"TotalVolume\"]}"},
+              {"ProcessType":"ThenDescOrder","ParameterJson":"{\"TargetPropertyNamePath\" :[\"ChangeRange\"]}"},
+              {"ParameterJson":"{\"TargetPropertyNamePath\" :[\"CommKey\"]}","ProcessType":"ThenAscOrder"},
+              {"ParameterJson":"{\"Count\":20}","ProcessType":"TakeCount"}
+            ]
           }
         },
         {
@@ -290,8 +305,14 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
           description: '按成交額排序的熱門股票',
           triggerType: 'intraday',
           apiConfig: {
-            endpoint: 'https://asterisk-chipsapi.cmoney.tw/api/quotes',
-            processing: []
+            endpoint: 'https://asterisk-chipsapi.cmoney.tw/AdditionInformationRevisit/api/GetAll/StockCalculation',
+            processing: [
+              {"ProcessType":"EqualValueFilter","ParameterJson":"{\"TargetPropertyNamePath\":[\"Commodity\", \"IsChipsKPopularStocksSortSubject\"], \"Value\": true}"},
+              {"ProcessType":"DescOrder","ParameterJson":"{\"TargetPropertyNamePath\":[\"TotalTransactionAmount\"]}"},
+              {"ParameterJson":"{\"TargetPropertyNamePath\":[\"TotalVolume\" ]}","ProcessType":"ThenDescOrder"},
+              {"ProcessType":"ThenDescOrder","ParameterJson":"{\"TargetPropertyNamePath\":[\"ChangeRange\"]}"},
+              {"ProcessType":"TakeCount","ParameterJson":"{\"Count\":20}"}
+            ]
           }
         },
         {
@@ -301,8 +322,14 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
           description: '篩選跌停股票',
           triggerType: 'intraday',
           apiConfig: {
-            endpoint: 'https://asterisk-chipsapi.cmoney.tw/api/quotes',
-            processing: []
+            endpoint: 'https://asterisk-chipsapi.cmoney.tw/AdditionInformationRevisit/api/GetAll/StockCalculation',
+            processing: [
+              {"ProcessType":"EqualValueFilter","ParameterJson":"{\"TargetPropertyNamePath\": [\"Commodity\", \"IsChipsKPopularStocksSortSubject\"], \"Value\": true}"},
+              {"ParameterJson":"{\"TargetPropertyNamePath\": [\"StrikePrice\"], \"ComparePropertyNamePath\": [\"Commodity\", \"LimitDown\"]}","ProcessType":"EqualColumnsFilter"},
+              {"ProcessType":"AscOrder","ParameterJson":"{\"TargetPropertyNamePath\":[\"ChangeRange\"]}"},
+              {"ProcessType":"ThenDescOrder","ParameterJson":"{\"TargetPropertyNamePath\":[\"TotalVolume\"]}"},
+              {"ParameterJson":"{\"Count\":20}","ProcessType":"TakeCount"}
+            ]
           }
         },
         {
@@ -312,8 +339,14 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
           description: '篩選漲停股票',
           triggerType: 'intraday',
           apiConfig: {
-            endpoint: 'https://asterisk-chipsapi.cmoney.tw/api/quotes',
-            processing: []
+            endpoint: 'https://asterisk-chipsapi.cmoney.tw/AdditionInformationRevisit/api/GetAll/StockCalculation',
+            processing: [
+              {"ParameterJson":"{\"TargetPropertyNamePath\": [\"Commodity\", \"IsChipsKPopularStocksSortSubject\"], \"Value\": true}","ProcessType":"EqualValueFilter"},
+              {"ProcessType":"EqualColumnsFilter","ParameterJson":"{\"TargetPropertyNamePath\": [\"StrikePrice\"], \"ComparePropertyNamePath\": [\"Commodity\", \"LimitUp\"]}"},
+              {"ProcessType":"DescOrder","ParameterJson":"{\"TargetPropertyNamePath\": [\"ChangeRange\"]}"},
+              {"ParameterJson":"{\"TargetPropertyNamePath\": [\"TotalVolume\"]}","ProcessType":"ThenDescOrder"},
+              {"ProcessType":"TakeCount","ParameterJson":"{\"Count\":20}"}
+            ]
           }
         },
         {
@@ -323,8 +356,17 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
           description: '按成交額排序的跌停股票',
           triggerType: 'intraday',
           apiConfig: {
-            endpoint: 'https://asterisk-chipsapi.cmoney.tw/api/quotes',
-            processing: []
+            endpoint: 'https://asterisk-chipsapi.cmoney.tw/AdditionInformationRevisit/api/GetAll/StockCalculation',
+            processing: [
+              {"ParameterJson":"{ \"TargetPropertyNamePath\" : [ \"TotalTransactionAmount\"]}","ProcessType":"DescOrder"},
+              {"ParameterJson":"{\"TargetPropertyNamePath\":[\"Commodity\", \"IsChipsKPopularStocksSortSubject\" ], \"Value\": true}","ProcessType":"EqualValueFilter"},
+              {"ParameterJson":"{\"TargetPropertyNamePath\": [\"StrikePrice\"], \"ComparePropertyNamePath\": [\"Commodity\", \"LimitDown\"]}","ProcessType":"MoreThanColumnsFilter"},
+              {"ProcessType":"LessThanValueFilter","ParameterJson":"{\"TargetPropertyNamePath\": [\"ChangeRange\"], \"Value\": 0 }"},
+              {"ParameterJson":"{\"TargetPropertyNamePath\": [\"ChangeRange\"]}","ProcessType":"AscOrder"},
+              {"ProcessType":"ThenDescOrder","ParameterJson":"{\"TargetPropertyNamePath\": [\"TotalVolume\"]}"},
+              {"ProcessType":"ThenAscOrder","ParameterJson":"{\"TargetPropertyNamePath\": [\"CommKey\"]}"},
+              {"ParameterJson":"{\"Count\":20}","ProcessType":"TakeCount"}
+            ]
           }
         }
       ]
@@ -1017,16 +1059,10 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
       }
 
       // 調用真實的 API - 根據觸發器類型選擇不同的端點
-      console.log('🔍 TriggerSelector v1.2 - 調用 API');
-      console.log('  triggerKey:', value.triggerConfig?.triggerKey);
-      console.log('  queryParams:', queryParams);
-      
       let result;
       if (value.triggerConfig?.triggerKey === 'limit_down_after_hours') {
-        console.log('📞 調用 getAfterHoursLimitDownStocks');
         result = await PostingManagementAPI.getAfterHoursLimitDownStocks(queryParams);
       } else {
-        console.log('📞 調用 getAfterHoursLimitUpStocks');
         result = await PostingManagementAPI.getAfterHoursLimitUpStocks(queryParams);
       }
       
