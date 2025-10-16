@@ -5,10 +5,15 @@
 import axios from 'axios';
 import { API_CONFIG, createApiUrl, API_ENDPOINTS } from '../config/api';
 
+// posting-service URL (Railway 後端)
+const POSTING_SERVICE_URL = API_CONFIG.BASE_URL;
+const API_BASE_URL = API_CONFIG.BASE_URL;
+
 // 調試：輸出實際的 API URL
 console.log('🔍 API 配置調試 (使用 Vercel Rewrites):');
 console.log('  API_CONFIG.BASE_URL:', API_CONFIG.BASE_URL);
 console.log('  API_CONFIG.OHLC_API:', API_CONFIG.OHLC_API);
+console.log('  POSTING_SERVICE_URL:', POSTING_SERVICE_URL);
 
 // 創建axios實例 - 使用 Vercel Rewrites
 const apiClient = axios.create({
