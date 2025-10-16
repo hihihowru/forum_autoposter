@@ -3,7 +3,7 @@ nixPkgs = ["python311"]
 
 [phases.install]
 cmds = [
-  "cd docker-container/finlab python/apps/unified-api && pip install -r requirements.txt"
+  "cd 'docker-container/finlab python/apps/unified-api' && pip install -r requirements.txt"
 ]
 
 [phases.build]
