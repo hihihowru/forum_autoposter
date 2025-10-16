@@ -29,8 +29,7 @@ class IntradayTriggerAPI {
       const apiUrl = createApiUrl(API_ENDPOINTS.INTRADAY_TRIGGER);
       console.log('🌐 [前端] 請求 URL (通過 Vercel Rewrites):', apiUrl);
       
-      const response = await axios.get(apiUrl, {
-        params: config,  // 將配置作為查詢參數
+      const response = await axios.post(apiUrl, config, {
         headers: {
           'Content-Type': 'application/json'
         },

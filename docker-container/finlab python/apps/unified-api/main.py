@@ -609,22 +609,19 @@ async def get_dynamic_auth_token() -> str:
         logger.error(f"❌ 動態取得 CMoney API token 失敗: {e}")
         raise HTTPException(status_code=500, detail=f"認證失敗: {str(e)}")
 
-@app.get("/intraday-trigger/execute")
-async def get_intraday_trigger_stocks(
-    endpoint: str = Query(..., description="數據源端點"),
-    processing: str = Query("", description="處理配置")
-):
+@app.post("/intraday-trigger/execute")
+async def get_intraday_trigger_stocks(request: Request):
     """獲取盤中觸發器股票列表"""
-    logger.info(f"收到盤中觸發器請求: endpoint={endpoint}, processing={processing}")
-
     try:
-        # 解析處理配置
-        processing_config = []
-        if processing:
-            try:
-                processing_config = json.loads(processing) if isinstance(processing, str) else processing
-            except:
-                processing_config = []
+        # 從 POST body 獲取配置
+        body = await request.json()
+        endpoint = body.get("endpoint")
+        processing = body.get("processing", [])
+        
+        logger.info(f"收到盤中觸發器請求: endpoint={endpoint}, processing={processing}")
+        
+        if not endpoint:
+            raise HTTPException(status_code=400, detail="缺少 endpoint 參數")
 
         # 準備請求參數
         columns = "交易時間,傳輸序號,內外盤旗標,即時成交價,即時成交量,最低價,最高價,標的,漲跌,漲跌幅,累計成交總額,累計成交量,開盤價"
@@ -632,7 +629,7 @@ async def get_intraday_trigger_stocks(
         request_data = {
             "AppId": 2,
             "Guid": "583defeb-f7cb-49e7-964d-d0817e944e4f",
-            "Processing": processing_config
+            "Processing": processing
         }
 
         # 動態取得認證 token
