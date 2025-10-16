@@ -1493,12 +1493,21 @@ export class PostingManagementAPI {
   // 輔助函數：根據股票代號獲取股票名稱
   public static async getStockName(stockCode: string): Promise<string> {
     try {
-      // 如果緩存為空，從JSON文件加載
+      // 如果緩存為空，從後端 API 加載
       if (!this.stockMappingCache) {
-        const response = await fetch('/stock_mapping.json');
-        this.stockMappingCache = await response.json();
+        // 使用 Railway 後端 API 獲取股票映射表
+        const apiUrl = createApiUrl('/stock_mapping.json', 'OHLC');
+        const response = await axios.get(apiUrl, { timeout: 10000 });
+
+        // 後端返回格式: { success: true, data: {...}, count: 2269 }
+        if (response.data && response.data.success && response.data.data) {
+          this.stockMappingCache = response.data.data;
+        } else {
+          console.error('股票映射表 API 返回格式錯誤:', response.data);
+          this.stockMappingCache = {};
+        }
       }
-      
+
       // 檢查股票數據結構，提取 company_name
       const stockData = this.stockMappingCache?.[stockCode];
       if (stockData && typeof stockData === 'object' && stockData.company_name) {
@@ -1507,7 +1516,7 @@ export class PostingManagementAPI {
         // 兼容舊格式（如果有的話）
         return stockData;
       }
-      
+
       return `股票${stockCode}`;
     } catch (error) {
       console.error(`獲取股票名稱失敗 ${stockCode}:`, error);

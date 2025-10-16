@@ -402,6 +402,22 @@ async def get_after_hours_limit_down_stocks(
         logger.error(f"獲取盤後跌停股票失敗: {e}")
         return {"error": str(e)}
 
+@app.get("/stock_mapping.json")
+async def get_stock_mapping():
+    """獲取完整股票映射表（供前端使用）"""
+    logger.info("收到 stock_mapping 請求")
+
+    try:
+        return {
+            "success": True,
+            "data": stock_mapping,
+            "count": len(stock_mapping),
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"獲取股票映射表失敗: {e}")
+        return {"error": str(e)}
+
 @app.get("/industries")
 async def get_industries():
     """獲取所有產業類別"""
