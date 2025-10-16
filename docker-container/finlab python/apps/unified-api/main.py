@@ -1526,6 +1526,84 @@ async def reset_database():
         logger.error(f"❌ 重置數據庫失敗: {e}")
         return {"error": str(e)}
 
+@app.post("/admin/fix-database")
+async def fix_database():
+    """修復數據庫（管理員功能）"""
+    try:
+        if not db_connection:
+            return {"error": "數據庫連接不存在"}
+        
+        # 創建新的連接來避免事務問題
+        import psycopg2
+        from psycopg2.extras import RealDictCursor
+        
+        # 從環境變數獲取數據庫連接信息
+        database_url = os.getenv("DATABASE_URL")
+        if not database_url:
+            return {"error": "DATABASE_URL 環境變數不存在"}
+        
+        # 創建新連接
+        new_conn = psycopg2.connect(database_url)
+        new_conn.autocommit = True
+        
+        with new_conn.cursor() as cursor:
+            # 刪除現有表
+            cursor.execute("DROP TABLE IF EXISTS post_records CASCADE")
+            logger.info("🗑️ 刪除現有 post_records 表")
+            
+            # 重新創建表
+            cursor.execute("""
+                CREATE TABLE post_records (
+                    post_id VARCHAR PRIMARY KEY,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    session_id BIGINT,
+                    kol_serial INTEGER NOT NULL,
+                    kol_nickname VARCHAR NOT NULL,
+                    kol_persona VARCHAR,
+                    stock_code VARCHAR NOT NULL,
+                    stock_name VARCHAR NOT NULL,
+                    title VARCHAR NOT NULL,
+                    content TEXT NOT NULL,
+                    content_md TEXT,
+                    status VARCHAR DEFAULT 'draft',
+                    reviewer_notes TEXT,
+                    approved_by VARCHAR,
+                    approved_at TIMESTAMP,
+                    scheduled_at TIMESTAMP,
+                    published_at TIMESTAMP,
+                    cmoney_post_id VARCHAR,
+                    cmoney_post_url VARCHAR,
+                    publish_error TEXT,
+                    views BIGINT DEFAULT 0,
+                    likes BIGINT DEFAULT 0,
+                    comments BIGINT DEFAULT 0,
+                    shares BIGINT DEFAULT 0,
+                    topic_id VARCHAR,
+                    topic_title VARCHAR,
+                    technical_analysis TEXT,
+                    serper_data TEXT,
+                    quality_score FLOAT,
+                    ai_detection_score FLOAT,
+                    risk_level VARCHAR,
+                    generation_params TEXT,
+                    commodity_tags TEXT,
+                    alternative_versions TEXT
+                );
+            """)
+            logger.info("✅ 重新創建 post_records 表成功")
+            
+        new_conn.close()
+        
+        return {
+            "success": True,
+            "message": "數據庫已修復，表已重新創建",
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"❌ 修復數據庫失敗: {e}")
+        return {"error": str(e)}
+
 @app.post("/admin/import-post-records")
 async def import_post_records():
     """導入 post_records 數據（管理員功能）"""
