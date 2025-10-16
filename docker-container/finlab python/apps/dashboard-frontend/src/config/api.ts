@@ -1,8 +1,11 @@
 /**
  * API 配置
  * 統一管理所有 API 端點
- * 使用 Vercel Rewrites 解決 CORS 問題
+ * 直接調用 Railway 後端 (CORS 已啟用)
  */
+
+// Railway 後端 URL
+const RAILWAY_API_URL = 'https://forumautoposter-production.up.railway.app';
 
 // 環境變數配置
 const getApiConfig = () => {
@@ -18,16 +21,16 @@ const getApiConfig = () => {
       DASHBOARD_API: 'http://localhost:8012',
     };
   }
-  
-  // 生產環境 - 使用 Vercel Rewrites
+
+  // 生產環境 - 直接調用 Railway 後端
   return {
-    BASE_URL: '/api',  // 使用 Vercel Rewrites
-    OHLC_API: '/api',  // 通過 Vercel Rewrites 路由
-    TRENDING_API: '/api',
-    ANALYZE_API: '/api',
-    FINANCIAL_API: '/api',
-    SUMMARY_API: '/api',
-    DASHBOARD_API: '/api',
+    BASE_URL: RAILWAY_API_URL,
+    OHLC_API: RAILWAY_API_URL,
+    TRENDING_API: RAILWAY_API_URL,
+    ANALYZE_API: RAILWAY_API_URL,
+    FINANCIAL_API: RAILWAY_API_URL,
+    SUMMARY_API: RAILWAY_API_URL,
+    DASHBOARD_API: RAILWAY_API_URL,
   };
 };
 
