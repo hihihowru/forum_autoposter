@@ -144,13 +144,58 @@ def startup_event():
             if database_url.startswith("postgres://"):
                 database_url = database_url.replace("postgres://", "postgresql://", 1)
 
-            db_connection = psycopg2.connect(database_url)
-            logger.info("✅ PostgreSQL 數據庫連接成功")
+            # 添加連接參數以解決 Railway 連接問題
+            import urllib.parse
+            parsed_url = urllib.parse.urlparse(database_url)
             
-            # 創建 post_records 表（如果不存在）
-            logger.info("📋 開始創建 post_records 表...")
-            create_post_records_table()
-            logger.info("✅ post_records 表創建完成")
+            # 構建連接參數
+            connect_kwargs = {
+                'host': parsed_url.hostname,
+                'port': parsed_url.port or 5432,
+                'database': parsed_url.path[1:],  # 移除前導斜線
+                'user': parsed_url.username,
+                'password': parsed_url.password,
+                'connect_timeout': 30,  # 30秒連接超時
+                'sslmode': 'require',   # Railway 需要 SSL
+                'keepalives_idle': 600, # 保持連接活躍
+                'keepalives_interval': 30,
+                'keepalives_count': 3
+            }
+            
+            # 重試連接邏輯
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    logger.info(f"🔗 嘗試連接數據庫 (第 {attempt + 1}/{max_retries} 次)...")
+                    db_connection = psycopg2.connect(**connect_kwargs)
+                    logger.info("✅ PostgreSQL 數據庫連接成功")
+                    
+                    # 測試連接
+                    with db_connection.cursor() as cursor:
+                        cursor.execute("SELECT 1")
+                        cursor.fetchone()
+                    logger.info("✅ 數據庫連接測試成功")
+                    
+                    # 創建 post_records 表（如果不存在）
+                    logger.info("📋 開始創建 post_records 表...")
+                    create_post_records_table()
+                    logger.info("✅ post_records 表創建完成")
+                    break
+                    
+                except psycopg2.OperationalError as e:
+                    logger.warning(f"⚠️ 數據庫連接失敗 (第 {attempt + 1} 次): {e}")
+                    if attempt < max_retries - 1:
+                        import time
+                        wait_time = (attempt + 1) * 5  # 5, 10, 15 秒
+                        logger.info(f"⏳ 等待 {wait_time} 秒後重試...")
+                        time.sleep(wait_time)
+                    else:
+                        logger.error("❌ 數據庫連接最終失敗，將在無數據庫模式下運行")
+                        db_connection = None
+                except Exception as e:
+                    logger.error(f"❌ 數據庫連接意外錯誤: {e}")
+                    db_connection = None
+                    break
         else:
             logger.warning("⚠️ 未找到 DATABASE_URL 環境變數，將無法查詢貼文數據")
     except Exception as e:
@@ -285,11 +330,97 @@ async def root():
 async def health_check():
     """健康檢查端點"""
     logger.info("收到健康檢查請求")
+    
+    # 檢查數據庫連接狀態
+    db_status = "disconnected"
+    if db_connection:
+        try:
+            with db_connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+                cursor.fetchone()
+            db_status = "connected"
+        except Exception as e:
+            logger.warning(f"數據庫健康檢查失敗: {e}")
+            db_status = "error"
+    
     return {
         "status": "healthy",
         "message": "Unified API is running successfully",
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat(),
+        "services": {
+            "finlab": "connected" if finlab_api_key else "disconnected",
+            "database": db_status
+        },
+        "endpoints": {
+            "total": 35,
+            "working": 30 if db_status == "connected" else 24,
+            "database_dependent": 11
+        }
     }
+
+@app.post("/admin/reconnect-database")
+async def reconnect_database():
+    """重新連接數據庫（管理員功能）"""
+    global db_connection
+    logger.info("收到重新連接數據庫請求")
+    
+    try:
+        database_url = os.getenv("DATABASE_URL")
+        if not database_url:
+            return {
+                "success": False,
+                "error": "DATABASE_URL not found",
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        # 關閉現有連接
+        if db_connection:
+            try:
+                db_connection.close()
+                logger.info("已關閉現有數據庫連接")
+            except:
+                pass
+        
+        # 重新連接
+        import urllib.parse
+        parsed_url = urllib.parse.urlparse(database_url)
+        
+        connect_kwargs = {
+            'host': parsed_url.hostname,
+            'port': parsed_url.port or 5432,
+            'database': parsed_url.path[1:],
+            'user': parsed_url.username,
+            'password': parsed_url.password,
+            'connect_timeout': 30,
+            'sslmode': 'require',
+            'keepalives_idle': 600,
+            'keepalives_interval': 30,
+            'keepalives_count': 3
+        }
+        
+        db_connection = psycopg2.connect(**connect_kwargs)
+        
+        # 測試連接
+        with db_connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+            cursor.fetchone()
+        
+        logger.info("✅ 數據庫重新連接成功")
+        
+        return {
+            "success": True,
+            "message": "Database reconnected successfully",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ 數據庫重新連接失敗: {e}")
+        db_connection = None
+        return {
+            "success": False,
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
 
 # ==================== OHLC API 功能 ====================
 
