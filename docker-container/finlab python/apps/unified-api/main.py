@@ -1719,13 +1719,13 @@ async def get_kol_list():
     try:
         if not db_connection:
             logger.warning("數據庫連接不可用，返回空數據")
-            return {
-                "success": False,
-                "kols": [],
-                "count": 0,
-                "error": "數據庫連接不可用",
-                "timestamp": datetime.now().isoformat()
-            }
+        return {
+            "success": False,
+            "data": [],
+            "count": 0,
+            "error": "數據庫連接不可用",
+            "timestamp": datetime.now().isoformat()
+        }
 
         with db_connection.cursor(cursor_factory=RealDictCursor) as cursor:
             cursor.execute("SELECT * FROM kol_profiles ORDER BY serial")
@@ -1735,7 +1735,7 @@ async def get_kol_list():
 
             return {
                 "success": True,
-                "kols": [dict(kol) for kol in kols],
+                "data": [dict(kol) for kol in kols],
                 "count": len(kols),
                 "timestamp": datetime.now().isoformat()
             }
@@ -1744,7 +1744,7 @@ async def get_kol_list():
         logger.error(f"查詢 KOL 列表失敗: {e}")
         return {
             "success": False,
-            "kols": [],
+            "data": [],
             "count": 0,
             "error": str(e),
             "timestamp": datetime.now().isoformat()
