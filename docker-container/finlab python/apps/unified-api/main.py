@@ -505,6 +505,392 @@ async def get_after_hours_limit_down_stocks(
         logger.error(f"獲取盤後跌停股票失敗: {e}")
         return {"error": str(e)}
 
+@app.get("/after_hours_volume_amount_high")
+async def get_after_hours_volume_amount_high(
+    limit: int = Query(50, description="返回的股票數量"),
+    changeThreshold: float = Query(0.0, description="漲跌幅閾值（%）")
+):
+    """獲取盤後成交金額高的股票（成交金額絕對值排序，由大到小）"""
+    logger.info(f"收到 get_after_hours_volume_amount_high 請求: limit={limit}, changeThreshold={changeThreshold}")
+    
+    try:
+        if not finlab_api_key:
+            return {"error": "FINLAB_API_KEY not found"}
+        
+        # 獲取股票數據
+        data = finlab.get('price:收盤價', limit=2)
+        volume_data = finlab.get('price:成交股數', limit=2)
+        
+        if data is None or data.empty:
+            return {"error": "無法獲取股票數據"}
+        
+        close_df = data.sort_index()
+        volume_df = volume_data.sort_index() if volume_data is not None else None
+        
+        latest_date = close_df.index[-1]
+        previous_date = close_df.index[-2]
+        
+        latest_close = close_df.loc[latest_date]
+        previous_close = close_df.loc[previous_date]
+        
+        latest_volume = None
+        if volume_df is not None and latest_date in volume_df.index:
+            latest_volume = volume_df.loc[latest_date]
+        
+        volume_amount_stocks = []
+        
+        for stock_id in latest_close.index:
+            try:
+                today_price = latest_close[stock_id]
+                yesterday_price = previous_close[stock_id]
+                
+                if pd.isna(today_price) or pd.isna(yesterday_price):
+                    continue
+                
+                change_percent = ((today_price - yesterday_price) / yesterday_price) * 100
+                
+                # 檢查漲跌幅閾值
+                if abs(change_percent) < changeThreshold:
+                    continue
+                
+                # 計算成交金額
+                volume_amount = 0
+                if latest_volume is not None and stock_id in latest_volume.index:
+                    vol = latest_volume[stock_id]
+                    if not pd.isna(vol):
+                        volume_amount = int(vol) * float(today_price)
+                
+                volume_amount_stocks.append({
+                    'stock_id': stock_id,
+                    'stock_name': get_stock_name(stock_id),
+                    'price': float(today_price),
+                    'change_amount': float(today_price - yesterday_price),
+                    'change_percent': float(change_percent),
+                    'volume_amount': volume_amount,
+                    'date': latest_date.strftime('%Y-%m-%d'),
+                    'previous_date': previous_date.strftime('%Y-%m-%d')
+                })
+                
+            except Exception as e:
+                logger.warning(f"處理股票 {stock_id} 時發生錯誤: {e}")
+                continue
+        
+        # 按成交金額排序（由大到小）
+        volume_amount_stocks.sort(key=lambda x: x['volume_amount'], reverse=True)
+        volume_amount_stocks = volume_amount_stocks[:limit]
+        
+        return {
+            'success': True,
+            'total_count': len(volume_amount_stocks),
+            'stocks': volume_amount_stocks,
+            'timestamp': datetime.now().isoformat(),
+            'date': latest_date.strftime('%Y-%m-%d'),
+            'previous_date': previous_date.strftime('%Y-%m-%d'),
+            'sort_by': 'volume_amount_high'
+        }
+        
+    except Exception as e:
+        logger.error(f"獲取盤後成交金額高股票失敗: {e}")
+        return {"error": str(e)}
+
+@app.get("/after_hours_volume_amount_low")
+async def get_after_hours_volume_amount_low(
+    limit: int = Query(50, description="返回的股票數量"),
+    changeThreshold: float = Query(0.0, description="漲跌幅閾值（%）")
+):
+    """獲取盤後成交金額低的股票（成交金額絕對值排序，由小到大）"""
+    logger.info(f"收到 get_after_hours_volume_amount_low 請求: limit={limit}, changeThreshold={changeThreshold}")
+    
+    try:
+        if not finlab_api_key:
+            return {"error": "FINLAB_API_KEY not found"}
+        
+        # 獲取股票數據
+        data = finlab.get('price:收盤價', limit=2)
+        volume_data = finlab.get('price:成交股數', limit=2)
+        
+        if data is None or data.empty:
+            return {"error": "無法獲取股票數據"}
+        
+        close_df = data.sort_index()
+        volume_df = volume_data.sort_index() if volume_data is not None else None
+        
+        latest_date = close_df.index[-1]
+        previous_date = close_df.index[-2]
+        
+        latest_close = close_df.loc[latest_date]
+        previous_close = close_df.loc[previous_date]
+        
+        latest_volume = None
+        if volume_df is not None and latest_date in volume_df.index:
+            latest_volume = volume_df.loc[latest_date]
+        
+        volume_amount_stocks = []
+        
+        for stock_id in latest_close.index:
+            try:
+                today_price = latest_close[stock_id]
+                yesterday_price = previous_close[stock_id]
+                
+                if pd.isna(today_price) or pd.isna(yesterday_price):
+                    continue
+                
+                change_percent = ((today_price - yesterday_price) / yesterday_price) * 100
+                
+                # 檢查漲跌幅閾值
+                if abs(change_percent) < changeThreshold:
+                    continue
+                
+                # 計算成交金額
+                volume_amount = 0
+                if latest_volume is not None and stock_id in latest_volume.index:
+                    vol = latest_volume[stock_id]
+                    if not pd.isna(vol):
+                        volume_amount = int(vol) * float(today_price)
+                
+                volume_amount_stocks.append({
+                    'stock_id': stock_id,
+                    'stock_name': get_stock_name(stock_id),
+                    'price': float(today_price),
+                    'change_amount': float(today_price - yesterday_price),
+                    'change_percent': float(change_percent),
+                    'volume_amount': volume_amount,
+                    'date': latest_date.strftime('%Y-%m-%d'),
+                    'previous_date': previous_date.strftime('%Y-%m-%d')
+                })
+                
+            except Exception as e:
+                logger.warning(f"處理股票 {stock_id} 時發生錯誤: {e}")
+                continue
+        
+        # 按成交金額排序（由小到大）
+        volume_amount_stocks.sort(key=lambda x: x['volume_amount'])
+        volume_amount_stocks = volume_amount_stocks[:limit]
+        
+        return {
+            'success': True,
+            'total_count': len(volume_amount_stocks),
+            'stocks': volume_amount_stocks,
+            'timestamp': datetime.now().isoformat(),
+            'date': latest_date.strftime('%Y-%m-%d'),
+            'previous_date': previous_date.strftime('%Y-%m-%d'),
+            'sort_by': 'volume_amount_low'
+        }
+        
+    except Exception as e:
+        logger.error(f"獲取盤後成交金額低股票失敗: {e}")
+        return {"error": str(e)}
+
+@app.get("/after_hours_volume_change_rate_high")
+async def get_after_hours_volume_change_rate_high(
+    limit: int = Query(50, description="返回的股票數量"),
+    changeThreshold: float = Query(0.0, description="漲跌幅閾值（%）")
+):
+    """獲取盤後成交金額變化率高的股票（成交金額變化率排序，由大到小）"""
+    logger.info(f"收到 get_after_hours_volume_change_rate_high 請求: limit={limit}, changeThreshold={changeThreshold}")
+    
+    try:
+        if not finlab_api_key:
+            return {"error": "FINLAB_API_KEY not found"}
+        
+        # 獲取股票數據（需要3天的數據來計算變化率）
+        data = finlab.get('price:收盤價', limit=3)
+        volume_data = finlab.get('price:成交股數', limit=3)
+        
+        if data is None or data.empty:
+            return {"error": "無法獲取股票數據"}
+        
+        close_df = data.sort_index()
+        volume_df = volume_data.sort_index() if volume_data is not None else None
+        
+        latest_date = close_df.index[-1]
+        previous_date = close_df.index[-2]
+        day_before_date = close_df.index[-3]
+        
+        latest_close = close_df.loc[latest_date]
+        previous_close = close_df.loc[previous_date]
+        
+        latest_volume = None
+        previous_volume = None
+        if volume_df is not None:
+            if latest_date in volume_df.index:
+                latest_volume = volume_df.loc[latest_date]
+            if previous_date in volume_df.index:
+                previous_volume = volume_df.loc[previous_date]
+        
+        volume_change_stocks = []
+        
+        for stock_id in latest_close.index:
+            try:
+                today_price = latest_close[stock_id]
+                yesterday_price = previous_close[stock_id]
+                
+                if pd.isna(today_price) or pd.isna(yesterday_price):
+                    continue
+                
+                change_percent = ((today_price - yesterday_price) / yesterday_price) * 100
+                
+                # 檢查漲跌幅閾值
+                if abs(change_percent) < changeThreshold:
+                    continue
+                
+                # 計算成交金額變化率
+                today_volume_amount = 0
+                yesterday_volume_amount = 0
+                volume_change_rate = 0
+                
+                if latest_volume is not None and stock_id in latest_volume.index:
+                    vol = latest_volume[stock_id]
+                    if not pd.isna(vol):
+                        today_volume_amount = int(vol) * float(today_price)
+                
+                if previous_volume is not None and stock_id in previous_volume.index:
+                    vol = previous_volume[stock_id]
+                    if not pd.isna(vol):
+                        yesterday_volume_amount = int(vol) * float(yesterday_price)
+                
+                if yesterday_volume_amount > 0:
+                    volume_change_rate = ((today_volume_amount - yesterday_volume_amount) / yesterday_volume_amount) * 100
+                
+                volume_change_stocks.append({
+                    'stock_id': stock_id,
+                    'stock_name': get_stock_name(stock_id),
+                    'price': float(today_price),
+                    'change_amount': float(today_price - yesterday_price),
+                    'change_percent': float(change_percent),
+                    'volume_amount': today_volume_amount,
+                    'volume_change_rate': float(volume_change_rate),
+                    'date': latest_date.strftime('%Y-%m-%d'),
+                    'previous_date': previous_date.strftime('%Y-%m-%d')
+                })
+                
+            except Exception as e:
+                logger.warning(f"處理股票 {stock_id} 時發生錯誤: {e}")
+                continue
+        
+        # 按成交金額變化率排序（由大到小）
+        volume_change_stocks.sort(key=lambda x: x['volume_change_rate'], reverse=True)
+        volume_change_stocks = volume_change_stocks[:limit]
+        
+        return {
+            'success': True,
+            'total_count': len(volume_change_stocks),
+            'stocks': volume_change_stocks,
+            'timestamp': datetime.now().isoformat(),
+            'date': latest_date.strftime('%Y-%m-%d'),
+            'previous_date': previous_date.strftime('%Y-%m-%d'),
+            'sort_by': 'volume_change_rate_high'
+        }
+        
+    except Exception as e:
+        logger.error(f"獲取盤後成交金額變化率高股票失敗: {e}")
+        return {"error": str(e)}
+
+@app.get("/after_hours_volume_change_rate_low")
+async def get_after_hours_volume_change_rate_low(
+    limit: int = Query(50, description="返回的股票數量"),
+    changeThreshold: float = Query(0.0, description="漲跌幅閾值（%）")
+):
+    """獲取盤後成交金額變化率低的股票（成交金額變化率排序，由小到大）"""
+    logger.info(f"收到 get_after_hours_volume_change_rate_low 請求: limit={limit}, changeThreshold={changeThreshold}")
+    
+    try:
+        if not finlab_api_key:
+            return {"error": "FINLAB_API_KEY not found"}
+        
+        # 獲取股票數據（需要3天的數據來計算變化率）
+        data = finlab.get('price:收盤價', limit=3)
+        volume_data = finlab.get('price:成交股數', limit=3)
+        
+        if data is None or data.empty:
+            return {"error": "無法獲取股票數據"}
+        
+        close_df = data.sort_index()
+        volume_df = volume_data.sort_index() if volume_data is not None else None
+        
+        latest_date = close_df.index[-1]
+        previous_date = close_df.index[-2]
+        day_before_date = close_df.index[-3]
+        
+        latest_close = close_df.loc[latest_date]
+        previous_close = close_df.loc[previous_date]
+        
+        latest_volume = None
+        previous_volume = None
+        if volume_df is not None:
+            if latest_date in volume_df.index:
+                latest_volume = volume_df.loc[latest_date]
+            if previous_date in volume_df.index:
+                previous_volume = volume_df.loc[previous_date]
+        
+        volume_change_stocks = []
+        
+        for stock_id in latest_close.index:
+            try:
+                today_price = latest_close[stock_id]
+                yesterday_price = previous_close[stock_id]
+                
+                if pd.isna(today_price) or pd.isna(yesterday_price):
+                    continue
+                
+                change_percent = ((today_price - yesterday_price) / yesterday_price) * 100
+                
+                # 檢查漲跌幅閾值
+                if abs(change_percent) < changeThreshold:
+                    continue
+                
+                # 計算成交金額變化率
+                today_volume_amount = 0
+                yesterday_volume_amount = 0
+                volume_change_rate = 0
+                
+                if latest_volume is not None and stock_id in latest_volume.index:
+                    vol = latest_volume[stock_id]
+                    if not pd.isna(vol):
+                        today_volume_amount = int(vol) * float(today_price)
+                
+                if previous_volume is not None and stock_id in previous_volume.index:
+                    vol = previous_volume[stock_id]
+                    if not pd.isna(vol):
+                        yesterday_volume_amount = int(vol) * float(yesterday_price)
+                
+                if yesterday_volume_amount > 0:
+                    volume_change_rate = ((today_volume_amount - yesterday_volume_amount) / yesterday_volume_amount) * 100
+                
+                volume_change_stocks.append({
+                    'stock_id': stock_id,
+                    'stock_name': get_stock_name(stock_id),
+                    'price': float(today_price),
+                    'change_amount': float(today_price - yesterday_price),
+                    'change_percent': float(change_percent),
+                    'volume_amount': today_volume_amount,
+                    'volume_change_rate': float(volume_change_rate),
+                    'date': latest_date.strftime('%Y-%m-%d'),
+                    'previous_date': previous_date.strftime('%Y-%m-%d')
+                })
+                
+            except Exception as e:
+                logger.warning(f"處理股票 {stock_id} 時發生錯誤: {e}")
+                continue
+        
+        # 按成交金額變化率排序（由小到大）
+        volume_change_stocks.sort(key=lambda x: x['volume_change_rate'])
+        volume_change_stocks = volume_change_stocks[:limit]
+        
+        return {
+            'success': True,
+            'total_count': len(volume_change_stocks),
+            'stocks': volume_change_stocks,
+            'timestamp': datetime.now().isoformat(),
+            'date': latest_date.strftime('%Y-%m-%d'),
+            'previous_date': previous_date.strftime('%Y-%m-%d'),
+            'sort_by': 'volume_change_rate_low'
+        }
+        
+    except Exception as e:
+        logger.error(f"獲取盤後成交金額變化率低股票失敗: {e}")
+        return {"error": str(e)}
+
 @app.get("/stock_mapping.json")
 async def get_stock_mapping():
     """獲取完整股票映射表（供前端使用）"""
