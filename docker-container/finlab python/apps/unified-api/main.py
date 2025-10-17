@@ -1807,47 +1807,184 @@ async def get_schedule_tasks(
 
 @app.get("/api/schedule/daily-stats")
 async def get_daily_stats():
-    """獲取每日排程統計（模擬數據）"""
+    """獲取每日排程統計"""
     logger.info("收到 get_daily_stats 請求")
 
-    # 返回模擬數據
-    result = {
-        "success": True,
-        "data": {
-            "today_posts": 12,
-            "scheduled_posts": 8,
-            "completed_posts": 4,
-            "failed_posts": 0,
-            "active_schedules": 5,
-            "total_schedules": 10
-        },
-        "timestamp": datetime.now().isoformat()
-    }
+    try:
+        if not db_connection:
+            logger.warning("數據庫連接不可用")
+            return {
+                "success": False,
+                "data": {},
+                "error": "數據庫連接不可用",
+                "timestamp": datetime.now().isoformat()
+            }
 
-    logger.info("返回每日排程統計數據")
-    return result
+        with db_connection.cursor(cursor_factory=RealDictCursor) as cursor:
+            # Get today's date range
+            today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            today_end = datetime.now().replace(hour=23, minute=59, second=59, microsecond=999999)
+
+            # Count total posts generated today from schedule_tasks
+            cursor.execute("""
+                SELECT COALESCE(SUM(total_posts_generated), 0) as today_posts
+                FROM schedule_tasks
+                WHERE last_run >= %s AND last_run <= %s
+            """, (today_start, today_end))
+            today_posts = cursor.fetchone()['today_posts']
+
+            # Count scheduled posts (active schedules with next_run in future)
+            cursor.execute("""
+                SELECT COUNT(*) as scheduled_posts
+                FROM schedule_tasks
+                WHERE status = 'active' AND next_run > NOW()
+            """)
+            scheduled_posts = cursor.fetchone()['scheduled_posts']
+
+            # Count completed posts today (schedules that completed today)
+            cursor.execute("""
+                SELECT COALESCE(SUM(success_count), 0) as completed_posts
+                FROM schedule_tasks
+                WHERE last_run >= %s AND last_run <= %s
+            """, (today_start, today_end))
+            completed_posts = cursor.fetchone()['completed_posts']
+
+            # Count failed posts today
+            cursor.execute("""
+                SELECT COALESCE(SUM(failure_count), 0) as failed_posts
+                FROM schedule_tasks
+                WHERE last_run >= %s AND last_run <= %s
+            """, (today_start, today_end))
+            failed_posts = cursor.fetchone()['failed_posts']
+
+            # Count active schedules
+            cursor.execute("""
+                SELECT COUNT(*) as active_schedules
+                FROM schedule_tasks
+                WHERE status = 'active'
+            """)
+            active_schedules = cursor.fetchone()['active_schedules']
+
+            # Count total schedules
+            cursor.execute("SELECT COUNT(*) as total_schedules FROM schedule_tasks")
+            total_schedules = cursor.fetchone()['total_schedules']
+
+            result = {
+                "success": True,
+                "data": {
+                    "today_posts": int(today_posts),
+                    "scheduled_posts": int(scheduled_posts),
+                    "completed_posts": int(completed_posts),
+                    "failed_posts": int(failed_posts),
+                    "active_schedules": int(active_schedules),
+                    "total_schedules": int(total_schedules)
+                },
+                "timestamp": datetime.now().isoformat()
+            }
+
+            logger.info(f"返回每日排程統計數據: {result['data']}")
+            return result
+
+    except Exception as e:
+        logger.error(f"查詢每日統計失敗: {e}")
+        return {
+            "success": False,
+            "data": {},
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
 
 @app.get("/api/schedule/scheduler/status")
 async def get_scheduler_status():
-    """獲取排程器狀態（模擬數據）"""
+    """獲取排程器狀態"""
     logger.info("收到 get_scheduler_status 請求")
 
-    # 返回模擬數據
-    result = {
-        "success": True,
-        "data": {
-            "status": "running",
-            "active_tasks": 5,
-            "pending_tasks": 3,
-            "next_run": (datetime.now() + timedelta(minutes=5)).isoformat(),
-            "last_run": datetime.now().isoformat(),
-            "uptime": "2 days, 5 hours"
-        },
-        "timestamp": datetime.now().isoformat()
-    }
+    try:
+        if not db_connection:
+            logger.warning("數據庫連接不可用")
+            return {
+                "success": False,
+                "data": {},
+                "error": "數據庫連接不可用",
+                "timestamp": datetime.now().isoformat()
+            }
 
-    logger.info("返回排程器狀態數據")
-    return result
+        with db_connection.cursor(cursor_factory=RealDictCursor) as cursor:
+            # Count active tasks (status='active')
+            cursor.execute("""
+                SELECT COUNT(*) as active_tasks
+                FROM schedule_tasks
+                WHERE status = 'active'
+            """)
+            active_tasks = cursor.fetchone()['active_tasks']
+
+            # Count pending tasks (status='pending' or next_run is in the future)
+            cursor.execute("""
+                SELECT COUNT(*) as pending_tasks
+                FROM schedule_tasks
+                WHERE status = 'pending' OR (status = 'active' AND next_run > NOW())
+            """)
+            pending_tasks = cursor.fetchone()['pending_tasks']
+
+            # Get next run time (earliest next_run from active schedules)
+            cursor.execute("""
+                SELECT MIN(next_run) as next_run
+                FROM schedule_tasks
+                WHERE status = 'active' AND next_run IS NOT NULL
+            """)
+            next_run_row = cursor.fetchone()
+            next_run = next_run_row['next_run'].isoformat() if next_run_row['next_run'] else None
+
+            # Get last run time (most recent last_run)
+            cursor.execute("""
+                SELECT MAX(last_run) as last_run
+                FROM schedule_tasks
+                WHERE last_run IS NOT NULL
+            """)
+            last_run_row = cursor.fetchone()
+            last_run = last_run_row['last_run'].isoformat() if last_run_row['last_run'] else None
+
+            # Calculate uptime from earliest started_at
+            cursor.execute("""
+                SELECT MIN(started_at) as earliest_start
+                FROM schedule_tasks
+                WHERE started_at IS NOT NULL
+            """)
+            earliest_start_row = cursor.fetchone()
+            uptime = "N/A"
+            if earliest_start_row['earliest_start']:
+                uptime_delta = datetime.now() - earliest_start_row['earliest_start']
+                days = uptime_delta.days
+                hours = uptime_delta.seconds // 3600
+                uptime = f"{days} days, {hours} hours"
+
+            # Determine overall status based on active tasks
+            status = "running" if active_tasks > 0 else "idle"
+
+            result = {
+                "success": True,
+                "data": {
+                    "status": status,
+                    "active_tasks": int(active_tasks),
+                    "pending_tasks": int(pending_tasks),
+                    "next_run": next_run,
+                    "last_run": last_run,
+                    "uptime": uptime
+                },
+                "timestamp": datetime.now().isoformat()
+            }
+
+            logger.info(f"返回排程器狀態數據: {result['data']}")
+            return result
+
+    except Exception as e:
+        logger.error(f"查詢排程器狀態失敗: {e}")
+        return {
+            "success": False,
+            "data": {},
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
 
 if __name__ == "__main__":
     import uvicorn
