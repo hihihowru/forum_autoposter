@@ -1709,6 +1709,146 @@ async def import_post_records():
         logger.error(f"❌ 導入 post_records 失敗: {e}")
         return {"error": str(e)}
 
+# ==================== KOL API 功能 ====================
+
+@app.get("/api/kol/list")
+async def get_kol_list():
+    """獲取 KOL 列表"""
+    logger.info("收到 get_kol_list 請求")
+
+    try:
+        if not db_connection:
+            logger.warning("數據庫連接不可用，返回空數據")
+            return {
+                "success": False,
+                "kols": [],
+                "count": 0,
+                "error": "數據庫連接不可用",
+                "timestamp": datetime.now().isoformat()
+            }
+
+        with db_connection.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute("SELECT * FROM kol_profiles ORDER BY serial")
+            kols = cursor.fetchall()
+
+            logger.info(f"查詢到 {len(kols)} 個 KOL 配置")
+
+            return {
+                "success": True,
+                "kols": [dict(kol) for kol in kols],
+                "count": len(kols),
+                "timestamp": datetime.now().isoformat()
+            }
+
+    except Exception as e:
+        logger.error(f"查詢 KOL 列表失敗: {e}")
+        return {
+            "success": False,
+            "kols": [],
+            "count": 0,
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+# ==================== Schedule API 功能 ====================
+
+@app.get("/api/schedule/tasks")
+async def get_schedule_tasks(
+    status: str = Query(None, description="狀態篩選"),
+    limit: int = Query(100, description="返回的記錄數")
+):
+    """獲取排程任務列表"""
+    logger.info(f"收到 get_schedule_tasks 請求: status={status}, limit={limit}")
+
+    try:
+        if not db_connection:
+            logger.warning("數據庫連接不可用，返回空數據")
+            return {
+                "success": False,
+                "tasks": [],
+                "count": 0,
+                "error": "數據庫連接不可用",
+                "timestamp": datetime.now().isoformat()
+            }
+
+        with db_connection.cursor(cursor_factory=RealDictCursor) as cursor:
+            query = "SELECT * FROM schedule_tasks"
+            params = []
+
+            if status:
+                query += " WHERE status = %s"
+                params.append(status)
+
+            query += " ORDER BY created_at DESC LIMIT %s"
+            params.append(limit)
+
+            logger.info(f"執行 SQL 查詢: {query} with params: {params}")
+            cursor.execute(query, params)
+            tasks = cursor.fetchall()
+
+            logger.info(f"查詢到 {len(tasks)} 個排程任務")
+
+            return {
+                "success": True,
+                "tasks": [dict(task) for task in tasks],
+                "count": len(tasks),
+                "timestamp": datetime.now().isoformat()
+            }
+
+    except Exception as e:
+        logger.error(f"查詢排程任務失敗: {e}")
+        return {
+            "success": False,
+            "tasks": [],
+            "count": 0,
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+@app.get("/api/schedule/daily-stats")
+async def get_daily_stats():
+    """獲取每日排程統計（模擬數據）"""
+    logger.info("收到 get_daily_stats 請求")
+
+    # 返回模擬數據
+    result = {
+        "success": True,
+        "data": {
+            "today_posts": 12,
+            "scheduled_posts": 8,
+            "completed_posts": 4,
+            "failed_posts": 0,
+            "active_schedules": 5,
+            "total_schedules": 10
+        },
+        "timestamp": datetime.now().isoformat()
+    }
+
+    logger.info("返回每日排程統計數據")
+    return result
+
+@app.get("/api/schedule/scheduler/status")
+async def get_scheduler_status():
+    """獲取排程器狀態（模擬數據）"""
+    logger.info("收到 get_scheduler_status 請求")
+
+    # 返回模擬數據
+    result = {
+        "success": True,
+        "data": {
+            "status": "running",
+            "active_tasks": 5,
+            "pending_tasks": 3,
+            "next_run": (datetime.now() + timedelta(minutes=5)).isoformat(),
+            "last_run": datetime.now().isoformat(),
+            "uptime": "2 days, 5 hours"
+        },
+        "timestamp": datetime.now().isoformat()
+    }
+
+    logger.info("返回排程器狀態數據")
+    return result
+
 if __name__ == "__main__":
     import uvicorn
     
