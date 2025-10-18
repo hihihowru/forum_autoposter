@@ -343,12 +343,15 @@ async def health_check():
             logger.warning(f"數據庫健康檢查失敗: {e}")
             db_status = "error"
     
+    # 檢查 FinLab API 狀態
+    finlab_status = "connected" if os.getenv("FINLAB_API_KEY") else "disconnected"
+    
     return {
         "status": "healthy",
         "message": "Unified API is running successfully",
         "timestamp": datetime.now().isoformat(),
         "services": {
-            "finlab": "connected" if finlab_api_key else "disconnected",
+            "finlab": finlab_status,
             "database": db_status
         },
         "endpoints": {
@@ -645,7 +648,7 @@ async def get_after_hours_volume_amount_high(
     logger.info(f"收到 get_after_hours_volume_amount_high 請求: limit={limit}, changeThreshold={changeThreshold}")
     
     try:
-        if not finlab_api_key:
+        if not os.getenv("FINLAB_API_KEY"):
             return {"error": "FINLAB_API_KEY not found"}
         
         # 獲取股票數據
@@ -733,7 +736,7 @@ async def get_after_hours_volume_amount_low(
     logger.info(f"收到 get_after_hours_volume_amount_low 請求: limit={limit}, changeThreshold={changeThreshold}")
     
     try:
-        if not finlab_api_key:
+        if not os.getenv("FINLAB_API_KEY"):
             return {"error": "FINLAB_API_KEY not found"}
         
         # 獲取股票數據
@@ -821,7 +824,7 @@ async def get_after_hours_volume_change_rate_high(
     logger.info(f"收到 get_after_hours_volume_change_rate_high 請求: limit={limit}, changeThreshold={changeThreshold}")
     
     try:
-        if not finlab_api_key:
+        if not os.getenv("FINLAB_API_KEY"):
             return {"error": "FINLAB_API_KEY not found"}
         
         # 獲取股票數據（需要3天的數據來計算變化率）
@@ -926,7 +929,7 @@ async def get_after_hours_volume_change_rate_low(
     logger.info(f"收到 get_after_hours_volume_change_rate_low 請求: limit={limit}, changeThreshold={changeThreshold}")
     
     try:
-        if not finlab_api_key:
+        if not os.getenv("FINLAB_API_KEY"):
             return {"error": "FINLAB_API_KEY not found"}
         
         # 獲取股票數據（需要3天的數據來計算變化率）
