@@ -35,8 +35,10 @@ import {
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import ScheduleConfigModal from './ScheduleConfigModal';
+import { getApiBaseUrl } from '../../../config/api';
 
 const { Title, Text } = Typography;
+const API_BASE_URL = getApiBaseUrl();
 
 interface ScheduleTask {
   task_id: string;
@@ -88,7 +90,7 @@ const ScheduleManagementPage: React.FC = () => {
   const handleSchedulerToggle = async (enabled: boolean) => {
     try {
       setLoading(true);
-      const response = await fetch(`http://localhost:8001/api/schedule/scheduler/${enabled ? 'start' : 'stop'}`, {
+      const response = await fetch(`${API_BASE_URL}/api/schedule/scheduler/${enabled ? 'start' : 'stop'}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -113,7 +115,7 @@ const ScheduleManagementPage: React.FC = () => {
   // 獲取背景排程器狀態
   const fetchSchedulerStatus = async () => {
     try {
-      const response = await fetch('http://localhost:8001/api/schedule/scheduler/status');
+      const response = await fetch(`${API_BASE_URL}/api/schedule/scheduler/status`);
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
@@ -258,7 +260,7 @@ const ScheduleManagementPage: React.FC = () => {
   const loadSchedules = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:8001/api/schedule/tasks');
+      const response = await fetch(`${API_BASE_URL}/api/schedule/tasks`);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }  
@@ -283,7 +285,7 @@ const ScheduleManagementPage: React.FC = () => {
   // 獲取每日統計數據
   const loadDailyStats = async () => {
     try {
-      const response = await fetch('http://localhost:8001/api/schedule/daily-stats');
+      const response = await fetch(`${API_BASE_URL}/api/schedule/daily-stats`);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -328,7 +330,7 @@ const ScheduleManagementPage: React.FC = () => {
       let response;
       if (enabled) {
         // 啟用排程 - 調用 start API
-        response = await fetch(`http://localhost:8001/api/schedule/start/${scheduleId}`, {
+        response = await fetch(`${API_BASE_URL}/api/schedule/start/${scheduleId}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -336,7 +338,7 @@ const ScheduleManagementPage: React.FC = () => {
         });
       } else {
         // 暫停排程 - 調用 cancel API
-        response = await fetch(`http://localhost:8001/api/schedule/cancel/${scheduleId}`, {
+        response = await fetch(`${API_BASE_URL}/api/schedule/cancel/${scheduleId}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -363,7 +365,7 @@ const ScheduleManagementPage: React.FC = () => {
   const handleToggleAutoPosting = async (record: ScheduleTask, autoPosting: boolean) => {
     try {
       // 不設置全局 loading，避免影響表格顯示
-      const response = await fetch(`http://localhost:8001/api/schedule/${record.task_id}/auto-posting`, {
+      const response = await fetch(`${API_BASE_URL}/api/schedule/${record.task_id}/auto-posting`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: autoPosting })
@@ -386,7 +388,7 @@ const ScheduleManagementPage: React.FC = () => {
     try {
       setLoading(true);
       
-      const response = await fetch(`http://localhost:8001/api/schedule/execute/${scheduleId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/schedule/execute/${scheduleId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -81,10 +81,15 @@ export const API_ENDPOINTS = {
 // 創建完整的 API URL
 export const createApiUrl = (endpoint: string, service: 'OHLC' | 'BASE' | 'TRENDING' | 'ANALYZE' | 'FINANCIAL' | 'SUMMARY' | 'DASHBOARD' = 'BASE') => {
   let baseUrl = API_CONFIG[`${service}_API` as keyof typeof API_CONFIG] || API_CONFIG.BASE_URL;
-  
+
   const fullUrl = `${baseUrl}${endpoint}`;
   console.log(`🔗 createApiUrl: ${fullUrl}`);
   return fullUrl;
+};
+
+// 獲取 API 基礎 URL - 簡單版本，直接返回 BASE_URL
+export const getApiBaseUrl = () => {
+  return API_CONFIG.BASE_URL;
 };
 
 export default API_CONFIG;
