@@ -2948,6 +2948,8 @@ async def get_scheduler_status():
     """獲取排程器狀態"""
     logger.info("收到 get_scheduler_status 請求")
 
+    global db_connection
+
     try:
         if not db_connection:
             logger.warning("數據庫連接不可用")
@@ -2957,6 +2959,12 @@ async def get_scheduler_status():
                 "error": "數據庫連接不可用",
                 "timestamp": datetime.now().isoformat()
             }
+
+        # Reset connection if in failed state
+        try:
+            db_connection.rollback()
+        except:
+            pass
 
         with db_connection.cursor(cursor_factory=RealDictCursor) as cursor:
             # Count active tasks (status='active')
@@ -3023,10 +3031,13 @@ async def get_scheduler_status():
                 "timestamp": datetime.now().isoformat()
             }
 
+            db_connection.commit()  # Commit transaction
             logger.info(f"返回排程器狀態數據: {result['data']}")
             return result
 
     except Exception as e:
+        if db_connection:
+            db_connection.rollback()
         logger.error(f"查詢排程器狀態失敗: {e}")
         return {
             "success": False,
