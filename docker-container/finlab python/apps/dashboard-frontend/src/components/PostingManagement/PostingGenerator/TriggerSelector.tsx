@@ -126,9 +126,9 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
   `;
 
   // 預設值設定 - 移除限制，使用篩選機制
-  const DEFAULT_THRESHOLD = 1000;  // 設為大數值以獲取所有符合條件的股票
+  const DEFAULT_THRESHOLD = 20;  // 預設查詢 20 檔股票
   const MIN_THRESHOLD = 5;
-  const MAX_THRESHOLD = 1000;
+  const MAX_THRESHOLD = 100;
 
   // 篩選預設值 - 增強篩選功能
   const FILTER_DEFAULTS = {
@@ -749,7 +749,7 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
     
     if (isSelected) {
       // 檢查是否已達到最大選擇數量
-      const maxSelection = value.stockCountLimit || 10;
+      const maxSelection = value.stockCountLimit || 20;
       if (currentStocks.length >= maxSelection) {
         message.warning(`最多只能選擇 ${maxSelection} 支股票`);
         return;
@@ -1073,7 +1073,7 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
         threshold: value.threshold,
         filters: value.filters,
         // 新增：股票數量限制和篩選依據
-        stockCountLimit: value.stockCountLimit || 10,
+        stockCountLimit: value.stockCountLimit || 20,
         stockFilterCriteria: value.stockFilterCriteria || []
       };
       
@@ -1329,10 +1329,10 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
                 <InputNumber
                   min={1}
                   max={50}
-                  value={value.stockCountLimit || 10}
+                  value={value.stockCountLimit || 20}
                   onChange={(val) => onChange({
                     ...value,
-                    stockCountLimit: val || 10
+                    stockCountLimit: val || 20
                   })}
                   addonAfter="篇"
                   style={{ width: 120, marginTop: 8 }}
