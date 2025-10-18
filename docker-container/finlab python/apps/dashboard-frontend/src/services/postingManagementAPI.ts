@@ -1237,6 +1237,154 @@ export class PostingManagementAPI {
     }
   }
 
+  // Volume Amount High
+  static async getAfterHoursVolumeAmountHigh(triggerConfig: any): Promise<any> {
+    try {
+      const params: any = {
+        limit: triggerConfig.stockCountLimit || triggerConfig.threshold || 50,
+        changeThreshold: triggerConfig.changeThreshold?.percentage || 0.0
+      };
+
+      const response = await apiClient.get(API_ENDPOINTS.AFTER_HOURS_VOLUME_AMOUNT_HIGH, {
+        params,
+        timeout: 30000
+      });
+
+      if (response.data && response.data.success) {
+        return {
+          success: true,
+          total_count: response.data.total_count,
+          stocks: response.data.stocks || [],
+          timestamp: response.data.timestamp,
+          source: 'api',
+          sort_by: 'volume_amount_high'
+        };
+      } else {
+        throw new Error('API returned invalid data');
+      }
+    } catch (error) {
+      console.error('Volume amount high API failed:', error);
+      return {
+        success: false,
+        total_count: 0,
+        stocks: [],
+        timestamp: new Date().toISOString(),
+        error: String(error)
+      };
+    }
+  }
+
+  // Volume Amount Low
+  static async getAfterHoursVolumeAmountLow(triggerConfig: any): Promise<any> {
+    try {
+      const params: any = {
+        limit: triggerConfig.stockCountLimit || triggerConfig.threshold || 50,
+        changeThreshold: triggerConfig.changeThreshold?.percentage || 0.0
+      };
+
+      const response = await apiClient.get(API_ENDPOINTS.AFTER_HOURS_VOLUME_AMOUNT_LOW, {
+        params,
+        timeout: 30000
+      });
+
+      if (response.data && response.data.success) {
+        return {
+          success: true,
+          total_count: response.data.total_count,
+          stocks: response.data.stocks || [],
+          timestamp: response.data.timestamp,
+          source: 'api',
+          sort_by: 'volume_amount_low'
+        };
+      } else {
+        throw new Error('API returned invalid data');
+      }
+    } catch (error) {
+      console.error('Volume amount low API failed:', error);
+      return {
+        success: false,
+        total_count: 0,
+        stocks: [],
+        timestamp: new Date().toISOString(),
+        error: String(error)
+      };
+    }
+  }
+
+  // Volume Change Rate High
+  static async getAfterHoursVolumeChangeRateHigh(triggerConfig: any): Promise<any> {
+    try {
+      const params: any = {
+        limit: triggerConfig.stockCountLimit || triggerConfig.threshold || 50,
+        changeThreshold: triggerConfig.changeThreshold?.percentage || 0.0
+      };
+
+      const response = await apiClient.get(API_ENDPOINTS.AFTER_HOURS_VOLUME_CHANGE_RATE_HIGH, {
+        params,
+        timeout: 30000
+      });
+
+      if (response.data && response.data.success) {
+        return {
+          success: true,
+          total_count: response.data.total_count,
+          stocks: response.data.stocks || [],
+          timestamp: response.data.timestamp,
+          source: 'api',
+          sort_by: 'volume_change_rate_high'
+        };
+      } else {
+        throw new Error('API returned invalid data');
+      }
+    } catch (error) {
+      console.error('Volume change rate high API failed:', error);
+      return {
+        success: false,
+        total_count: 0,
+        stocks: [],
+        timestamp: new Date().toISOString(),
+        error: String(error)
+      };
+    }
+  }
+
+  // Volume Change Rate Low
+  static async getAfterHoursVolumeChangeRateLow(triggerConfig: any): Promise<any> {
+    try {
+      const params: any = {
+        limit: triggerConfig.stockCountLimit || triggerConfig.threshold || 50,
+        changeThreshold: triggerConfig.changeThreshold?.percentage || 0.0
+      };
+
+      const response = await apiClient.get(API_ENDPOINTS.AFTER_HOURS_VOLUME_CHANGE_RATE_LOW, {
+        params,
+        timeout: 30000
+      });
+
+      if (response.data && response.data.success) {
+        return {
+          success: true,
+          total_count: response.data.total_count,
+          stocks: response.data.stocks || [],
+          timestamp: response.data.timestamp,
+          source: 'api',
+          sort_by: 'volume_change_rate_low'
+        };
+      } else {
+        throw new Error('API returned invalid data');
+      }
+    } catch (error) {
+      console.error('Volume change rate low API failed:', error);
+      return {
+        success: false,
+        total_count: 0,
+        stocks: [],
+        timestamp: new Date().toISOString(),
+        error: String(error)
+      };
+    }
+  }
+
   // ==================== 批次歷史管理 ====================
 
   /**

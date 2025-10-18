@@ -1060,10 +1060,29 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
 
       // 調用真實的 API - 根據觸發器類型選擇不同的端點
       let result;
-      if (value.triggerConfig?.triggerKey === 'limit_down_after_hours') {
-        result = await PostingManagementAPI.getAfterHoursLimitDownStocks(queryParams);
-      } else {
-        result = await PostingManagementAPI.getAfterHoursLimitUpStocks(queryParams);
+      const triggerKey = value.triggerConfig?.triggerKey;
+
+      switch (triggerKey) {
+        case 'limit_down_after_hours':
+          result = await PostingManagementAPI.getAfterHoursLimitDownStocks(queryParams);
+          break;
+        case 'limit_up_after_hours':
+          result = await PostingManagementAPI.getAfterHoursLimitUpStocks(queryParams);
+          break;
+        case 'volume_amount_high':
+          result = await PostingManagementAPI.getAfterHoursVolumeAmountHigh(queryParams);
+          break;
+        case 'volume_amount_low':
+          result = await PostingManagementAPI.getAfterHoursVolumeAmountLow(queryParams);
+          break;
+        case 'volume_change_rate_high':
+          result = await PostingManagementAPI.getAfterHoursVolumeChangeRateHigh(queryParams);
+          break;
+        case 'volume_change_rate_low':
+          result = await PostingManagementAPI.getAfterHoursVolumeChangeRateLow(queryParams);
+          break;
+        default:
+          result = await PostingManagementAPI.getAfterHoursLimitUpStocks(queryParams);
       }
       
       setStockCountResult(result);
@@ -1106,10 +1125,29 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
       
       // 根據觸發器類型選擇不同的端點
       let result;
-      if (value.triggerConfig?.triggerKey === 'limit_down_after_hours') {
-        result = await PostingManagementAPI.getAfterHoursLimitDownStocks(apiParams);
-      } else {
-        result = await PostingManagementAPI.getAfterHoursLimitUpStocks(apiParams);
+      const triggerKey = value.triggerConfig?.triggerKey;
+
+      switch (triggerKey) {
+        case 'limit_down_after_hours':
+          result = await PostingManagementAPI.getAfterHoursLimitDownStocks(apiParams);
+          break;
+        case 'limit_up_after_hours':
+          result = await PostingManagementAPI.getAfterHoursLimitUpStocks(apiParams);
+          break;
+        case 'volume_amount_high':
+          result = await PostingManagementAPI.getAfterHoursVolumeAmountHigh(apiParams);
+          break;
+        case 'volume_amount_low':
+          result = await PostingManagementAPI.getAfterHoursVolumeAmountLow(apiParams);
+          break;
+        case 'volume_change_rate_high':
+          result = await PostingManagementAPI.getAfterHoursVolumeChangeRateHigh(apiParams);
+          break;
+        case 'volume_change_rate_low':
+          result = await PostingManagementAPI.getAfterHoursVolumeChangeRateLow(apiParams);
+          break;
+        default:
+          result = await PostingManagementAPI.getAfterHoursLimitUpStocks(apiParams);
       }
       
       setStockCountResult(result);

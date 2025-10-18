@@ -143,9 +143,9 @@ def startup_event():
         database_url = os.getenv("DATABASE_URL")
         if database_url:
             logger.info(f"🔗 嘗試連接數據庫: {database_url[:20]}...")
-            # Railway PostgreSQL URL 格式轉換（postgresql:// -> postgres://）
-            if database_url.startswith("postgres://"):
-                database_url = database_url.replace("postgres://", "postgresql://", 1)
+            # Railway PostgreSQL URL 格式轉換（postgresql:// -> postgres:// for psycopg2）
+            if database_url.startswith("postgresql://"):
+                database_url = database_url.replace("postgresql://", "postgres://", 1)
 
             # 添加連接參數以解決 Railway 連接問題
             import urllib.parse
@@ -2420,13 +2420,13 @@ async def get_kol_list():
     try:
         if not db_connection:
             logger.warning("數據庫連接不可用，返回空數據")
-        return {
-            "success": False,
-            "data": [],
-            "count": 0,
-            "error": "數據庫連接不可用",
-            "timestamp": datetime.now().isoformat()
-        }
+            return {
+                "success": False,
+                "data": [],
+                "count": 0,
+                "error": "數據庫連接不可用",
+                "timestamp": datetime.now().isoformat()
+            }
 
         with db_connection.cursor(cursor_factory=RealDictCursor) as cursor:
             cursor.execute("SELECT * FROM kol_profiles ORDER BY serial")

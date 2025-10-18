@@ -38,32 +38,44 @@ export const API_CONFIG = getApiConfig();
 
 // API 端點映射
 export const API_ENDPOINTS = {
-  // OHLC API
-  AFTER_HOURS_LIMIT_UP: '/after_hours_limit_up',
-  AFTER_HOURS_LIMIT_DOWN: '/after_hours_limit_down',
-  INDUSTRIES: '/industries',
-  STOCKS_BY_INDUSTRY: '/stocks_by_industry',
-  GET_OHLC: '/get_ohlc',
+  // OHLC API - After Hours Triggers
+  AFTER_HOURS_LIMIT_UP: '/api/after_hours_limit_up',
+  AFTER_HOURS_LIMIT_DOWN: '/api/after_hours_limit_down',
+  AFTER_HOURS_VOLUME_AMOUNT_HIGH: '/api/after_hours_volume_amount_high',
+  AFTER_HOURS_VOLUME_AMOUNT_LOW: '/api/after_hours_volume_amount_low',
+  AFTER_HOURS_VOLUME_CHANGE_RATE_HIGH: '/api/after_hours_volume_change_rate_high',
+  AFTER_HOURS_VOLUME_CHANGE_RATE_LOW: '/api/after_hours_volume_change_rate_low',
+
+  // Stock Data
+  INDUSTRIES: '/api/industries',
+  STOCKS_BY_INDUSTRY: '/api/stocks_by_industry',
+  GET_OHLC: '/api/get_ohlc',
   
   // Posting Service
   POSTING_SERVICE: '/api/posting',
   MANUAL_POSTING: '/api/manual-posting',
   
   // Dashboard API
-  DASHBOARD_HEALTH: '/health',
-  SYSTEM_MONITORING: '/dashboard/system-monitoring',
-  CONTENT_MANAGEMENT: '/dashboard/content-management',
-  INTERACTION_ANALYSIS: '/dashboard/interaction-analysis',
-  
+  DASHBOARD_HEALTH: '/api/health',
+  SYSTEM_MONITORING: '/api/dashboard/system-monitoring',
+  CONTENT_MANAGEMENT: '/api/dashboard/content-management',
+  INTERACTION_ANALYSIS: '/api/dashboard/interaction-analysis',
+
   // Trending API
-  TRENDING_TOPICS: '/trending',
-  EXTRACT_KEYWORDS: '/extract-keywords',
-  SEARCH_STOCKS: '/search-stocks-by-keywords',
-  ANALYZE_TOPIC: '/analyze-topic',
-  GENERATE_CONTENT: '/generate-content',
-  
-  // Intraday Trigger
-  INTRADAY_TRIGGER: '/intraday-trigger/execute',
+  TRENDING_TOPICS: '/api/trending',
+  EXTRACT_KEYWORDS: '/api/extract-keywords',
+  SEARCH_STOCKS: '/api/search-stocks-by-keywords',
+  ANALYZE_TOPIC: '/api/analyze-topic',
+  GENERATE_CONTENT: '/api/generate-content',
+
+  // Intraday Triggers - 6 separate endpoints
+  INTRADAY_TRIGGER: '/api/intraday-trigger/execute',
+  INTRADAY_GAINERS_BY_AMOUNT: '/api/intraday/gainers-by-amount',
+  INTRADAY_VOLUME_LEADERS: '/api/intraday/volume-leaders',
+  INTRADAY_AMOUNT_LEADERS: '/api/intraday/amount-leaders',
+  INTRADAY_LIMIT_DOWN: '/api/intraday/limit-down',
+  INTRADAY_LIMIT_UP: '/api/intraday/limit-up',
+  INTRADAY_LIMIT_DOWN_BY_AMOUNT: '/api/intraday/limit-down-by-amount',
 };
 
 // 創建完整的 API URL
