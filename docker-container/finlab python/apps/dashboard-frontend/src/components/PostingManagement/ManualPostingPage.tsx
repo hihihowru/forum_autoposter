@@ -49,9 +49,9 @@ const ManualPostingPage: React.FC = () => {
   
   // 表單狀態
   const [formData, setFormData] = useState<{ [key: string]: ManualPostingFormData }>({});
-  
-  // API 基礎 URL
-  const API_BASE = `${import.meta.env.DEV ? 'http://localhost:8005' : import.meta.env.VITE_API_BASE_URL || 'https://forumautoposter-production.up.railway.app'}/api/manual-posting`;
+
+  // API 基礎 URL - 使用統一的 API 配置
+  const API_BASE = import.meta.env.DEV ? 'http://localhost:8001' : 'https://forumautoposter-production.up.railway.app';
 
   // 初始化
   useEffect(() => {
@@ -78,7 +78,7 @@ const ManualPostingPage: React.FC = () => {
   // 載入 KOL 列表
   const loadKOLs = async () => {
     try {
-      const response = await fetch(`${API_BASE}/kols`);
+      const response = await fetch(`${API_BASE}/api/kol/list`);
       if (!response.ok) throw new Error('載入 KOL 失敗');
       const kolsData = await response.json();
       setKols(kolsData);
@@ -103,11 +103,17 @@ const ManualPostingPage: React.FC = () => {
   // 載入股票列表
   const loadStocks = async () => {
     try {
-      const response = await fetch(`${API_BASE}/stocks`);
+      const response = await fetch(`${API_BASE}/api/stock_mapping.json`);
       if (!response.ok) throw new Error('載入股票失敗');
-      const stocksData = await response.json();
-      setStocks(stocksData);
-      setStockSearchResults(stocksData); // 初始化搜尋結果
+      const result = await response.json();
+      // 轉換 stock_mapping 格式為陣列
+      const stocksArray = Object.entries(result.data || {}).map(([code, info]: [string, any]) => ({
+        code,
+        name: info.company_name || code,
+        industry: info.industry || '未分類'
+      }));
+      setStocks(stocksArray);
+      setStockSearchResults(stocksArray); // 初始化搜尋結果
     } catch (error) {
       console.error('載入股票失敗:', error);
       throw error;
@@ -117,9 +123,10 @@ const ManualPostingPage: React.FC = () => {
   // 載入熱門話題
   const loadTrendingTopics = async () => {
     try {
-      const response = await fetch(`${API_BASE}/trending-topics`);
+      const response = await fetch(`${API_BASE}/api/trending`);
       if (!response.ok) throw new Error('載入熱門話題失敗');
-      const topicsData = await response.json();
+      const result = await response.json();
+      const topicsData = result.data || [];
       setTrendingTopics(topicsData);
     } catch (error) {
       console.error('載入熱門話題失敗:', error);
@@ -134,11 +141,12 @@ const ManualPostingPage: React.FC = () => {
       setStockSearchResults(stocks);
       return stocks;
     }
-    
+
     try {
-      const response = await fetch(`${API_BASE}/stocks/search?q=${encodeURIComponent(query)}`);
+      const response = await fetch(`${API_BASE}/api/search-stocks-by-keywords?keyword=${encodeURIComponent(query)}`);
       if (!response.ok) throw new Error('搜尋股票失敗');
-      const data = await response.json();
+      const result = await response.json();
+      const data = result.data || [];
       setStockSearchResults(data);
       return data;
     } catch (error) {
@@ -175,8 +183,8 @@ const ManualPostingPage: React.FC = () => {
 
     try {
       setSubmitting(prev => ({ ...prev, [kolSerial]: true }));
-      
-      const response = await fetch(`${API_BASE}/submit`, {
+
+      const response = await fetch(`${API_BASE}/api/manual-posting`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
