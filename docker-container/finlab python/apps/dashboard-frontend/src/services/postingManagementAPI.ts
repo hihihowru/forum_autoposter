@@ -663,7 +663,7 @@ export class PostingManagementAPI {
   ): Promise<{posts: Post[], total: number, skip: number, limit: number}> {
     try {
       // 從 posting-service 獲取所有貼文（不限制於pending-review）
-      const response = await axios.get(`${POSTING_SERVICE_URL}/posts`, {
+      const response = await axios.get(`${POSTING_SERVICE_URL}/api/posts`, {
         params: { skip, limit, status }
       });
       

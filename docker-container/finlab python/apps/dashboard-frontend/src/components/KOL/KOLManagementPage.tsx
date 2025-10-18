@@ -34,6 +34,7 @@ import {
 import axios from 'axios';
 import { getApiBaseUrl } from '../../config/api';
 
+const API_BASE_URL = getApiBaseUrl();
 const { Title, Text, Paragraph } = Typography;
 const { Option } = Select;
 const { TextArea } = Input;
@@ -132,8 +133,7 @@ const KOLManagementPage: React.FC = () => {
   const loadKOLProfiles = async () => {
     setLoading(true);
     try {
-      // 使用 Vercel API proxy 或直接 Railway URL
-      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+      // 使用 Railway API URL
       const response = await axios.get(`${API_BASE_URL}/api/kol/list`);
       
       // 檢查響應結構
