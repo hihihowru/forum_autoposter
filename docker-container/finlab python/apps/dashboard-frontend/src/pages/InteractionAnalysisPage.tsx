@@ -516,8 +516,8 @@ const InteractionAnalysisPage: React.FC = () => {
     setLoading(true);
     try {
       // 使用現有的 posts API 獲取已發布的貼文數據
-      console.log(`📡 發送 API 請求到: ${API_BASE_URL}/posts?limit=10000&status=published`);
-      const response = await fetch(`${API_BASE_URL}/posts?limit=10000&status=published`);
+      console.log(`📡 發送 API 請求到: ${API_BASE_URL}/api/posts?limit=10000&status=published`);
+      const response = await fetch(`${API_BASE_URL}/api/posts?limit=10000&status=published`);
       console.log('📥 API 回應狀態:', response.status);
       
       if (!response.ok) {
@@ -646,26 +646,27 @@ const InteractionAnalysisPage: React.FC = () => {
   // 批量刷新互動數據
   const refreshAllInteractions = async () => {
     setRefreshing(true);
+    message.info('開始刷新互動數據，這可能需要幾分鐘...');
     try {
-      const response = await fetch(`${API_BASE_URL}/interactions/refresh-all`, {
+      const response = await fetch(`${API_BASE_URL}/api/posts/refresh-all`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
       });
-      
+
       const result = await response.json();
-      
+
       if (result.success) {
-        message.success(result.message);
+        message.success(`刷新成功！更新了 ${result.updated_count} 篇貼文，失敗 ${result.failed_count} 篇`);
         // 重新獲取數據
         await fetchInteractionAnalysis();
       } else {
-        message.error('批量刷新失敗');
+        message.error(`批量刷新失敗: ${result.error}`);
       }
     } catch (error) {
       console.error('批量刷新失敗:', error);
-      message.error('批量刷新失敗');
+      message.error('批量刷新失敗: ' + (error as Error).message);
     } finally {
       setRefreshing(false);
     }
