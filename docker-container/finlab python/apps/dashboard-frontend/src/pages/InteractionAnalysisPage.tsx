@@ -34,7 +34,10 @@ import {
   ExportOutlined
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
+import { getApiBaseUrl } from '../config/api';
 
+
+const API_BASE_URL = getApiBaseUrl();
 const { Title, Text } = Typography;
 const { Option } = Select;
 const { Search } = Input;
@@ -513,8 +516,8 @@ const InteractionAnalysisPage: React.FC = () => {
     setLoading(true);
     try {
       // 使用現有的 posts API 獲取已發布的貼文數據
-      console.log('📡 發送 API 請求到: http://localhost:8001/posts?limit=10000&status=published');
-      const response = await fetch('http://localhost:8001/posts?limit=10000&status=published');
+      console.log(`📡 發送 API 請求到: ${API_BASE_URL}/posts?limit=10000&status=published`);
+      const response = await fetch(`${API_BASE_URL}/posts?limit=10000&status=published`);
       console.log('📥 API 回應狀態:', response.status);
       
       if (!response.ok) {
@@ -644,7 +647,7 @@ const InteractionAnalysisPage: React.FC = () => {
   const refreshAllInteractions = async () => {
     setRefreshing(true);
     try {
-      const response = await fetch('http://localhost:8001/interactions/refresh-all', {
+      const response = await fetch(`${API_BASE_URL}/interactions/refresh-all`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -672,7 +675,7 @@ const InteractionAnalysisPage: React.FC = () => {
   const fetchAllInteractions = async () => {
     setRefreshing(true);
     try {
-      const response = await fetch('http://localhost:8001/interactions/fetch-all-interactions', {
+      const response = await fetch(`${API_BASE_URL}/interactions/fetch-all-interactions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -700,7 +703,7 @@ const InteractionAnalysisPage: React.FC = () => {
   const deduplicatePosts = async () => {
     setRefreshing(true);
     try {
-      const response = await fetch('http://localhost:8001/interactions/deduplicate', {
+      const response = await fetch(`${API_BASE_URL}/interactions/deduplicate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -59,7 +59,10 @@ import {
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import BatchScheduleModal from '../components/PostingManagement/BatchHistory/BatchScheduleModal';
+import { getApiBaseUrl } from '../config/api';
 
+
+const API_BASE_URL = getApiBaseUrl();
 const { Title, Text, Paragraph } = Typography;
 const { Option } = Select;
 const { Search } = Input;
@@ -1259,7 +1262,7 @@ const SelfLearningPage: React.FC = () => {
       params.append('include_external', includeExternal.toString());
 
       // 使用與 InteractionAnalysisPage 相同的 API 端點
-      const response = await fetch(`http://localhost:8001/posts?limit=10000&status=published`);
+      const response = await fetch(`${API_BASE_URL}/posts?limit=10000&status=published`);
       const result = await response.json();
 
       if (result.posts) {
@@ -1750,7 +1753,7 @@ const SelfLearningPage: React.FC = () => {
       }
       
       // 創建排程 - 直接調用 posting-service 的 API
-      const response = await fetch('http://localhost:8001/api/schedule/create', {
+      const response = await fetch(`${API_BASE_URL}/api/schedule/create`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

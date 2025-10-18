@@ -56,7 +56,10 @@ import {
   TrophyOutlined
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
+import { getApiBaseUrl } from '../config/api';
 
+
+const API_BASE_URL = getApiBaseUrl();
 const { Title, Text, Paragraph } = Typography;
 const { Option } = Select;
 const { Search } = Input;
@@ -146,7 +149,7 @@ const PerformanceAnalysisPage: React.FC = () => {
       }
       params.append('include_external', includeExternal.toString());
 
-      const response = await fetch(`http://localhost:8001/performance-analysis/report?${params}`);
+      const response = await fetch(`${API_BASE_URL}/performance-analysis/report?${params}`);
       const result = await response.json();
 
       if (result.success) {

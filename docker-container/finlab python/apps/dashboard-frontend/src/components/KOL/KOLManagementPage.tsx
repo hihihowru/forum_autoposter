@@ -32,6 +32,7 @@ import {
   BarChartOutlined
 } from '@ant-design/icons';
 import axios from 'axios';
+import { getApiBaseUrl } from '../../config/api';
 
 const { Title, Text, Paragraph } = Typography;
 const { Option } = Select;
@@ -166,7 +167,7 @@ const KOLManagementPage: React.FC = () => {
       const values = await form.validateFields();
       setSaving(true);
       
-      await axios.put(`http://localhost:8001/api/kol/${selectedKOL?.serial}/personalization`, {
+      await axios.put(`${API_BASE_URL}/api/kol/${selectedKOL?.serial}/personalization`, {
         content_style_probabilities: values.content_style_probabilities,
         analysis_depth_probabilities: values.analysis_depth_probabilities,
         content_length_probabilities: values.content_length_probabilities

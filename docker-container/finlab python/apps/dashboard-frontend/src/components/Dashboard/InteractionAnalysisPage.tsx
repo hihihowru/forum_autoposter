@@ -2,7 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { Alert, Spin } from 'antd';
 import InteractionAnalysis from './InteractionAnalysis';
 import type { InteractionAnalysisData } from '../../types';
+import { getApiBaseUrl } from '../../config/api';
 
+
+const API_BASE_URL = getApiBaseUrl();
 const InteractionAnalysisPage: React.FC = () => {
   const [data, setData] = useState<InteractionAnalysisData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -16,9 +19,9 @@ const InteractionAnalysisPage: React.FC = () => {
     try {
       // 嘗試從多個可能的 API 端點獲取數據
       const endpoints = [
-        'http://localhost:8001/interactions/stats',
-        'http://localhost:8001/posts?limit=10000',
-        'http://localhost:8001/posts?limit=10000&status=published'
+        `${API_BASE_URL}/interactions/stats`,
+        `${API_BASE_URL}/posts?limit=10000`,
+        `${API_BASE_URL}/posts?limit=10000&status=published`
       ];
 
       let response = null;

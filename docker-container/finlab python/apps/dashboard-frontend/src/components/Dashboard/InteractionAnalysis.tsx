@@ -12,7 +12,10 @@ import {
 } from '@ant-design/icons';
 import { Column, Pie } from '@ant-design/charts';
 import type { InteractionAnalysisData } from '../../types';
+import { getApiBaseUrl } from '../../config/api';
 
+
+const API_BASE_URL = getApiBaseUrl();
 const { Option } = Select;
 
 interface InteractionAnalysisProps {
@@ -29,7 +32,7 @@ const InteractionAnalysis: React.FC<InteractionAnalysisProps> = ({ data, loading
   const refreshAllInteractions = async () => {
     setFetchingData(true);
     try {
-      const response = await fetch('http://localhost:8001/interactions/refresh-all', {
+      const response = await fetch(`${API_BASE_URL}/interactions/refresh-all`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -63,7 +66,7 @@ const InteractionAnalysis: React.FC<InteractionAnalysisProps> = ({ data, loading
   const fetchAllPostsData = async () => {
     setFetchingData(true);
     try {
-      const response = await fetch('http://localhost:8001/posts?skip=0&limit=10000');
+      const response = await fetch(`${API_BASE_URL}/posts?skip=0&limit=10000`);
       if (response.ok) {
         const result = await response.json();
         message.success(`成功抓取 ${result.posts?.length || 0} 筆貼文數據`);

@@ -31,7 +31,10 @@ import { useNavigate } from 'react-router-dom';
 import type { ColumnsType } from 'antd/es/table';
 import PostingManagementAPI from '../../../services/postingManagementAPI';
 import BatchScheduleModal from './BatchScheduleModal';
+import { getApiBaseUrl } from '../../../config/api';
 
+
+const API_BASE_URL = getApiBaseUrl();
 const { Title, Text } = Typography;
 
 interface BatchRecord {
@@ -148,7 +151,7 @@ const BatchHistoryPage: React.FC = () => {
       setLoading(true);
       
       // 創建排程
-      const response = await fetch('http://localhost:8001/api/schedule/create', {
+      const response = await fetch(`${API_BASE_URL}/api/schedule/create`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

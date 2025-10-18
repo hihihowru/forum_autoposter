@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
 import { Card, Button, List, Tag, Space, Typography, message, Spin, Switch, Divider } from 'antd';
 import { FireOutlined, StockOutlined } from '@ant-design/icons';
+import { getApiBaseUrl } from '../../../config/api';
 
+
+const API_BASE_URL = getApiBaseUrl();
 const { Title, Text } = Typography;
 
 interface TrendingTopic {
@@ -48,7 +51,7 @@ const TrendingTopicsDisplay: React.FC<TrendingTopicsDisplayProps> = ({
       }
       
       // 調用 OHLC API 獲取股票名稱
-      const response = await fetch(`http://localhost:8001/get_stock_name?stock_id=${stockCode}`);
+      const response = await fetch(`${API_BASE_URL}/get_stock_name?stock_id=${stockCode}`);
       if (response.ok) {
         const data = await response.json();
         return data.name || `股票${stockCode}`;
