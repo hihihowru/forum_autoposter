@@ -1,80 +1,34 @@
-// Vercel API Proxy - 解決 CORS 問題
-// 將前端請求代理到 Railway 後端
-
-const RAILWAY_BASE_URL = process.env.RAILWAY_API_URL || 'https://forumautoposter-production.up.railway.app';
-
 export default async function handler(req, res) {
-  // 設置 CORS headers
-  res.setHeader('Access-Control-Allow-Credentials', true);
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  res.setHeader(
-    'Access-Control-Allow-Headers',
-    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
-  );
-
-  // 處理 OPTIONS 請求
-  if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
-  }
-
+  const { path } = req.query;
+  const apiUrl = process.env.RAILWAY_API_URL || 'https://forumautoposter-production.up.railway.app';
+  
+  // Construct the full API URL
+  const fullUrl = `${apiUrl}/api/${path.join('/')}`;
+  
+  console.log(`Proxying ${req.method} ${fullUrl}`);
+  
   try {
-    // 構建目標 URL
-    const { query } = req;
-    const queryString = new URLSearchParams(query).toString();
-    const targetUrl = `${RAILWAY_BASE_URL}${req.url}${queryString ? `?${queryString}` : ''}`;
-
-    console.log(`🔄 [Proxy] ${req.method} ${req.url} -> ${targetUrl}`);
-    console.log(`🌐 [Proxy] Railway URL: ${RAILWAY_BASE_URL}`);
-    console.log(`📋 [Proxy] Environment: ${process.env.NODE_ENV}`);
-
-    // 準備請求選項
-    const requestOptions = {
+    const response = await fetch(fullUrl, {
       method: req.method,
       headers: {
         'Content-Type': 'application/json',
-        'User-Agent': 'Vercel-Proxy/1.0',
+        'Accept': 'application/json',
+        ...req.headers
       },
-    };
-
-    // 如果有 body，添加到請求中
-    if (req.method !== 'GET' && req.method !== 'HEAD') {
-      requestOptions.body = JSON.stringify(req.body);
+      body: req.method !== 'GET' && req.method !== 'HEAD' ? JSON.stringify(req.body) : undefined
+    });
+    
+    const contentType = response.headers.get('content-type');
+    
+    if (contentType && contentType.includes('application/json')) {
+      const data = await response.json();
+      res.status(response.status).json(data);
+    } else {
+      const text = await response.text();
+      res.status(response.status).send(text);
     }
-
-    // 發送請求到 Railway
-    const response = await fetch(targetUrl, requestOptions);
-    
-    // 獲取響應數據
-    const data = await response.text();
-    
-    console.log(`📡 [Proxy] 響應狀態: ${response.status}`);
-    console.log(`📊 [Proxy] 響應數據: ${data.substring(0, 200)}...`);
-
-    // 設置響應 headers
-    res.status(response.status);
-    
-    // 複製重要的 headers
-    const headersToForward = ['content-type', 'content-length', 'cache-control'];
-    headersToForward.forEach(header => {
-      const value = response.headers.get(header);
-      if (value) {
-        res.setHeader(header, value);
-      }
-    });
-
-    // 發送響應
-    res.send(data);
-
   } catch (error) {
-    console.error('❌ [Proxy] 代理請求失敗:', error);
-    
-    res.status(500).json({
-      success: false,
-      message: '代理請求失敗',
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
+    console.error('API proxy error:', error);
+    res.status(500).json({ error: 'API proxy error', message: error.message });
   }
 }

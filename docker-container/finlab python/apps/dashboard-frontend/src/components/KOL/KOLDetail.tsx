@@ -37,8 +37,8 @@ const KOLDetail: React.FC = () => {
     setError(null);
     
     try {
-      // 使用環境變數或默認 Railway URL
-      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://forumautoposter-production.up.railway.app';
+      // 使用 Vercel API proxy 或直接 Railway URL
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
       
       // 首先獲取 KOL 列表，找到對應的 serial
       const listResponse = await axios.get(`${API_BASE_URL}/api/kol/list`);

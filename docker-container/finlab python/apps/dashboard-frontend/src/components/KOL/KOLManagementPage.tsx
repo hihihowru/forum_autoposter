@@ -131,8 +131,8 @@ const KOLManagementPage: React.FC = () => {
   const loadKOLProfiles = async () => {
     setLoading(true);
     try {
-      // 使用環境變數或默認 Railway URL
-      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://forumautoposter-production.up.railway.app';
+      // 使用 Vercel API proxy 或直接 Railway URL
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
       const response = await axios.get(`${API_BASE_URL}/api/kol/list`);
       
       // 檢查響應結構
