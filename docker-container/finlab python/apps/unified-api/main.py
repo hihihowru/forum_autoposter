@@ -1842,8 +1842,10 @@ async def get_posts(
             with db_connection.cursor() as test_cursor:
                 test_cursor.execute("SELECT 1")
                 test_cursor.fetchone()
+            db_connection.commit()  # Commit to close transaction
             logger.info("✅ 數據庫連接測試成功")
         except Exception as db_test_error:
+            db_connection.rollback()  # Rollback failed transaction
             logger.error(f"❌ 數據庫連接測試失敗: {db_test_error}")
             return {
                 "success": False,
@@ -1906,6 +1908,7 @@ async def get_posts(
             cursor.execute(query, params)
             posts = cursor.fetchall()
 
+            db_connection.commit()  # Commit after all reads
             logger.info(f"✅ 查詢到 {len(posts)} 條貼文數據，總數: {total_count}")
 
             return {
@@ -1918,6 +1921,8 @@ async def get_posts(
             }
 
     except Exception as e:
+        if db_connection:
+            db_connection.rollback()  # Rollback on error
         logger.error(f"❌ 查詢貼文數據失敗: {e}")
         logger.error(f"❌ 錯誤詳情: {type(e).__name__}: {str(e)}")
         import traceback
