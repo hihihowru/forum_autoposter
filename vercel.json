@@ -1,0 +1,38 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "docker-container/finlab python/apps/dashboard-frontend/package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/proxy/$1"
+    },
+    {
+      "src": "/assets/(.*)",
+      "dest": "/docker-container/finlab python/apps/dashboard-frontend/dist/assets/$1"
+    },
+    {
+      "src": "/(.*\\.(js|css|ico|png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot))",
+      "dest": "/docker-container/finlab python/apps/dashboard-frontend/dist/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/docker-container/finlab python/apps/dashboard-frontend/dist/index.html"
+    }
+  ],
+  "env": {
+    "RAILWAY_API_URL": "https://forumautoposter-production.up.railway.app"
+  },
+  "functions": {
+    "api/proxy/[...path].js": {
+      "maxDuration": 30
+    }
+  }
+}
