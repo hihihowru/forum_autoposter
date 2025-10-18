@@ -56,25 +56,48 @@ const ApiTestPage: React.FC = () => {
 
   // Define all your API endpoints
   const apiEndpoints: ApiEndpoint[] = [
-    // KOL Management
-    { method: 'GET', path: '/api/kol/list', description: 'Get all KOL profiles', category: 'KOL Management' },
-    { method: 'GET', path: '/api/kol/stats', description: 'Get KOL statistics', category: 'KOL Management' },
-
-    // Schedule Management
-    { method: 'GET', path: '/api/schedule/stats', description: 'Get schedule statistics', category: 'Schedule Management' },
-    { method: 'GET', path: '/api/schedule/list', description: 'Get all schedules', category: 'Schedule Management' },
-
-    // Posts Management
-    { method: 'GET', path: '/api/posts/list', description: 'Get all posts', category: 'Posts Management' },
-    { method: 'GET', path: '/api/posts/stats', description: 'Get post statistics', category: 'Posts Management' },
-
-    // After Hours Triggers
-    { method: 'GET', path: '/api/after-hours/stats', description: 'Get after-hours statistics', category: 'After Hours' },
-    { method: 'GET', path: '/api/after-hours/volume/list', description: 'Get volume-based triggers', category: 'After Hours' },
-
     // System Health
     { method: 'GET', path: '/api/health', description: 'Check API health', category: 'System' },
-    { method: 'GET', path: '/api/database/status', description: 'Check database status', category: 'System' },
+
+    // KOL Management
+    { method: 'GET', path: '/api/kol/list', description: 'Get all KOL profiles', category: 'KOL Management' },
+
+    // Schedule Management
+    { method: 'GET', path: '/api/schedule/tasks', description: 'Get schedule tasks', category: 'Schedule Management' },
+    { method: 'GET', path: '/api/schedule/daily-stats', description: 'Get daily statistics', category: 'Schedule Management' },
+    { method: 'GET', path: '/api/schedule/scheduler/status', description: 'Get scheduler status', category: 'Schedule Management' },
+
+    // Posts Management
+    { method: 'GET', path: '/api/posts', description: 'Get all posts', category: 'Posts Management' },
+
+    // After Hours Triggers (6 endpoints)
+    { method: 'GET', path: '/api/after_hours_limit_up', description: 'After-hours limit up stocks', category: 'After Hours Triggers' },
+    { method: 'GET', path: '/api/after_hours_limit_down', description: 'After-hours limit down stocks', category: 'After Hours Triggers' },
+    { method: 'GET', path: '/api/after_hours_volume_amount_high', description: 'After-hours high volume (amount)', category: 'After Hours Triggers' },
+    { method: 'GET', path: '/api/after_hours_volume_amount_low', description: 'After-hours low volume (amount)', category: 'After Hours Triggers' },
+    { method: 'GET', path: '/api/after_hours_volume_change_rate_high', description: 'After-hours high volume change rate', category: 'After Hours Triggers' },
+    { method: 'GET', path: '/api/after_hours_volume_change_rate_low', description: 'After-hours low volume change rate', category: 'After Hours Triggers' },
+
+    // Intraday Trigger
+    { method: 'POST', path: '/api/intraday-trigger/execute', description: 'Execute intraday trigger', category: 'Intraday Triggers' },
+
+    // Dashboard
+    { method: 'GET', path: '/api/dashboard/system-monitoring', description: 'System monitoring data', category: 'Dashboard' },
+    { method: 'GET', path: '/api/dashboard/content-management', description: 'Content management data', category: 'Dashboard' },
+    { method: 'GET', path: '/api/dashboard/interaction-analysis', description: 'Interaction analysis data', category: 'Dashboard' },
+
+    // Stock & Industry Data
+    { method: 'GET', path: '/api/industries', description: 'Get all industries', category: 'Stock Data' },
+    { method: 'GET', path: '/api/stocks_by_industry', description: 'Get stocks by industry', category: 'Stock Data' },
+    { method: 'GET', path: '/api/get_ohlc', description: 'Get OHLC data', category: 'Stock Data' },
+    { method: 'GET', path: '/api/stock_mapping.json', description: 'Get stock mapping', category: 'Stock Data' },
+
+    // Content Generation
+    { method: 'GET', path: '/api/trending', description: 'Get trending topics', category: 'Content' },
+    { method: 'GET', path: '/api/extract-keywords', description: 'Extract keywords', category: 'Content' },
+    { method: 'GET', path: '/api/search-stocks-by-keywords', description: 'Search stocks by keywords', category: 'Content' },
+    { method: 'GET', path: '/api/analyze-topic', description: 'Analyze topic', category: 'Content' },
+    { method: 'GET', path: '/api/generate-content', description: 'Generate content', category: 'Content' },
   ];
 
   const testEndpoint = async (endpoint: ApiEndpoint) => {
