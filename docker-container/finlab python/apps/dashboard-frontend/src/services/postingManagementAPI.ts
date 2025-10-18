@@ -1385,6 +1385,86 @@ export class PostingManagementAPI {
     }
   }
 
+  // ==================== Intraday Triggers (6 endpoints) ====================
+
+  static async getIntradayGainersByAmount(limit: number = 20): Promise<any> {
+    try {
+      const response = await apiClient.get(API_ENDPOINTS.INTRADAY_GAINERS_BY_AMOUNT, {
+        params: { limit },
+        timeout: 30000
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Intraday gainers by amount API failed:', error);
+      throw error;
+    }
+  }
+
+  static async getIntradayVolumeLeaders(limit: number = 20): Promise<any> {
+    try {
+      const response = await apiClient.get(API_ENDPOINTS.INTRADAY_VOLUME_LEADERS, {
+        params: { limit },
+        timeout: 30000
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Intraday volume leaders API failed:', error);
+      throw error;
+    }
+  }
+
+  static async getIntradayAmountLeaders(limit: number = 20): Promise<any> {
+    try {
+      const response = await apiClient.get(API_ENDPOINTS.INTRADAY_AMOUNT_LEADERS, {
+        params: { limit },
+        timeout: 30000
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Intraday amount leaders API failed:', error);
+      throw error;
+    }
+  }
+
+  static async getIntradayLimitDown(limit: number = 20): Promise<any> {
+    try {
+      const response = await apiClient.get(API_ENDPOINTS.INTRADAY_LIMIT_DOWN, {
+        params: { limit },
+        timeout: 30000
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Intraday limit down API failed:', error);
+      throw error;
+    }
+  }
+
+  static async getIntradayLimitUp(limit: number = 20): Promise<any> {
+    try {
+      const response = await apiClient.get(API_ENDPOINTS.INTRADAY_LIMIT_UP, {
+        params: { limit },
+        timeout: 30000
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Intraday limit up API failed:', error);
+      throw error;
+    }
+  }
+
+  static async getIntradayLimitDownByAmount(limit: number = 20): Promise<any> {
+    try {
+      const response = await apiClient.get(API_ENDPOINTS.INTRADAY_LIMIT_DOWN_BY_AMOUNT, {
+        params: { limit },
+        timeout: 30000
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Intraday limit down by amount API failed:', error);
+      throw error;
+    }
+  }
+
   // ==================== 批次歷史管理 ====================
 
   /**

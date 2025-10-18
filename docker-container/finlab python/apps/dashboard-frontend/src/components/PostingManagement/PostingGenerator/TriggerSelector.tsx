@@ -20,7 +20,6 @@ import {
 import StockCodeListInput from './StockCodeListInput';
 import CustomStockInput from './CustomStockInput';
 import TrendingTopicsDisplay from './TrendingTopicsDisplay';
-import IntradayTriggerDisplay from './IntradayTriggerDisplay';
 import { PostingManagementAPI } from '../../../services/postingManagementAPI';
 import companyInfoService, { CompanySearchResult } from '../../../services/companyInfoService';
 
@@ -47,10 +46,6 @@ interface TriggerConfig {
   macroFilter?: string;
   newsFilter?: string;
   customFilters?: Record<string, any>;
-  apiConfig?: {
-    endpoint: string;
-    processing: any[];
-  };
 }
 
 interface TriggerSelection {
@@ -267,19 +262,7 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
           icon: <RiseOutlined />,
           description: '按成交額排序的漲幅股票',
           triggerType: 'intraday',
-          apiConfig: {
-            endpoint: 'https://asterisk-chipsapi.cmoney.tw/AdditionInformationRevisit/api/GetAll/StockCalculation',
-            processing: [
-              {"ParameterJson":"{ \"TargetPropertyNamePath\" : [ \"TotalTransactionAmount\"]}","ProcessType":"DescOrder"},
-              {"ProcessType":"EqualValueFilter","ParameterJson":"{\"TargetPropertyNamePath\": [\"Commodity\", \"IsChipsKPopularStocksSortSubject\"], \"Value\": true}"},
-              {"ProcessType":"LessThanColumnsFilter","ParameterJson":"{\"TargetPropertyNamePath\": [\"StrikePrice\"], \"ComparePropertyNamePath\": [\"Commodity\" , \"LimitUp\"]}"},
-              {"ProcessType":"MoreThanValueFilter","ParameterJson":"{\"TargetPropertyNamePath\": [\"ChangeRange\"], \"Value\": 0 }"},
-              {"ParameterJson":"{\"TargetPropertyNamePath\": [\"ChangeRange\"]}","ProcessType":"DescOrder"},
-              {"ProcessType":"ThenDescOrder","ParameterJson":"{\"TargetPropertyNamePath\": [\"TotalVolume\"]}"},
-              {"ParameterJson":"{\"TargetPropertyNamePath\": [\"CommKey\"]}","ProcessType":"ThenAscOrder"},
-              {"ProcessType":"TakeCount","ParameterJson":"{\"Count\":20}"}
-            ]
-          }
+          newsKeywords: ['上漲', '漲幅', '強勢', '飆漲']
         },
         {
           key: 'intraday_volume_leaders',
@@ -287,16 +270,7 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
           icon: <BarChartOutlined />,
           description: '按成交量排序的熱門股票',
           triggerType: 'intraday',
-          apiConfig: {
-            endpoint: 'https://asterisk-chipsapi.cmoney.tw/AdditionInformationRevisit/api/GetAll/StockCalculation',
-            processing: [
-              {"ProcessType":"EqualValueFilter","ParameterJson":"{\"TargetPropertyNamePath\": [\"Commodity\", \"IsChipsKPopularStocksSortSubject\"], \"Value\": true}"},
-              {"ProcessType":"DescOrder","ParameterJson":"{\"TargetPropertyNamePath\" :[\"TotalVolume\"]}"},
-              {"ProcessType":"ThenDescOrder","ParameterJson":"{\"TargetPropertyNamePath\" :[\"ChangeRange\"]}"},
-              {"ParameterJson":"{\"TargetPropertyNamePath\" :[\"CommKey\"]}","ProcessType":"ThenAscOrder"},
-              {"ParameterJson":"{\"Count\":20}","ProcessType":"TakeCount"}
-            ]
-          }
+          newsKeywords: ['成交量', '爆量', '熱門', '活躍']
         },
         {
           key: 'intraday_amount_leaders',
@@ -304,16 +278,7 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
           icon: <GlobalOutlined />,
           description: '按成交額排序的熱門股票',
           triggerType: 'intraday',
-          apiConfig: {
-            endpoint: 'https://asterisk-chipsapi.cmoney.tw/AdditionInformationRevisit/api/GetAll/StockCalculation',
-            processing: [
-              {"ProcessType":"EqualValueFilter","ParameterJson":"{\"TargetPropertyNamePath\":[\"Commodity\", \"IsChipsKPopularStocksSortSubject\"], \"Value\": true}"},
-              {"ProcessType":"DescOrder","ParameterJson":"{\"TargetPropertyNamePath\":[\"TotalTransactionAmount\"]}"},
-              {"ParameterJson":"{\"TargetPropertyNamePath\":[\"TotalVolume\" ]}","ProcessType":"ThenDescOrder"},
-              {"ProcessType":"ThenDescOrder","ParameterJson":"{\"TargetPropertyNamePath\":[\"ChangeRange\"]}"},
-              {"ProcessType":"TakeCount","ParameterJson":"{\"Count\":20}"}
-            ]
-          }
+          newsKeywords: ['成交額', '大戶', '熱絡', '交投']
         },
         {
           key: 'intraday_limit_down',
@@ -321,16 +286,7 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
           icon: <FallOutlined />,
           description: '篩選跌停股票',
           triggerType: 'intraday',
-          apiConfig: {
-            endpoint: 'https://asterisk-chipsapi.cmoney.tw/AdditionInformationRevisit/api/GetAll/StockCalculation',
-            processing: [
-              {"ProcessType":"EqualValueFilter","ParameterJson":"{\"TargetPropertyNamePath\": [\"Commodity\", \"IsChipsKPopularStocksSortSubject\"], \"Value\": true}"},
-              {"ParameterJson":"{\"TargetPropertyNamePath\": [\"StrikePrice\"], \"ComparePropertyNamePath\": [\"Commodity\", \"LimitDown\"]}","ProcessType":"EqualColumnsFilter"},
-              {"ProcessType":"AscOrder","ParameterJson":"{\"TargetPropertyNamePath\":[\"ChangeRange\"]}"},
-              {"ProcessType":"ThenDescOrder","ParameterJson":"{\"TargetPropertyNamePath\":[\"TotalVolume\"]}"},
-              {"ParameterJson":"{\"Count\":20}","ProcessType":"TakeCount"}
-            ]
-          }
+          newsKeywords: ['跌停', '重挫', '暴跌', '弱勢']
         },
         {
           key: 'intraday_limit_up',
@@ -338,16 +294,7 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
           icon: <ArrowUpOutlined />,
           description: '篩選漲停股票',
           triggerType: 'intraday',
-          apiConfig: {
-            endpoint: 'https://asterisk-chipsapi.cmoney.tw/AdditionInformationRevisit/api/GetAll/StockCalculation',
-            processing: [
-              {"ParameterJson":"{\"TargetPropertyNamePath\": [\"Commodity\", \"IsChipsKPopularStocksSortSubject\"], \"Value\": true}","ProcessType":"EqualValueFilter"},
-              {"ProcessType":"EqualColumnsFilter","ParameterJson":"{\"TargetPropertyNamePath\": [\"StrikePrice\"], \"ComparePropertyNamePath\": [\"Commodity\", \"LimitUp\"]}"},
-              {"ProcessType":"DescOrder","ParameterJson":"{\"TargetPropertyNamePath\": [\"ChangeRange\"]}"},
-              {"ParameterJson":"{\"TargetPropertyNamePath\": [\"TotalVolume\"]}","ProcessType":"ThenDescOrder"},
-              {"ProcessType":"TakeCount","ParameterJson":"{\"Count\":20}"}
-            ]
-          }
+          newsKeywords: ['漲停', '強漲', '飆漲', '突破']
         },
         {
           key: 'intraday_limit_down_by_amount',
@@ -355,19 +302,7 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
           icon: <FallOutlined />,
           description: '按成交額排序的跌停股票',
           triggerType: 'intraday',
-          apiConfig: {
-            endpoint: 'https://asterisk-chipsapi.cmoney.tw/AdditionInformationRevisit/api/GetAll/StockCalculation',
-            processing: [
-              {"ParameterJson":"{ \"TargetPropertyNamePath\" : [ \"TotalTransactionAmount\"]}","ProcessType":"DescOrder"},
-              {"ParameterJson":"{\"TargetPropertyNamePath\":[\"Commodity\", \"IsChipsKPopularStocksSortSubject\" ], \"Value\": true}","ProcessType":"EqualValueFilter"},
-              {"ParameterJson":"{\"TargetPropertyNamePath\": [\"StrikePrice\"], \"ComparePropertyNamePath\": [\"Commodity\", \"LimitDown\"]}","ProcessType":"MoreThanColumnsFilter"},
-              {"ProcessType":"LessThanValueFilter","ParameterJson":"{\"TargetPropertyNamePath\": [\"ChangeRange\"], \"Value\": 0 }"},
-              {"ParameterJson":"{\"TargetPropertyNamePath\": [\"ChangeRange\"]}","ProcessType":"AscOrder"},
-              {"ProcessType":"ThenDescOrder","ParameterJson":"{\"TargetPropertyNamePath\": [\"TotalVolume\"]}"},
-              {"ProcessType":"ThenAscOrder","ParameterJson":"{\"TargetPropertyNamePath\": [\"CommKey\"]}"},
-              {"ParameterJson":"{\"Count\":20}","ProcessType":"TakeCount"}
-            ]
-          }
+          newsKeywords: ['跌停', '大跌', '賣壓', '弱勢']
         }
       ]
     },
@@ -506,7 +441,7 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
   const handleTriggerSelect = (categoryKey: string, triggerKey: string) => {
     const category = triggerCategories.find(c => c.key === categoryKey);
     const trigger = category?.triggers.find(t => t.key === triggerKey);
-    
+
     if (trigger) {
       const triggerConfig: TriggerConfig = {
         triggerType: categoryKey as any,
@@ -515,10 +450,9 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
         volumeFilter: trigger.volumeFilter,
         sectorFilter: trigger.sectorFilter,
         macroFilter: trigger.macroFilter,
-        newsFilter: trigger.newsFilter,
-        apiConfig: trigger.apiConfig // 添加 apiConfig 支援
+        newsFilter: trigger.newsFilter
       };
-      
+
       // 更新觸發器配置
       onChange({
         ...value,
@@ -526,7 +460,7 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
         threshold: value.threshold || DEFAULT_THRESHOLD,
         filters: value.filters || FILTER_DEFAULTS
       });
-      
+
       // 智能更新新聞搜尋關鍵字
       if (trigger.newsKeywords && onNewsConfigChange) {
         onNewsConfigChange(trigger.newsKeywords);
@@ -1063,6 +997,7 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
       const triggerKey = value.triggerConfig?.triggerKey;
 
       switch (triggerKey) {
+        // After-hours triggers
         case 'limit_down_after_hours':
           result = await PostingManagementAPI.getAfterHoursLimitDownStocks(queryParams);
           break;
@@ -1081,6 +1016,27 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
         case 'volume_change_rate_low':
           result = await PostingManagementAPI.getAfterHoursVolumeChangeRateLow(queryParams);
           break;
+
+        // Intraday triggers
+        case 'intraday_gainers_by_amount':
+          result = await PostingManagementAPI.getIntradayGainersByAmount(value.stockCountLimit || 20);
+          break;
+        case 'intraday_volume_leaders':
+          result = await PostingManagementAPI.getIntradayVolumeLeaders(value.stockCountLimit || 20);
+          break;
+        case 'intraday_amount_leaders':
+          result = await PostingManagementAPI.getIntradayAmountLeaders(value.stockCountLimit || 20);
+          break;
+        case 'intraday_limit_down':
+          result = await PostingManagementAPI.getIntradayLimitDown(value.stockCountLimit || 20);
+          break;
+        case 'intraday_limit_up':
+          result = await PostingManagementAPI.getIntradayLimitUp(value.stockCountLimit || 20);
+          break;
+        case 'intraday_limit_down_by_amount':
+          result = await PostingManagementAPI.getIntradayLimitDownByAmount(value.stockCountLimit || 20);
+          break;
+
         default:
           result = await PostingManagementAPI.getAfterHoursLimitUpStocks(queryParams);
       }
@@ -1128,6 +1084,7 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
       const triggerKey = value.triggerConfig?.triggerKey;
 
       switch (triggerKey) {
+        // After-hours triggers
         case 'limit_down_after_hours':
           result = await PostingManagementAPI.getAfterHoursLimitDownStocks(apiParams);
           break;
@@ -1146,6 +1103,27 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
         case 'volume_change_rate_low':
           result = await PostingManagementAPI.getAfterHoursVolumeChangeRateLow(apiParams);
           break;
+
+        // Intraday triggers
+        case 'intraday_gainers_by_amount':
+          result = await PostingManagementAPI.getIntradayGainersByAmount(apiParams.stockCountLimit);
+          break;
+        case 'intraday_volume_leaders':
+          result = await PostingManagementAPI.getIntradayVolumeLeaders(apiParams.stockCountLimit);
+          break;
+        case 'intraday_amount_leaders':
+          result = await PostingManagementAPI.getIntradayAmountLeaders(apiParams.stockCountLimit);
+          break;
+        case 'intraday_limit_down':
+          result = await PostingManagementAPI.getIntradayLimitDown(apiParams.stockCountLimit);
+          break;
+        case 'intraday_limit_up':
+          result = await PostingManagementAPI.getIntradayLimitUp(apiParams.stockCountLimit);
+          break;
+        case 'intraday_limit_down_by_amount':
+          result = await PostingManagementAPI.getIntradayLimitDownByAmount(apiParams.stockCountLimit);
+          break;
+
         default:
           result = await PostingManagementAPI.getAfterHoursLimitUpStocks(apiParams);
       }
@@ -2231,36 +2209,6 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
         </Card>
       )}
       
-      {/* 盤中觸發器顯示 */}
-      {value.triggerConfig?.triggerType === 'intraday' && value.triggerConfig?.apiConfig && (
-        <div style={{ marginTop: '16px' }}>
-          <IntradayTriggerDisplay
-            triggerConfig={value.triggerConfig.apiConfig}
-            onStockSelect={(stocks, stockNames) => {
-              // 自動將獲取的股票添加到篩選列表
-              const existingStocks = value.stock_codes || [];
-              const existingStockNames = value.stock_names || [];
-              const newStocks = [...new Set([...existingStocks, ...stocks])];
-              
-              // 合併股票名稱，優先使用傳入的 stockNames
-              const newStockNames = newStocks.map(code => {
-                const index = stocks.indexOf(code);
-                if (index >= 0 && stockNames && stockNames[index]) {
-                  return stockNames[index];
-                }
-                return companyNameMapping[code] || `股票${code}`;
-              });
-              
-              onChange({
-                ...value,
-                stock_codes: newStocks,
-                stock_names: newStockNames
-              });
-            }}
-            selectedStocks={value.stock_codes || []}
-          />
-        </div>
-      )}
 
       {/* 股票代號列表輸入 */}
       {value.triggerConfig?.triggerKey === 'stock_code_list' && (

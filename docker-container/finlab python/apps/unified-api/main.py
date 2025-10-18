@@ -1377,6 +1377,145 @@ async def get_intraday_trigger_stocks(request: Request):
         logger.error(f"❌ [盤中觸發器] 執行失敗: {e}")
         raise HTTPException(status_code=500, detail=f"執行失敗: {str(e)}")
 
+# Helper function for intraday triggers
+async def execute_cmoney_intraday_trigger(processing: list, trigger_name: str):
+    """執行 CMoney 盤中觸發器的通用函數"""
+    try:
+        endpoint = "https://asterisk-chipsapi.cmoney.tw/AdditionInformationRevisit/api/GetAll/StockCalculation"
+        columns = "交易時間,傳輸序號,內外盤旗標,即時成交價,即時成交量,最低價,最高價,標的,漲跌,漲跌幅,累計成交總額,累計成交量,開盤價"
+
+        request_data = {
+            "AppId": 2,
+            "Guid": "583defeb-f7cb-49e7-964d-d0817e944e4f",
+            "Processing": processing
+        }
+
+        # 動態取得認證 token
+        auth_token = await get_dynamic_auth_token()
+
+        headers = {
+            "Accept-Encoding": "gzip",
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {auth_token}",
+            "cmoneyapi-trace-context": '{"appVersion":"10.111.0","osName":"iOS","platform":1,"manufacturer":"Apple","osVersion":"18.6.2","appId":2,"model":"iPhone15,2"}'
+        }
+
+        # 發送請求到 CMoney API
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                f"{endpoint}?columns={columns}",
+                json=request_data,
+                headers=headers
+            )
+
+            if response.status_code != 200:
+                raise HTTPException(status_code=500, detail=f"CMoney API 請求失敗: {response.status_code}")
+
+            raw_data = response.json()
+            stock_codes = [item[7] for item in raw_data if len(item) > 7 and item[7]]
+
+            stocks_with_info = []
+            for stock_code in stock_codes:
+                stocks_with_info.append({
+                    "stock_code": stock_code,
+                    "stock_name": get_stock_name(stock_code),
+                    "industry": get_stock_industry(stock_code)
+                })
+
+            logger.info(f"✅ [{trigger_name}] 獲取 {len(stocks_with_info)} 支股票")
+
+            return {
+                "success": True,
+                "total_count": len(stocks_with_info),
+                "stocks": stocks_with_info,
+                "timestamp": datetime.now().isoformat(),
+                "trigger_type": trigger_name
+            }
+
+    except Exception as e:
+        logger.error(f"❌ [{trigger_name}] 執行失敗: {e}")
+        raise HTTPException(status_code=500, detail=f"{trigger_name} 執行失敗: {str(e)}")
+
+# 6 個獨立的盤中觸發器端點
+
+@app.get("/api/intraday/gainers-by-amount")
+async def get_intraday_gainers_by_amount(limit: int = Query(20, description="返回股票數量")):
+    """漲幅排序+成交額"""
+    processing = [
+        {"ParameterJson":"{ \"TargetPropertyNamePath\" : [ \"TotalTransactionAmount\"]}","ProcessType":"DescOrder"},
+        {"ProcessType":"EqualValueFilter","ParameterJson":"{\"TargetPropertyNamePath\": [\"Commodity\", \"IsChipsKPopularStocksSortSubject\"], \"Value\": true}"},
+        {"ProcessType":"LessThanColumnsFilter","ParameterJson":"{\"TargetPropertyNamePath\": [\"StrikePrice\"], \"ComparePropertyNamePath\": [\"Commodity\" , \"LimitUp\"]}"},
+        {"ProcessType":"MoreThanValueFilter","ParameterJson":"{\"TargetPropertyNamePath\": [\"ChangeRange\"], \"Value\": 0 }"},
+        {"ParameterJson":"{\"TargetPropertyNamePath\": [\"ChangeRange\"]}","ProcessType":"DescOrder"},
+        {"ProcessType":"ThenDescOrder","ParameterJson":"{\"TargetPropertyNamePath\": [\"TotalVolume\"]}"},
+        {"ParameterJson":"{\"TargetPropertyNamePath\": [\"CommKey\"]}","ProcessType":"ThenAscOrder"},
+        {"ProcessType":"TakeCount","ParameterJson":f"{{\"Count\":{limit}}}"}
+    ]
+    return await execute_cmoney_intraday_trigger(processing, "漲幅排序+成交額")
+
+@app.get("/api/intraday/volume-leaders")
+async def get_intraday_volume_leaders(limit: int = Query(20, description="返回股票數量")):
+    """成交量排序"""
+    processing = [
+        {"ProcessType":"EqualValueFilter","ParameterJson":"{\"TargetPropertyNamePath\": [\"Commodity\", \"IsChipsKPopularStocksSortSubject\"], \"Value\": true}"},
+        {"ProcessType":"DescOrder","ParameterJson":"{\"TargetPropertyNamePath\" :[\"TotalVolume\"]}"},
+        {"ProcessType":"ThenDescOrder","ParameterJson":"{\"TargetPropertyNamePath\" :[\"ChangeRange\"]}"},
+        {"ParameterJson":"{\"TargetPropertyNamePath\" :[\"CommKey\"]}","ProcessType":"ThenAscOrder"},
+        {"ParameterJson":f"{{\"Count\":{limit}}}","ProcessType":"TakeCount"}
+    ]
+    return await execute_cmoney_intraday_trigger(processing, "成交量排序")
+
+@app.get("/api/intraday/amount-leaders")
+async def get_intraday_amount_leaders(limit: int = Query(20, description="返回股票數量")):
+    """成交額排序"""
+    processing = [
+        {"ProcessType":"EqualValueFilter","ParameterJson":"{\"TargetPropertyNamePath\":[\"Commodity\", \"IsChipsKPopularStocksSortSubject\"], \"Value\": true}"},
+        {"ProcessType":"DescOrder","ParameterJson":"{\"TargetPropertyNamePath\":[\"TotalTransactionAmount\"]}"},
+        {"ParameterJson":"{\"TargetPropertyNamePath\":[\"TotalVolume\" ]}","ProcessType":"ThenDescOrder"},
+        {"ProcessType":"ThenDescOrder","ParameterJson":"{\"TargetPropertyNamePath\":[\"ChangeRange\"]}"},
+        {"ProcessType":"TakeCount","ParameterJson":f"{{\"Count\":{limit}}}"}
+    ]
+    return await execute_cmoney_intraday_trigger(processing, "成交額排序")
+
+@app.get("/api/intraday/limit-down")
+async def get_intraday_limit_down(limit: int = Query(20, description="返回股票數量")):
+    """跌停篩選"""
+    processing = [
+        {"ProcessType":"EqualValueFilter","ParameterJson":"{\"TargetPropertyNamePath\": [\"Commodity\", \"IsChipsKPopularStocksSortSubject\"], \"Value\": true}"},
+        {"ParameterJson":"{\"TargetPropertyNamePath\": [\"StrikePrice\"], \"ComparePropertyNamePath\": [\"Commodity\", \"LimitDown\"]}","ProcessType":"EqualColumnsFilter"},
+        {"ProcessType":"AscOrder","ParameterJson":"{\"TargetPropertyNamePath\":[\"ChangeRange\"]}"},
+        {"ProcessType":"ThenDescOrder","ParameterJson":"{\"TargetPropertyNamePath\":[\"TotalVolume\"]}"},
+        {"ParameterJson":f"{{\"Count\":{limit}}}","ProcessType":"TakeCount"}
+    ]
+    return await execute_cmoney_intraday_trigger(processing, "跌停篩選")
+
+@app.get("/api/intraday/limit-up")
+async def get_intraday_limit_up(limit: int = Query(20, description="返回股票數量")):
+    """漲停篩選"""
+    processing = [
+        {"ParameterJson":"{\"TargetPropertyNamePath\": [\"Commodity\", \"IsChipsKPopularStocksSortSubject\"], \"Value\": true}","ProcessType":"EqualValueFilter"},
+        {"ProcessType":"EqualColumnsFilter","ParameterJson":"{\"TargetPropertyNamePath\": [\"StrikePrice\"], \"ComparePropertyNamePath\": [\"Commodity\", \"LimitUp\"]}"},
+        {"ProcessType":"DescOrder","ParameterJson":"{\"TargetPropertyNamePath\": [\"ChangeRange\"]}"},
+        {"ParameterJson":"{\"TargetPropertyNamePath\": [\"TotalVolume\"]}","ProcessType":"ThenDescOrder"},
+        {"ProcessType":"TakeCount","ParameterJson":f"{{\"Count\":{limit}}}"}
+    ]
+    return await execute_cmoney_intraday_trigger(processing, "漲停篩選")
+
+@app.get("/api/intraday/limit-down-by-amount")
+async def get_intraday_limit_down_by_amount(limit: int = Query(20, description="返回股票數量")):
+    """跌停篩選+成交額"""
+    processing = [
+        {"ParameterJson":"{ \"TargetPropertyNamePath\" : [ \"TotalTransactionAmount\"]}","ProcessType":"DescOrder"},
+        {"ParameterJson":"{\"TargetPropertyNamePath\":[\"Commodity\", \"IsChipsKPopularStocksSortSubject\" ], \"Value\": true}","ProcessType":"EqualValueFilter"},
+        {"ParameterJson":"{\"TargetPropertyNamePath\": [\"StrikePrice\"], \"ComparePropertyNamePath\": [\"Commodity\", \"LimitDown\"]}","ProcessType":"MoreThanColumnsFilter"},
+        {"ProcessType":"LessThanValueFilter","ParameterJson":"{\"TargetPropertyNamePath\": [\"ChangeRange\"], \"Value\": 0 }"},
+        {"ParameterJson":"{\"TargetPropertyNamePath\": [\"ChangeRange\"]}","ProcessType":"AscOrder"},
+        {"ProcessType":"ThenDescOrder","ParameterJson":"{\"TargetPropertyNamePath\": [\"TotalVolume\"]}"},
+        {"ProcessType":"ThenAscOrder","ParameterJson":"{\"TargetPropertyNamePath\": [\"CommKey\"]}"},
+        {"ParameterJson":f"{{\"Count\":{limit}}}","ProcessType":"TakeCount"}
+    ]
+    return await execute_cmoney_intraday_trigger(processing, "跌停篩選+成交額")
+
 # ==================== Posting Service 功能 ====================
 
 @app.post("/api/posting")

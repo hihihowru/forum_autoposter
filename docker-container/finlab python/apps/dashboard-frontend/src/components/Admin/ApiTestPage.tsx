@@ -79,8 +79,13 @@ const ApiTestPage: React.FC = () => {
     { method: 'GET', path: '/api/after_hours_volume_change_rate_high', description: 'After-hours high volume change rate', category: 'After Hours Triggers' },
     { method: 'GET', path: '/api/after_hours_volume_change_rate_low', description: 'After-hours low volume change rate', category: 'After Hours Triggers' },
 
-    // Intraday Trigger
-    { method: 'POST', path: '/api/intraday-trigger/execute', description: 'Execute intraday trigger', category: 'Intraday Triggers' },
+    // Intraday Triggers (6 separate endpoints)
+    { method: 'GET', path: '/api/intraday/gainers-by-amount', description: '漲幅排序+成交額', category: 'Intraday Triggers' },
+    { method: 'GET', path: '/api/intraday/volume-leaders', description: '成交量排序', category: 'Intraday Triggers' },
+    { method: 'GET', path: '/api/intraday/amount-leaders', description: '成交額排序', category: 'Intraday Triggers' },
+    { method: 'GET', path: '/api/intraday/limit-down', description: '跌停篩選', category: 'Intraday Triggers' },
+    { method: 'GET', path: '/api/intraday/limit-up', description: '漲停篩選', category: 'Intraday Triggers' },
+    { method: 'GET', path: '/api/intraday/limit-down-by-amount', description: '跌停篩選+成交額', category: 'Intraday Triggers' },
 
     // Dashboard
     { method: 'GET', path: '/api/dashboard/system-monitoring', description: 'System monitoring data', category: 'Dashboard' },
