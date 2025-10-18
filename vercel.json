@@ -1,8 +1,14 @@
 {
   "version": 2,
-  "buildCommand": "cd 'docker-container/finlab python/apps/dashboard-frontend' && npm run build",
-  "outputDirectory": "docker-container/finlab python/apps/dashboard-frontend/dist",
-  "installCommand": "cd 'docker-container/finlab python/apps/dashboard-frontend' && npm install",
+  "builds": [
+    {
+      "src": "docker-container/finlab python/apps/dashboard-frontend/package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist"
+      }
+    }
+  ],
   "routes": [
     {
       "src": "/api/(.*)",
@@ -10,15 +16,15 @@
     },
     {
       "src": "/assets/(.*)",
-      "dest": "/assets/$1"
+      "dest": "/docker-container/finlab python/apps/dashboard-frontend/dist/assets/$1"
     },
     {
       "src": "/(.*\\.(js|css|ico|png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot))",
-      "dest": "/$1"
+      "dest": "/docker-container/finlab python/apps/dashboard-frontend/dist/$1"
     },
     {
       "src": "/(.*)",
-      "dest": "/index.html"
+      "dest": "/docker-container/finlab python/apps/dashboard-frontend/dist/index.html"
     }
   ],
   "env": {
