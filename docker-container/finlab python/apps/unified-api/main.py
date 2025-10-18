@@ -764,21 +764,30 @@ async def get_after_hours_volume_amount_high(
                 # 檢查漲跌幅閾值
                 if abs(change_percent) < changeThreshold:
                     continue
-                
-                # 計算成交金額
+
+                # 計算成交金額和成交量
                 volume_amount = 0
+                volume = 0
                 if latest_volume is not None and stock_id in latest_volume.index:
                     vol = latest_volume[stock_id]
                     if not pd.isna(vol):
-                        volume_amount = int(vol) * float(today_price)
-                
+                        volume = int(vol)
+                        volume_amount = volume * float(today_price)
+
+                # 計算五日統計
+                stats = calculate_trading_stats(stock_id, latest_date, close_df)
+
                 volume_amount_stocks.append({
                     'stock_id': stock_id,
                     'stock_name': get_stock_name(stock_id),
+                    'industry': get_stock_industry(stock_id),
                     'price': float(today_price),
                     'change_amount': float(today_price - yesterday_price),
                     'change_percent': float(change_percent),
+                    'volume': volume,
                     'volume_amount': volume_amount,
+                    'up_days_5': stats['up_days'],
+                    'five_day_change': stats['five_day_change'],
                     'date': latest_date.strftime('%Y-%m-%d'),
                     'previous_date': previous_date.strftime('%Y-%m-%d')
                 })
@@ -851,21 +860,30 @@ async def get_after_hours_volume_amount_low(
                 # 檢查漲跌幅閾值
                 if abs(change_percent) < changeThreshold:
                     continue
-                
-                # 計算成交金額
+
+                # 計算成交金額和成交量
                 volume_amount = 0
+                volume = 0
                 if latest_volume is not None and stock_id in latest_volume.index:
                     vol = latest_volume[stock_id]
                     if not pd.isna(vol):
-                        volume_amount = int(vol) * float(today_price)
-                
+                        volume = int(vol)
+                        volume_amount = volume * float(today_price)
+
+                # 計算五日統計
+                stats = calculate_trading_stats(stock_id, latest_date, close_df)
+
                 volume_amount_stocks.append({
                     'stock_id': stock_id,
                     'stock_name': get_stock_name(stock_id),
+                    'industry': get_stock_industry(stock_id),
                     'price': float(today_price),
                     'change_amount': float(today_price - yesterday_price),
                     'change_percent': float(change_percent),
+                    'volume': volume,
                     'volume_amount': volume_amount,
+                    'up_days_5': stats['up_days'],
+                    'five_day_change': stats['five_day_change'],
                     'date': latest_date.strftime('%Y-%m-%d'),
                     'previous_date': previous_date.strftime('%Y-%m-%d')
                 })
@@ -962,14 +980,26 @@ async def get_after_hours_volume_change_rate_high(
                 if yesterday_volume_amount > 0:
                     volume_change_rate = ((today_volume_amount - yesterday_volume_amount) / yesterday_volume_amount) * 100
                 
+                # 計算五日統計
+                stats = calculate_trading_stats(stock_id, latest_date, close_df)
+
+                # 計算成交量
+                today_volume = 0
+                if latest_volume is not None and stock_id in latest_volume.index and not pd.isna(latest_volume[stock_id]):
+                    today_volume = int(latest_volume[stock_id])
+
                 volume_change_stocks.append({
                     'stock_id': stock_id,
                     'stock_name': get_stock_name(stock_id),
+                    'industry': get_stock_industry(stock_id),
                     'price': float(today_price),
                     'change_amount': float(today_price - yesterday_price),
                     'change_percent': float(change_percent),
+                    'volume': today_volume,
                     'volume_amount': today_volume_amount,
                     'volume_change_rate': float(volume_change_rate),
+                    'up_days_5': stats['up_days'],
+                    'five_day_change': stats['five_day_change'],
                     'date': latest_date.strftime('%Y-%m-%d'),
                     'previous_date': previous_date.strftime('%Y-%m-%d')
                 })
@@ -1066,14 +1096,26 @@ async def get_after_hours_volume_change_rate_low(
                 if yesterday_volume_amount > 0:
                     volume_change_rate = ((today_volume_amount - yesterday_volume_amount) / yesterday_volume_amount) * 100
                 
+                # 計算五日統計
+                stats = calculate_trading_stats(stock_id, latest_date, close_df)
+
+                # 計算成交量
+                today_volume = 0
+                if latest_volume is not None and stock_id in latest_volume.index and not pd.isna(latest_volume[stock_id]):
+                    today_volume = int(latest_volume[stock_id])
+
                 volume_change_stocks.append({
                     'stock_id': stock_id,
                     'stock_name': get_stock_name(stock_id),
+                    'industry': get_stock_industry(stock_id),
                     'price': float(today_price),
                     'change_amount': float(today_price - yesterday_price),
                     'change_percent': float(change_percent),
+                    'volume': today_volume,
                     'volume_amount': today_volume_amount,
                     'volume_change_rate': float(volume_change_rate),
+                    'up_days_5': stats['up_days'],
+                    'five_day_change': stats['five_day_change'],
                     'date': latest_date.strftime('%Y-%m-%d'),
                     'previous_date': previous_date.strftime('%Y-%m-%d')
                 })
