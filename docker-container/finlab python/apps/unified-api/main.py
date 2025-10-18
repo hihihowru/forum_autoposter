@@ -163,7 +163,7 @@ def startup_event():
     logger.info(f"🔍 [啟動檢查] DATABASE_URL 存在: {os.getenv('DATABASE_URL') is not None}")
     logger.info(f"🔍 [啟動檢查] PORT: {os.getenv('PORT', '未設定')}")
 
-    # 初始化數據庫連接
+    # 初始化數據庫連接 - Don't crash startup if DB fails
     try:
         database_url = os.getenv("DATABASE_URL")
         if database_url:
@@ -175,7 +175,7 @@ def startup_event():
             # 添加連接參數以解決 Railway 連接問題
             import urllib.parse
             parsed_url = urllib.parse.urlparse(database_url)
-            
+
             # 構建連接參數
             connect_kwargs = {
                 'host': parsed_url.hostname,
@@ -189,43 +189,43 @@ def startup_event():
                 'keepalives_interval': 30,
                 'keepalives_count': 3
             }
-            
-            # Create connection pool (5-20 concurrent connections)
+
+            # Create connection pool (2-10 concurrent connections)
+            logger.info(f"🔗 創建數據庫連接池...")
+            db_pool = pool.SimpleConnectionPool(
+                minconn=2,  # Minimum 2 connections
+                maxconn=10,  # Maximum 10 concurrent connections
+                **connect_kwargs
+            )
+            logger.info("✅ PostgreSQL 連接池創建成功 (2-10 connections)")
+
+            # Test pool with a connection
+            test_conn = db_pool.getconn()
             try:
-                logger.info(f"🔗 創建數據庫連接池...")
-                global db_pool
-                db_pool = pool.SimpleConnectionPool(
-                    minconn=2,  # Minimum 2 connections
-                    maxconn=10,  # Maximum 10 concurrent connections
-                    **connect_kwargs
-                )
-                logger.info("✅ PostgreSQL 連接池創建成功 (2-10 connections)")
+                with test_conn.cursor() as cursor:
+                    cursor.execute("SELECT 1")
+                    cursor.fetchone()
+                logger.info("✅ 數據庫連接池測試成功")
+            finally:
+                db_pool.putconn(test_conn)
 
-                # Test pool with a connection
-                test_conn = db_pool.getconn()
-                try:
-                    with test_conn.cursor() as cursor:
-                        cursor.execute("SELECT 1")
-                        cursor.fetchone()
-                    logger.info("✅ 數據庫連接池測試成功")
-                finally:
-                    db_pool.putconn(test_conn)
-
-                # Create tables using pool
+            # Create tables using pool
+            try:
                 logger.info("📋 開始創建 post_records 表...")
                 create_post_records_table()
                 logger.info("✅ post_records 表創建完成")
-
-            except Exception as e:
-                logger.error(f"❌ 數據庫連接池創建失敗: {e}")
-                db_pool = None
+            except Exception as table_error:
+                logger.error(f"❌ 創建表失敗: {table_error}")
+                # Don't fail startup if table creation fails
         else:
             logger.warning("⚠️ 未找到 DATABASE_URL 環境變數，將無法查詢貼文數據")
+            db_pool = None
     except Exception as e:
         logger.error(f"❌ PostgreSQL 數據庫連接失敗: {e}")
         logger.error(f"❌ 錯誤詳情: {type(e).__name__}: {str(e)}")
         import traceback
         logger.error(f"❌ 完整錯誤堆疊: {traceback.format_exc()}")
+        db_pool = None  # Ensure pool is None on failure
 
     api_key = os.getenv("FINLAB_API_KEY")
     if api_key:
