@@ -1523,19 +1523,73 @@ async def get_posts(
     logger.info(f"收到 get_posts 請求: skip={skip}, limit={limit}, status={status}")
 
     try:
+        # 檢查數據庫連接狀態
         if not db_connection:
-            logger.warning("數據庫連接不可用，返回空數據")
+            logger.error("❌ 數據庫連接不存在，無法查詢貼文數據")
             return {
-                "success": True,
+                "success": False,
                 "posts": [],
                 "count": 0,
                 "skip": skip,
                 "limit": limit,
+                "error": "數據庫連接不可用",
+                "timestamp": datetime.now().isoformat()
+            }
+
+        # 測試數據庫連接
+        try:
+            with db_connection.cursor() as test_cursor:
+                test_cursor.execute("SELECT 1")
+                test_cursor.fetchone()
+            logger.info("✅ 數據庫連接測試成功")
+        except Exception as db_test_error:
+            logger.error(f"❌ 數據庫連接測試失敗: {db_test_error}")
+            return {
+                "success": False,
+                "posts": [],
+                "count": 0,
+                "skip": skip,
+                "limit": limit,
+                "error": f"數據庫連接測試失敗: {str(db_test_error)}",
                 "timestamp": datetime.now().isoformat()
             }
 
         # 查詢 post_records 表
         with db_connection.cursor(cursor_factory=RealDictCursor) as cursor:
+            # 首先檢查表是否存在
+            cursor.execute("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_schema = 'public' 
+                    AND table_name = 'post_records'
+                );
+            """)
+            table_exists = cursor.fetchone()[0]
+            logger.info(f"📊 post_records 表存在狀態: {table_exists}")
+            
+            if not table_exists:
+                logger.error("❌ post_records 表不存在")
+                return {
+                    "success": False,
+                    "posts": [],
+                    "count": 0,
+                    "skip": skip,
+                    "limit": limit,
+                    "error": "post_records 表不存在",
+                    "timestamp": datetime.now().isoformat()
+                }
+
+            # 獲取總數（在查詢前先檢查）
+            count_query = "SELECT COUNT(*) as count FROM post_records"
+            if status:
+                count_query += " WHERE status = %s"
+                cursor.execute(count_query, [status])
+            else:
+                cursor.execute(count_query)
+            
+            total_count = cursor.fetchone()['count']
+            logger.info(f"📊 數據庫中總貼文數: {total_count}")
+
             # 構建查詢
             query = "SELECT * FROM post_records"
             params = []
@@ -1547,21 +1601,11 @@ async def get_posts(
             query += " ORDER BY created_at DESC LIMIT %s OFFSET %s"
             params.extend([limit, skip])
 
-            logger.info(f"執行 SQL 查詢: {query} with params: {params}")
+            logger.info(f"🔍 執行 SQL 查詢: {query} with params: {params}")
             cursor.execute(query, params)
             posts = cursor.fetchall()
 
-            # 獲取總數
-            count_query = "SELECT COUNT(*) as count FROM post_records"
-            if status:
-                count_query += " WHERE status = %s"
-                cursor.execute(count_query, [status] if status else [])
-            else:
-                cursor.execute(count_query)
-
-            total_count = cursor.fetchone()['count']
-
-            logger.info(f"查詢到 {len(posts)} 條貼文數據，總數: {total_count}")
+            logger.info(f"✅ 查詢到 {len(posts)} 條貼文數據，總數: {total_count}")
 
             return {
                 "success": True,
@@ -1573,7 +1617,10 @@ async def get_posts(
             }
 
     except Exception as e:
-        logger.error(f"查詢貼文數據失敗: {e}")
+        logger.error(f"❌ 查詢貼文數據失敗: {e}")
+        logger.error(f"❌ 錯誤詳情: {type(e).__name__}: {str(e)}")
+        import traceback
+        logger.error(f"❌ 完整錯誤堆疊: {traceback.format_exc()}")
         return {
             "success": False,
             "posts": [],
@@ -2042,6 +2089,71 @@ async def reset_database():
     except Exception as e:
         logger.error(f"❌ 重置數據庫失敗: {e}")
         return {"error": str(e)}
+
+@app.get("/admin/debug-database")
+async def debug_database():
+    """調試數據庫連接和表狀態（管理員功能）"""
+    try:
+        debug_info = {
+            "timestamp": datetime.now().isoformat(),
+            "database_connection": None,
+            "table_exists": False,
+            "table_count": 0,
+            "sample_data": None,
+            "error": None
+        }
+        
+        if not db_connection:
+            debug_info["error"] = "數據庫連接不存在"
+            return debug_info
+        
+        # 測試數據庫連接
+        try:
+            with db_connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+                cursor.fetchone()
+            debug_info["database_connection"] = "✅ 連接正常"
+        except Exception as e:
+            debug_info["database_connection"] = f"❌ 連接失敗: {str(e)}"
+            debug_info["error"] = str(e)
+            return debug_info
+        
+        # 檢查表是否存在
+        try:
+            with db_connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.tables 
+                        WHERE table_schema = 'public' 
+                        AND table_name = 'post_records'
+                    );
+                """)
+                table_exists = cursor.fetchone()[0]
+                debug_info["table_exists"] = table_exists
+                
+                if table_exists:
+                    # 獲取記錄數
+                    cursor.execute("SELECT COUNT(*) FROM post_records")
+                    count = cursor.fetchone()[0]
+                    debug_info["table_count"] = count
+                    
+                    # 獲取樣本數據
+                    cursor.execute("SELECT post_id, title, status, created_at FROM post_records LIMIT 3")
+                    sample_data = cursor.fetchall()
+                    debug_info["sample_data"] = [dict(row) for row in sample_data]
+                else:
+                    debug_info["error"] = "post_records 表不存在"
+                    
+        except Exception as e:
+            debug_info["error"] = f"查詢表信息失敗: {str(e)}"
+        
+        return debug_info
+        
+    except Exception as e:
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "error": f"調試失敗: {str(e)}"
+        }
 
 @app.post("/admin/fix-database")
 async def fix_database():

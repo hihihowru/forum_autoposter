@@ -37,8 +37,11 @@ const KOLDetail: React.FC = () => {
     setError(null);
     
     try {
+      // 使用環境變數或默認 Railway URL
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://forumautoposter-production.up.railway.app';
+      
       // 首先獲取 KOL 列表，找到對應的 serial
-      const listResponse = await axios.get('http://localhost:8001/api/kol/list');
+      const listResponse = await axios.get(`${API_BASE_URL}/api/kol/list`);
       const kols = listResponse.data.data || [];
       
       // 根據 member_id 找到對應的 KOL
@@ -49,7 +52,7 @@ const KOLDetail: React.FC = () => {
       }
       
       // 獲取完整的 KOL 詳情
-      const response = await axios.get(`http://localhost:8001/api/kol/${kol.serial}`);
+      const response = await axios.get(`${API_BASE_URL}/api/kol/${kol.serial}`);
       
       if (response.data) {
         // 直接使用 PostgreSQL API 返回的數據

@@ -1,7 +1,9 @@
 import axios from 'axios';
 
-// 使用現有的dashboard-api服務
-const API_BASE_URL = 'http://localhost:8007/api/dashboard';
+// 使用環境變數或默認 Railway URL
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://forumautoposter-production.up.railway.app';
+const POSTING_SERVICE_URL = `${API_BASE_URL}/api`;
+const DASHBOARD_API_URL = `${API_BASE_URL}/api/dashboard`;
 
 export interface KOLProfile {
   serial: number;
@@ -32,7 +34,7 @@ class KOLService {
       console.log('KOLService.getKOLs() 被調用');
       
       // 嘗試從 posting-service 獲取 KOL 數據
-      const response = await axios.get('http://localhost:8001/posts/kol-list');
+      const response = await axios.get(`${POSTING_SERVICE_URL}/kol/list`);
       
       if (response.data && Array.isArray(response.data)) {
         console.log('從後端API獲取到KOL數據:', response.data.length, '個KOL');
@@ -137,7 +139,7 @@ class KOLService {
    */
   async getKOLBySerial(serial: number): Promise<KOLProfile | null> {
     try {
-      const response = await axios.get(`${API_BASE_URL}/kols/${serial}`);
+      const response = await axios.get(`${DASHBOARD_API_URL}/kols/${serial}`);
       return response.data;
     } catch (error) {
       console.error(`獲取KOL ${serial} 失敗:`, error);
@@ -157,7 +159,7 @@ class KOLService {
    */
   async getKOLsByPersona(persona: string): Promise<KOLProfile[]> {
     try {
-      const response = await axios.get(`${API_BASE_URL}/kols?persona=${persona}`);
+      const response = await axios.get(`${DASHBOARD_API_URL}/kols?persona=${persona}`);
       return response.data;
     } catch (error) {
       console.error(`獲取人設 ${persona} 的KOL失敗:`, error);

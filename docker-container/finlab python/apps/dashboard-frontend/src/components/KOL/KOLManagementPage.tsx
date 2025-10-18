@@ -131,7 +131,9 @@ const KOLManagementPage: React.FC = () => {
   const loadKOLProfiles = async () => {
     setLoading(true);
     try {
-      const response = await axios.get('http://localhost:8001/api/kol/list');
+      // 使用環境變數或默認 Railway URL
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://forumautoposter-production.up.railway.app';
+      const response = await axios.get(`${API_BASE_URL}/api/kol/list`);
       
       // 檢查響應結構
       if (response.data && response.data.success) {

@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // KOL API 服務 - 使用 PostgreSQL 數據庫
 class KOLApiService {
-  private baseURL = 'http://localhost:8001/api/kol';
+  private baseURL = `${import.meta.env.VITE_API_BASE_URL || 'https://forumautoposter-production.up.railway.app'}/api/kol`;
   
   /**
    * 根據 member_id 獲取 KOL 詳情
