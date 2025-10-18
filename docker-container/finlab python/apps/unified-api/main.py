@@ -329,11 +329,12 @@ async def root():
         "timestamp": datetime.now().isoformat()
     }
 
+@app.get("/health")
 @app.get("/api/health")
 async def health_check():
-    """健康檢查端點"""
+    """健康檢查端點 - 支持 /health 和 /api/health 兩個路徑"""
     logger.info("收到健康檢查請求")
-    
+
     # 檢查數據庫連接狀態
     db_status = "disconnected"
     if db_connection:
@@ -345,10 +346,10 @@ async def health_check():
         except Exception as e:
             logger.warning(f"數據庫健康檢查失敗: {e}")
             db_status = "error"
-    
+
     # 檢查 FinLab API 狀態
     finlab_status = "connected" if os.getenv("FINLAB_API_KEY") else "disconnected"
-    
+
     return {
         "status": "healthy",
         "message": "Unified API is running successfully",
