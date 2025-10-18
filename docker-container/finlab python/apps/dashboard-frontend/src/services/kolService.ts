@@ -1,7 +1,8 @@
 import axios from 'axios';
+import { getApiBaseUrl } from '../config/api';
 
-// 使用環境變數或默認 Railway URL
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://forumautoposter-production.up.railway.app';
+// 使用統一的 API 配置
+const API_BASE_URL = getApiBaseUrl();
 const POSTING_SERVICE_URL = `${API_BASE_URL}/api`;
 const DASHBOARD_API_URL = `${API_BASE_URL}/api/dashboard`;
 
