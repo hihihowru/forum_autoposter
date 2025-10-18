@@ -646,20 +646,19 @@ async def get_after_hours_volume_amount_high(
 ):
     """獲取盤後成交金額高的股票（成交金額絕對值排序，由大到小）"""
     logger.info(f"收到 get_after_hours_volume_amount_high 請求: limit={limit}, changeThreshold={changeThreshold}")
-    
+
     try:
-        if not os.getenv("FINLAB_API_KEY"):
-            return {"error": "FINLAB_API_KEY not found"}
-        
+        ensure_finlab_login()
+
         # 獲取股票數據
-        data = finlab.get('price:收盤價', limit=2)
-        volume_data = finlab.get('price:成交股數', limit=2)
-        
-        if data is None or data.empty:
+        close_df = data.get('price:收盤價')
+        volume_df = data.get('price:成交股數')
+
+        if close_df is None or close_df.empty:
             return {"error": "無法獲取股票數據"}
-        
-        close_df = data.sort_index()
-        volume_df = volume_data.sort_index() if volume_data is not None else None
+
+        close_df = close_df.sort_index()
+        volume_df = volume_df.sort_index() if volume_df is not None else None
         
         latest_date = close_df.index[-1]
         previous_date = close_df.index[-2]
@@ -734,20 +733,19 @@ async def get_after_hours_volume_amount_low(
 ):
     """獲取盤後成交金額低的股票（成交金額絕對值排序，由小到大）"""
     logger.info(f"收到 get_after_hours_volume_amount_low 請求: limit={limit}, changeThreshold={changeThreshold}")
-    
+
     try:
-        if not os.getenv("FINLAB_API_KEY"):
-            return {"error": "FINLAB_API_KEY not found"}
-        
+        ensure_finlab_login()
+
         # 獲取股票數據
-        data = finlab.get('price:收盤價', limit=2)
-        volume_data = finlab.get('price:成交股數', limit=2)
-        
-        if data is None or data.empty:
+        close_df = data.get('price:收盤價')
+        volume_df = data.get('price:成交股數')
+
+        if close_df is None or close_df.empty:
             return {"error": "無法獲取股票數據"}
-        
-        close_df = data.sort_index()
-        volume_df = volume_data.sort_index() if volume_data is not None else None
+
+        close_df = close_df.sort_index()
+        volume_df = volume_df.sort_index() if volume_df is not None else None
         
         latest_date = close_df.index[-1]
         previous_date = close_df.index[-2]
@@ -822,20 +820,19 @@ async def get_after_hours_volume_change_rate_high(
 ):
     """獲取盤後成交金額變化率高的股票（成交金額變化率排序，由大到小）"""
     logger.info(f"收到 get_after_hours_volume_change_rate_high 請求: limit={limit}, changeThreshold={changeThreshold}")
-    
+
     try:
-        if not os.getenv("FINLAB_API_KEY"):
-            return {"error": "FINLAB_API_KEY not found"}
-        
-        # 獲取股票數據（需要3天的數據來計算變化率）
-        data = finlab.get('price:收盤價', limit=3)
-        volume_data = finlab.get('price:成交股數', limit=3)
-        
-        if data is None or data.empty:
+        ensure_finlab_login()
+
+        # 獲取股票數據
+        close_df = data.get('price:收盤價')
+        volume_df = data.get('price:成交股數')
+
+        if close_df is None or close_df.empty:
             return {"error": "無法獲取股票數據"}
-        
-        close_df = data.sort_index()
-        volume_df = volume_data.sort_index() if volume_data is not None else None
+
+        close_df = close_df.sort_index()
+        volume_df = volume_df.sort_index() if volume_df is not None else None
         
         latest_date = close_df.index[-1]
         previous_date = close_df.index[-2]
@@ -927,20 +924,19 @@ async def get_after_hours_volume_change_rate_low(
 ):
     """獲取盤後成交金額變化率低的股票（成交金額變化率排序，由小到大）"""
     logger.info(f"收到 get_after_hours_volume_change_rate_low 請求: limit={limit}, changeThreshold={changeThreshold}")
-    
+
     try:
-        if not os.getenv("FINLAB_API_KEY"):
-            return {"error": "FINLAB_API_KEY not found"}
-        
-        # 獲取股票數據（需要3天的數據來計算變化率）
-        data = finlab.get('price:收盤價', limit=3)
-        volume_data = finlab.get('price:成交股數', limit=3)
-        
-        if data is None or data.empty:
+        ensure_finlab_login()
+
+        # 獲取股票數據
+        close_df = data.get('price:收盤價')
+        volume_df = data.get('price:成交股數')
+
+        if close_df is None or close_df.empty:
             return {"error": "無法獲取股票數據"}
-        
-        close_df = data.sort_index()
-        volume_df = volume_data.sort_index() if volume_data is not None else None
+
+        close_df = close_df.sort_index()
+        volume_df = volume_df.sort_index() if volume_df is not None else None
         
         latest_date = close_df.index[-1]
         previous_date = close_df.index[-2]

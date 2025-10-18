@@ -70,34 +70,34 @@ const ApiTestPage: React.FC = () => {
     // Posts Management
     { method: 'GET', path: '/api/posts', description: 'Get all posts', category: 'Posts Management' },
 
-    // After Hours Triggers (6 endpoints)
-    { method: 'GET', path: '/api/after_hours_limit_up', description: 'After-hours limit up stocks', category: 'After Hours Triggers' },
-    { method: 'GET', path: '/api/after_hours_limit_down', description: 'After-hours limit down stocks', category: 'After Hours Triggers' },
-    { method: 'GET', path: '/api/after_hours_volume_amount_high', description: 'After-hours high volume (amount)', category: 'After Hours Triggers' },
-    { method: 'GET', path: '/api/after_hours_volume_amount_low', description: 'After-hours low volume (amount)', category: 'After Hours Triggers' },
-    { method: 'GET', path: '/api/after_hours_volume_change_rate_high', description: 'After-hours high volume change rate', category: 'After Hours Triggers' },
-    { method: 'GET', path: '/api/after_hours_volume_change_rate_low', description: 'After-hours low volume change rate', category: 'After Hours Triggers' },
+    // After Hours Triggers (6 endpoints) - NO /api prefix!
+    { method: 'GET', path: '/after_hours_limit_up', description: 'After-hours limit up stocks', category: 'After Hours Triggers' },
+    { method: 'GET', path: '/after_hours_limit_down', description: 'After-hours limit down stocks', category: 'After Hours Triggers' },
+    { method: 'GET', path: '/after_hours_volume_amount_high', description: 'After-hours high volume (amount)', category: 'After Hours Triggers' },
+    { method: 'GET', path: '/after_hours_volume_amount_low', description: 'After-hours low volume (amount)', category: 'After Hours Triggers' },
+    { method: 'GET', path: '/after_hours_volume_change_rate_high', description: 'After-hours high volume change rate', category: 'After Hours Triggers' },
+    { method: 'GET', path: '/after_hours_volume_change_rate_low', description: 'After-hours low volume change rate', category: 'After Hours Triggers' },
 
-    // Intraday Trigger
-    { method: 'POST', path: '/api/intraday-trigger/execute', description: 'Execute intraday trigger', category: 'Intraday Triggers' },
+    // Intraday Trigger - NO /api prefix!
+    { method: 'POST', path: '/intraday-trigger/execute', description: 'Execute intraday trigger', category: 'Intraday Triggers' },
 
     // Dashboard
     { method: 'GET', path: '/api/dashboard/system-monitoring', description: 'System monitoring data', category: 'Dashboard' },
     { method: 'GET', path: '/api/dashboard/content-management', description: 'Content management data', category: 'Dashboard' },
     { method: 'GET', path: '/api/dashboard/interaction-analysis', description: 'Interaction analysis data', category: 'Dashboard' },
 
-    // Stock & Industry Data
-    { method: 'GET', path: '/api/industries', description: 'Get all industries', category: 'Stock Data' },
-    { method: 'GET', path: '/api/stocks_by_industry', description: 'Get stocks by industry', category: 'Stock Data' },
-    { method: 'GET', path: '/api/get_ohlc', description: 'Get OHLC data', category: 'Stock Data' },
-    { method: 'GET', path: '/api/stock_mapping.json', description: 'Get stock mapping', category: 'Stock Data' },
+    // Stock & Industry Data - NO /api prefix!
+    { method: 'GET', path: '/industries', description: 'Get all industries', category: 'Stock Data' },
+    { method: 'GET', path: '/stocks_by_industry', description: 'Get stocks by industry', category: 'Stock Data' },
+    { method: 'GET', path: '/get_ohlc', description: 'Get OHLC data', category: 'Stock Data' },
+    { method: 'GET', path: '/stock_mapping.json', description: 'Get stock mapping', category: 'Stock Data' },
 
-    // Content Generation
-    { method: 'GET', path: '/api/trending', description: 'Get trending topics', category: 'Content' },
-    { method: 'GET', path: '/api/extract-keywords', description: 'Extract keywords', category: 'Content' },
-    { method: 'GET', path: '/api/search-stocks-by-keywords', description: 'Search stocks by keywords', category: 'Content' },
-    { method: 'GET', path: '/api/analyze-topic', description: 'Analyze topic', category: 'Content' },
-    { method: 'GET', path: '/api/generate-content', description: 'Generate content', category: 'Content' },
+    // Content Generation - NO /api prefix!
+    { method: 'GET', path: '/trending', description: 'Get trending topics', category: 'Content' },
+    { method: 'GET', path: '/extract-keywords', description: 'Extract keywords', category: 'Content' },
+    { method: 'GET', path: '/search-stocks-by-keywords', description: 'Search stocks by keywords', category: 'Content' },
+    { method: 'GET', path: '/analyze-topic', description: 'Analyze topic', category: 'Content' },
+    { method: 'GET', path: '/generate-content', description: 'Generate content', category: 'Content' },
   ];
 
   const testEndpoint = async (endpoint: ApiEndpoint) => {
