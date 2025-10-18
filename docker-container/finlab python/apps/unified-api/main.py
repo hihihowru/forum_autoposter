@@ -190,24 +190,18 @@ def startup_event():
                 'keepalives_count': 3
             }
 
-            # Create connection pool (2-10 concurrent connections)
+            # Create connection pool (1-10 concurrent connections)
+            # Use minconn=1 for faster startup
             logger.info(f"🔗 創建數據庫連接池...")
             db_pool = pool.SimpleConnectionPool(
-                minconn=2,  # Minimum 2 connections
+                minconn=1,  # Minimum 1 connection (faster startup)
                 maxconn=10,  # Maximum 10 concurrent connections
                 **connect_kwargs
             )
-            logger.info("✅ PostgreSQL 連接池創建成功 (2-10 connections)")
+            logger.info("✅ PostgreSQL 連接池創建成功 (1-10 connections)")
 
-            # Test pool with a connection
-            test_conn = db_pool.getconn()
-            try:
-                with test_conn.cursor() as cursor:
-                    cursor.execute("SELECT 1")
-                    cursor.fetchone()
-                logger.info("✅ 數據庫連接池測試成功")
-            finally:
-                db_pool.putconn(test_conn)
+            # Don't test pool during startup - let first request validate
+            logger.info("✅ 數據庫連接池初始化完成 (延遲測試到首次使用)")
 
             # Create tables using pool
             try:
@@ -227,12 +221,19 @@ def startup_event():
         logger.error(f"❌ 完整錯誤堆疊: {traceback.format_exc()}")
         db_pool = None  # Ensure pool is None on failure
 
-    api_key = os.getenv("FINLAB_API_KEY")
-    if api_key:
-        finlab.login(api_key)
-        logger.info("✅ FinLab API 登入成功")
-    else:
-        logger.warning("❌ 未找到 FINLAB_API_KEY 環境變數")
+    # FinLab API 登入 - Don't crash startup if FinLab login fails
+    try:
+        api_key = os.getenv("FINLAB_API_KEY")
+        if api_key:
+            logger.info("🔑 嘗試登入 FinLab API...")
+            finlab.login(api_key)
+            logger.info("✅ FinLab API 登入成功")
+        else:
+            logger.warning("⚠️ 未找到 FINLAB_API_KEY 環境變數")
+    except Exception as e:
+        logger.error(f"❌ FinLab API 登入失敗: {e}")
+        logger.error(f"❌ 錯誤詳情: {type(e).__name__}: {str(e)}")
+        # Don't crash - app can still serve other endpoints
 
     # 載入股票映射表（先嘗試靜態文件）
     try:
