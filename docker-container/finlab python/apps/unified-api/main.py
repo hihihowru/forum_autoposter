@@ -358,15 +358,20 @@ async def health_check():
 
     # 檢查數據庫連接狀態
     db_status = "disconnected"
-    if db_connection:
+    if db_pool:
+        conn = None
         try:
-            with db_connection.cursor() as cursor:
+            conn = get_db_connection()
+            with conn.cursor() as cursor:
                 cursor.execute("SELECT 1")
                 cursor.fetchone()
             db_status = "connected"
         except Exception as e:
             logger.warning(f"數據庫健康檢查失敗: {e}")
             db_status = "error"
+        finally:
+            if conn:
+                return_db_connection(conn)
 
     # 檢查 FinLab API 狀態
     finlab_status = "connected" if os.getenv("FINLAB_API_KEY") else "disconnected"
@@ -402,14 +407,17 @@ async def test_database():
         "timestamp": datetime.now().isoformat()
     }
 
+    conn = None
     try:
-        if not db_connection:
-            result["errors"].append("Database connection not initialized")
+        if not db_pool:
+            result["errors"].append("Database pool not initialized")
             return result
+
+        conn = get_db_connection()
 
         # Test 1: Basic connection test
         try:
-            with db_connection.cursor() as cursor:
+            with conn.cursor() as cursor:
                 cursor.execute("SELECT 1")
                 cursor.fetchone()
             result["connection_status"] = "connected"
@@ -420,7 +428,7 @@ async def test_database():
 
         # Test 2: List all tables
         try:
-            with db_connection.cursor() as cursor:
+            with conn.cursor() as cursor:
                 cursor.execute("""
                     SELECT table_name
                     FROM information_schema.tables
@@ -434,7 +442,7 @@ async def test_database():
 
         # Test 3: Count records in key tables
         try:
-            with db_connection.cursor() as cursor:
+            with conn.cursor() as cursor:
                 # Count KOLs
                 cursor.execute("SELECT COUNT(*) FROM kol_profiles")
                 result["kol_count"] = cursor.fetchone()[0]
@@ -453,6 +461,9 @@ async def test_database():
 
     except Exception as e:
         result["errors"].append(f"Database test error: {str(e)}")
+    finally:
+        if conn:
+            return_db_connection(conn)
 
     return result
 
