@@ -1935,6 +1935,132 @@ async def get_posts(
             "timestamp": datetime.now().isoformat()
         }
 
+@app.post("/api/posts/refresh-all")
+async def refresh_all_interactions():
+    """
+    刷新所有貼文的互動數據
+    從CMoney API獲取最新的likes, comments, shares等數據並更新到數據庫
+    """
+    logger.info("收到 refresh-all 請求")
+
+    if not db_connection:
+        return {"success": False, "error": "數據庫連接不可用", "timestamp": datetime.now().isoformat()}
+
+    try:
+        # Get KOL credentials from environment
+        email = os.getenv("FORUM_200_EMAIL")
+        password = os.getenv("FORUM_200_PASSWORD")
+
+        if not email or not password:
+            return {"success": False, "error": "KOL credentials not configured", "timestamp": datetime.now().isoformat()}
+
+        # Fetch all published posts with article_id
+        with db_connection.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute("""
+                SELECT post_id, article_id, kol_serial
+                FROM post_records
+                WHERE status = 'published' AND article_id IS NOT NULL
+                ORDER BY created_at DESC
+            """)
+            posts = cursor.fetchall()
+            db_connection.commit()
+
+        logger.info(f"Found {len(posts)} published posts to refresh")
+
+        # Login to CMoney to get access token
+        async with httpx.AsyncClient() as client:
+            login_response = await client.post(
+                "https://www.cmoney.tw/member/login/jsonp.aspx",
+                data={"a": email, "b": password, "remember": 0},
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+                timeout=30.0
+            )
+
+            if login_response.status_code != 200:
+                return {"success": False, "error": "CMoney login failed", "timestamp": datetime.now().isoformat()}
+
+            # Extract access token
+            token_data = login_response.json()
+            access_token = token_data.get("Data", {}).get("access_token")
+
+            if not access_token:
+                return {"success": False, "error": "Failed to get access token", "timestamp": datetime.now().isoformat()}
+
+            # Refresh interaction data for each post
+            updated_count = 0
+            failed_count = 0
+
+            for post in posts:
+                article_id = post['article_id']
+                post_id = post['post_id']
+
+                try:
+                    # Fetch interaction data from CMoney
+                    interaction_response = await client.get(
+                        f"https://forumservice.cmoney.tw/api/Article/{article_id}",
+                        headers={
+                            "Authorization": f"Bearer {access_token}",
+                            "X-Version": "2.0",
+                            "accept": "application/json"
+                        },
+                        timeout=15.0
+                    )
+
+                    if interaction_response.status_code == 200:
+                        data = interaction_response.json()
+
+                        # Extract interaction metrics
+                        likes = data.get("ArticleReplyDto", {}).get("SatisfiedCount", 0)
+                        comments = data.get("CommentCount", 0)
+                        shares = data.get("ArticleReplyDto", {}).get("ShareCount", 0)
+                        bookmarks = data.get("ArticleReplyDto", {}).get("CollectedCount", 0)
+
+                        # Extract emoji counts
+                        emojis = data.get("ArticleReplyDto", {}).get("PersonEmotionArticleDetailDto", {})
+                        emoji_data = {
+                            "like": emojis.get("Like", 0),
+                            "dislike": emojis.get("Dislike", 0),
+                            "laugh": emojis.get("Laugh", 0),
+                            "money": emojis.get("Money", 0),
+                            "shock": emojis.get("Shock", 0),
+                            "cry": emojis.get("Cry", 0),
+                            "think": emojis.get("Think", 0),
+                            "angry": emojis.get("Angry", 0)
+                        }
+
+                        # Update database
+                        with db_connection.cursor() as update_cursor:
+                            update_cursor.execute("""
+                                UPDATE post_records
+                                SET likes = %s, comments = %s, shares = %s, bookmarks = %s,
+                                    emoji_data = %s, last_interaction_update = CURRENT_TIMESTAMP
+                                WHERE post_id = %s
+                            """, (likes, comments, shares, bookmarks, json.dumps(emoji_data), post_id))
+
+                        updated_count += 1
+
+                except Exception as e:
+                    logger.error(f"Failed to update post {post_id}: {e}")
+                    failed_count += 1
+
+            db_connection.commit()
+
+        logger.info(f"Refresh complete: {updated_count} updated, {failed_count} failed")
+
+        return {
+            "success": True,
+            "updated_count": updated_count,
+            "failed_count": failed_count,
+            "total_posts": len(posts),
+            "timestamp": datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        if db_connection:
+            db_connection.rollback()
+        logger.error(f"❌ Refresh all failed: {e}")
+        return {"success": False, "error": str(e), "timestamp": datetime.now().isoformat()}
+
 # ==================== Trending API 功能 ====================
 
 @app.get("/api/trending")
