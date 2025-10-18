@@ -1823,6 +1823,8 @@ async def get_posts(
     """獲取貼文列表（從 PostgreSQL 數據庫）"""
     logger.info(f"收到 get_posts 請求: skip={skip}, limit={limit}, status={status}")
 
+    global db_connection
+
     try:
         # 檢查數據庫連接狀態
         if not db_connection:
@@ -1837,25 +1839,11 @@ async def get_posts(
                 "timestamp": datetime.now().isoformat()
             }
 
-        # 測試數據庫連接
+        # Reset connection if in failed state
         try:
-            with db_connection.cursor() as test_cursor:
-                test_cursor.execute("SELECT 1")
-                test_cursor.fetchone()
-            db_connection.commit()  # Commit to close transaction
-            logger.info("✅ 數據庫連接測試成功")
-        except Exception as db_test_error:
-            db_connection.rollback()  # Rollback failed transaction
-            logger.error(f"❌ 數據庫連接測試失敗: {db_test_error}")
-            return {
-                "success": False,
-                "posts": [],
-                "count": 0,
-                "skip": skip,
-                "limit": limit,
-                "error": f"數據庫連接測試失敗: {str(db_test_error)}",
-                "timestamp": datetime.now().isoformat()
-            }
+            db_connection.rollback()  # Clear any failed transactions
+        except:
+            pass  # Connection might already be closed
 
         # 查詢 post_records 表
         with db_connection.cursor(cursor_factory=RealDictCursor) as cursor:
