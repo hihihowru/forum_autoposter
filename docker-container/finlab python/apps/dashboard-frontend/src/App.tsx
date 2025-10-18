@@ -39,6 +39,7 @@ import ManualPostingPage from './components/PostingManagement/ManualPostingPage'
 // 系統設置和用戶管理組件
 import SettingsPage from './components/Settings/SettingsPage';
 import UserManagement from './components/UserManagement/UserManagement';
+import ApiTestPage from './components/Admin/ApiTestPage';
 
 // 設置 dayjs 語言
 dayjs.locale('zh-tw');
@@ -316,7 +317,17 @@ const App: React.FC = () => {
                   path="/users/roles"
                   element={<UserManagement />}
                 />
-                
+
+                {/* Admin API Testing */}
+                <Route
+                  path="/admin"
+                  element={<ApiTestPage />}
+                />
+                <Route
+                  path="/admin/api-test"
+                  element={<ApiTestPage />}
+                />
+
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </Content>

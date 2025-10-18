@@ -1,0 +1,412 @@
+import React, { useState } from 'react';
+import {
+  Card,
+  Typography,
+  Row,
+  Col,
+  Button,
+  Space,
+  Tag,
+  Collapse,
+  Input,
+  Select,
+  message,
+  Spin,
+  Divider,
+  Alert
+} from 'antd';
+import {
+  ApiOutlined,
+  PlayCircleOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+  SyncOutlined
+} from '@ant-design/icons';
+import axios from 'axios';
+
+const { Title, Text, Paragraph } = Typography;
+const { Panel } = Collapse;
+const { TextArea } = Input;
+const { Option } = Select;
+
+interface ApiEndpoint {
+  method: string;
+  path: string;
+  description: string;
+  category: string;
+}
+
+interface TestResult {
+  endpoint: string;
+  status: 'success' | 'error' | 'loading';
+  statusCode?: number;
+  data?: any;
+  error?: string;
+  responseTime?: number;
+}
+
+const ApiTestPage: React.FC = () => {
+  const [testResults, setTestResults] = useState<Record<string, TestResult>>({});
+  const [customEndpoint, setCustomEndpoint] = useState('');
+  const [customMethod, setCustomMethod] = useState('GET');
+  const [customBody, setCustomBody] = useState('');
+  const [testing, setTesting] = useState(false);
+
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+
+  // Define all your API endpoints
+  const apiEndpoints: ApiEndpoint[] = [
+    // KOL Management
+    { method: 'GET', path: '/api/kol/list', description: 'Get all KOL profiles', category: 'KOL Management' },
+    { method: 'GET', path: '/api/kol/stats', description: 'Get KOL statistics', category: 'KOL Management' },
+
+    // Schedule Management
+    { method: 'GET', path: '/api/schedule/stats', description: 'Get schedule statistics', category: 'Schedule Management' },
+    { method: 'GET', path: '/api/schedule/list', description: 'Get all schedules', category: 'Schedule Management' },
+
+    // Posts Management
+    { method: 'GET', path: '/api/posts/list', description: 'Get all posts', category: 'Posts Management' },
+    { method: 'GET', path: '/api/posts/stats', description: 'Get post statistics', category: 'Posts Management' },
+
+    // After Hours Triggers
+    { method: 'GET', path: '/api/after-hours/stats', description: 'Get after-hours statistics', category: 'After Hours' },
+    { method: 'GET', path: '/api/after-hours/volume/list', description: 'Get volume-based triggers', category: 'After Hours' },
+
+    // System Health
+    { method: 'GET', path: '/api/health', description: 'Check API health', category: 'System' },
+    { method: 'GET', path: '/api/database/status', description: 'Check database status', category: 'System' },
+  ];
+
+  const testEndpoint = async (endpoint: ApiEndpoint) => {
+    const key = `${endpoint.method}-${endpoint.path}`;
+
+    setTestResults(prev => ({
+      ...prev,
+      [key]: { endpoint: endpoint.path, status: 'loading' }
+    }));
+
+    const startTime = Date.now();
+
+    try {
+      const response = await axios({
+        method: endpoint.method.toLowerCase(),
+        url: `${API_BASE_URL}${endpoint.path}`,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        }
+      });
+
+      const responseTime = Date.now() - startTime;
+
+      setTestResults(prev => ({
+        ...prev,
+        [key]: {
+          endpoint: endpoint.path,
+          status: 'success',
+          statusCode: response.status,
+          data: response.data,
+          responseTime
+        }
+      }));
+
+      message.success(`${endpoint.path} - Success (${responseTime}ms)`);
+    } catch (error: any) {
+      const responseTime = Date.now() - startTime;
+
+      setTestResults(prev => ({
+        ...prev,
+        [key]: {
+          endpoint: endpoint.path,
+          status: 'error',
+          statusCode: error.response?.status,
+          error: error.message,
+          data: error.response?.data,
+          responseTime
+        }
+      }));
+
+      message.error(`${endpoint.path} - Error: ${error.message}`);
+    }
+  };
+
+  const testAllEndpoints = async () => {
+    setTesting(true);
+    message.info('Testing all endpoints...');
+
+    for (const endpoint of apiEndpoints) {
+      await testEndpoint(endpoint);
+      // Small delay between requests
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+
+    setTesting(false);
+    message.success('All endpoints tested!');
+  };
+
+  const testCustomEndpoint = async () => {
+    if (!customEndpoint) {
+      message.warning('Please enter an endpoint');
+      return;
+    }
+
+    const key = `custom-${customMethod}-${customEndpoint}`;
+
+    setTestResults(prev => ({
+      ...prev,
+      [key]: { endpoint: customEndpoint, status: 'loading' }
+    }));
+
+    const startTime = Date.now();
+
+    try {
+      let body = undefined;
+      if (customBody && (customMethod === 'POST' || customMethod === 'PUT' || customMethod === 'PATCH')) {
+        body = JSON.parse(customBody);
+      }
+
+      const response = await axios({
+        method: customMethod.toLowerCase(),
+        url: `${API_BASE_URL}${customEndpoint}`,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        data: body
+      });
+
+      const responseTime = Date.now() - startTime;
+
+      setTestResults(prev => ({
+        ...prev,
+        [key]: {
+          endpoint: customEndpoint,
+          status: 'success',
+          statusCode: response.status,
+          data: response.data,
+          responseTime
+        }
+      }));
+
+      message.success(`Custom request - Success (${responseTime}ms)`);
+    } catch (error: any) {
+      const responseTime = Date.now() - startTime;
+
+      setTestResults(prev => ({
+        ...prev,
+        [key]: {
+          endpoint: customEndpoint,
+          status: 'error',
+          statusCode: error.response?.status,
+          error: error.message,
+          data: error.response?.data,
+          responseTime
+        }
+      }));
+
+      message.error(`Custom request - Error: ${error.message}`);
+    }
+  };
+
+  const clearResults = () => {
+    setTestResults({});
+    message.info('Results cleared');
+  };
+
+  const getStatusIcon = (status: TestResult['status']) => {
+    switch (status) {
+      case 'loading':
+        return <SyncOutlined spin style={{ color: '#1890ff' }} />;
+      case 'success':
+        return <CheckCircleOutlined style={{ color: '#52c41a' }} />;
+      case 'error':
+        return <CloseCircleOutlined style={{ color: '#ff4d4f' }} />;
+    }
+  };
+
+  const getStatusTag = (statusCode?: number) => {
+    if (!statusCode) return null;
+
+    if (statusCode >= 200 && statusCode < 300) {
+      return <Tag color="success">{statusCode}</Tag>;
+    } else if (statusCode >= 400 && statusCode < 500) {
+      return <Tag color="warning">{statusCode}</Tag>;
+    } else if (statusCode >= 500) {
+      return <Tag color="error">{statusCode}</Tag>;
+    }
+    return <Tag>{statusCode}</Tag>;
+  };
+
+  // Group endpoints by category
+  const groupedEndpoints = apiEndpoints.reduce((acc, endpoint) => {
+    if (!acc[endpoint.category]) {
+      acc[endpoint.category] = [];
+    }
+    acc[endpoint.category].push(endpoint);
+    return acc;
+  }, {} as Record<string, ApiEndpoint[]>);
+
+  return (
+    <div style={{ padding: '24px', background: '#f5f5f5', minHeight: '100vh' }}>
+      <Card>
+        <Title level={2}>
+          <ApiOutlined /> API Testing Dashboard
+        </Title>
+        <Paragraph>
+          Test all API endpoints to verify the proxy configuration and API connectivity.
+          Current API Base: <Tag color="blue">{API_BASE_URL || 'Vercel Proxy'}</Tag>
+        </Paragraph>
+
+        <Space style={{ marginBottom: 16 }}>
+          <Button
+            type="primary"
+            icon={<PlayCircleOutlined />}
+            onClick={testAllEndpoints}
+            loading={testing}
+          >
+            Test All Endpoints
+          </Button>
+          <Button onClick={clearResults}>Clear Results</Button>
+        </Space>
+
+        <Divider />
+
+        {/* Custom Endpoint Tester */}
+        <Card title="Custom Endpoint Test" style={{ marginBottom: 24 }}>
+          <Row gutter={16}>
+            <Col span={4}>
+              <Select
+                value={customMethod}
+                onChange={setCustomMethod}
+                style={{ width: '100%' }}
+              >
+                <Option value="GET">GET</Option>
+                <Option value="POST">POST</Option>
+                <Option value="PUT">PUT</Option>
+                <Option value="DELETE">DELETE</Option>
+                <Option value="PATCH">PATCH</Option>
+              </Select>
+            </Col>
+            <Col span={12}>
+              <Input
+                placeholder="/api/your-endpoint"
+                value={customEndpoint}
+                onChange={(e) => setCustomEndpoint(e.target.value)}
+              />
+            </Col>
+            <Col span={8}>
+              <Button
+                type="primary"
+                icon={<PlayCircleOutlined />}
+                onClick={testCustomEndpoint}
+              >
+                Test
+              </Button>
+            </Col>
+          </Row>
+          {(customMethod === 'POST' || customMethod === 'PUT' || customMethod === 'PATCH') && (
+            <div style={{ marginTop: 16 }}>
+              <TextArea
+                placeholder='{"key": "value"}'
+                value={customBody}
+                onChange={(e) => setCustomBody(e.target.value)}
+                rows={4}
+              />
+            </div>
+          )}
+        </Card>
+
+        {/* Endpoint Tests by Category */}
+        {Object.entries(groupedEndpoints).map(([category, endpoints]) => (
+          <Card
+            key={category}
+            title={category}
+            style={{ marginBottom: 16 }}
+          >
+            <Space direction="vertical" style={{ width: '100%' }}>
+              {endpoints.map(endpoint => {
+                const key = `${endpoint.method}-${endpoint.path}`;
+                const result = testResults[key];
+
+                return (
+                  <Card
+                    key={key}
+                    size="small"
+                    style={{
+                      borderLeft: result?.status === 'success' ? '4px solid #52c41a' :
+                                 result?.status === 'error' ? '4px solid #ff4d4f' :
+                                 '4px solid #d9d9d9'
+                    }}
+                  >
+                    <Row align="middle" gutter={16}>
+                      <Col span={1}>
+                        {result && getStatusIcon(result.status)}
+                      </Col>
+                      <Col span={2}>
+                        <Tag color={endpoint.method === 'GET' ? 'blue' : 'green'}>
+                          {endpoint.method}
+                        </Tag>
+                      </Col>
+                      <Col span={8}>
+                        <Text code>{endpoint.path}</Text>
+                      </Col>
+                      <Col span={6}>
+                        <Text type="secondary">{endpoint.description}</Text>
+                      </Col>
+                      <Col span={3}>
+                        {result && (
+                          <>
+                            {getStatusTag(result.statusCode)}
+                            {result.responseTime && (
+                              <Tag>{result.responseTime}ms</Tag>
+                            )}
+                          </>
+                        )}
+                      </Col>
+                      <Col span={4}>
+                        <Button
+                          size="small"
+                          icon={<PlayCircleOutlined />}
+                          onClick={() => testEndpoint(endpoint)}
+                        >
+                          Test
+                        </Button>
+                      </Col>
+                    </Row>
+
+                    {result && result.status !== 'loading' && (
+                      <Collapse ghost style={{ marginTop: 8 }}>
+                        <Panel header="View Response" key="1">
+                          {result.error && (
+                            <Alert
+                              message="Error"
+                              description={result.error}
+                              type="error"
+                              showIcon
+                              style={{ marginBottom: 8 }}
+                            />
+                          )}
+                          <pre style={{
+                            background: '#f5f5f5',
+                            padding: 12,
+                            borderRadius: 4,
+                            maxHeight: 300,
+                            overflow: 'auto'
+                          }}>
+                            {JSON.stringify(result.data, null, 2)}
+                          </pre>
+                        </Panel>
+                      </Collapse>
+                    )}
+                  </Card>
+                );
+              })}
+            </Space>
+          </Card>
+        ))}
+      </Card>
+    </div>
+  );
+};
+
+export default ApiTestPage;
