@@ -56,8 +56,9 @@ const ApiTestPage: React.FC = () => {
 
   // Define all your API endpoints
   const apiEndpoints: ApiEndpoint[] = [
-    // System Health
-    { method: 'GET', path: '/api/health', description: 'Check API health', category: 'System' },
+    // System Health & Database
+    { method: 'GET', path: '/api/health', description: 'Check API health status', category: 'System' },
+    { method: 'GET', path: '/api/database/test', description: 'Test database connection and tables', category: 'System' },
 
     // KOL Management
     { method: 'GET', path: '/api/kol/list', description: 'Get all KOL profiles', category: 'KOL Management' },
@@ -70,34 +71,34 @@ const ApiTestPage: React.FC = () => {
     // Posts Management
     { method: 'GET', path: '/api/posts', description: 'Get all posts', category: 'Posts Management' },
 
-    // After Hours Triggers (6 endpoints) - NO /api prefix!
-    { method: 'GET', path: '/after_hours_limit_up', description: 'After-hours limit up stocks', category: 'After Hours Triggers' },
-    { method: 'GET', path: '/after_hours_limit_down', description: 'After-hours limit down stocks', category: 'After Hours Triggers' },
-    { method: 'GET', path: '/after_hours_volume_amount_high', description: 'After-hours high volume (amount)', category: 'After Hours Triggers' },
-    { method: 'GET', path: '/after_hours_volume_amount_low', description: 'After-hours low volume (amount)', category: 'After Hours Triggers' },
-    { method: 'GET', path: '/after_hours_volume_change_rate_high', description: 'After-hours high volume change rate', category: 'After Hours Triggers' },
-    { method: 'GET', path: '/after_hours_volume_change_rate_low', description: 'After-hours low volume change rate', category: 'After Hours Triggers' },
+    // After Hours Triggers (6 endpoints)
+    { method: 'GET', path: '/api/after_hours_limit_up', description: 'After-hours limit up stocks', category: 'After Hours Triggers' },
+    { method: 'GET', path: '/api/after_hours_limit_down', description: 'After-hours limit down stocks', category: 'After Hours Triggers' },
+    { method: 'GET', path: '/api/after_hours_volume_amount_high', description: 'After-hours high volume (amount)', category: 'After Hours Triggers' },
+    { method: 'GET', path: '/api/after_hours_volume_amount_low', description: 'After-hours low volume (amount)', category: 'After Hours Triggers' },
+    { method: 'GET', path: '/api/after_hours_volume_change_rate_high', description: 'After-hours high volume change rate', category: 'After Hours Triggers' },
+    { method: 'GET', path: '/api/after_hours_volume_change_rate_low', description: 'After-hours low volume change rate', category: 'After Hours Triggers' },
 
-    // Intraday Trigger - NO /api prefix!
-    { method: 'POST', path: '/intraday-trigger/execute', description: 'Execute intraday trigger', category: 'Intraday Triggers' },
+    // Intraday Trigger
+    { method: 'POST', path: '/api/intraday-trigger/execute', description: 'Execute intraday trigger', category: 'Intraday Triggers' },
 
     // Dashboard
     { method: 'GET', path: '/api/dashboard/system-monitoring', description: 'System monitoring data', category: 'Dashboard' },
     { method: 'GET', path: '/api/dashboard/content-management', description: 'Content management data', category: 'Dashboard' },
     { method: 'GET', path: '/api/dashboard/interaction-analysis', description: 'Interaction analysis data', category: 'Dashboard' },
 
-    // Stock & Industry Data - NO /api prefix!
-    { method: 'GET', path: '/industries', description: 'Get all industries', category: 'Stock Data' },
-    { method: 'GET', path: '/stocks_by_industry', description: 'Get stocks by industry', category: 'Stock Data' },
-    { method: 'GET', path: '/get_ohlc', description: 'Get OHLC data', category: 'Stock Data' },
-    { method: 'GET', path: '/stock_mapping.json', description: 'Get stock mapping', category: 'Stock Data' },
+    // Stock & Industry Data
+    { method: 'GET', path: '/api/industries', description: 'Get all industries', category: 'Stock Data' },
+    { method: 'GET', path: '/api/stocks_by_industry', description: 'Get stocks by industry', category: 'Stock Data' },
+    { method: 'GET', path: '/api/get_ohlc', description: 'Get OHLC data', category: 'Stock Data' },
+    { method: 'GET', path: '/api/stock_mapping.json', description: 'Get stock mapping', category: 'Stock Data' },
 
-    // Content Generation - NO /api prefix!
-    { method: 'GET', path: '/trending', description: 'Get trending topics', category: 'Content' },
-    { method: 'GET', path: '/extract-keywords', description: 'Extract keywords', category: 'Content' },
-    { method: 'GET', path: '/search-stocks-by-keywords', description: 'Search stocks by keywords', category: 'Content' },
-    { method: 'GET', path: '/analyze-topic', description: 'Analyze topic', category: 'Content' },
-    { method: 'GET', path: '/generate-content', description: 'Generate content', category: 'Content' },
+    // Content Generation
+    { method: 'GET', path: '/api/trending', description: 'Get trending topics', category: 'Content' },
+    { method: 'GET', path: '/api/extract-keywords', description: 'Extract keywords', category: 'Content' },
+    { method: 'GET', path: '/api/search-stocks-by-keywords', description: 'Search stocks by keywords', category: 'Content' },
+    { method: 'GET', path: '/api/analyze-topic', description: 'Analyze topic', category: 'Content' },
+    { method: 'GET', path: '/api/generate-content', description: 'Generate content', category: 'Content' },
   ];
 
   const testEndpoint = async (endpoint: ApiEndpoint) => {
@@ -273,11 +274,32 @@ const ApiTestPage: React.FC = () => {
     <div style={{ padding: '24px', background: '#f5f5f5', minHeight: '100vh' }}>
       <Card>
         <Title level={2}>
-          <ApiOutlined /> API Testing Dashboard
+          <ApiOutlined /> API Documentation
         </Title>
+        <Alert
+          message="Swagger UI Available"
+          description={
+            <div>
+              <p>Visit the official <strong>Swagger UI</strong> for interactive API documentation:</p>
+              <p>
+                <a
+                  href="https://forumautoposter-production.up.railway.app/docs"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ fontSize: '16px', fontWeight: 'bold' }}
+                >
+                  https://forumautoposter-production.up.railway.app/docs
+                </a>
+              </p>
+              <p>You can test all API endpoints interactively with Swagger UI.</p>
+            </div>
+          }
+          type="info"
+          showIcon
+          style={{ marginBottom: 24 }}
+        />
         <Paragraph>
-          Test all API endpoints to verify the proxy configuration and API connectivity.
-          Current API Base: <Tag color="blue">{API_BASE_URL || 'Vercel Proxy'}</Tag>
+          Quick test endpoints below. Current API Base: <Tag color="blue">{API_BASE_URL || 'Vercel Proxy'}</Tag>
         </Paragraph>
 
         <Space style={{ marginBottom: 16 }}>

@@ -26,8 +26,11 @@ logger = logging.getLogger(__name__)
 # 創建 FastAPI 應用
 app = FastAPI(
     title="Forum Autoposter Unified API",
-    description="統一的 API 服務，整合所有微服務功能",
-    version="1.0.0"
+    description="統一的 API 服務，整合所有微服務功能。訪問 /docs 查看 Swagger UI 文檔",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json"
 )
 
 # 配置 CORS - 允許所有來源（因為我們會用 Vercel Proxy）
@@ -326,7 +329,7 @@ async def root():
         "timestamp": datetime.now().isoformat()
     }
 
-@app.get("/health")
+@app.get("/api/health")
 async def health_check():
     """健康檢查端點"""
     logger.info("收到健康檢查請求")
@@ -361,7 +364,77 @@ async def health_check():
         }
     }
 
-@app.post("/admin/reconnect-database")
+@app.get("/api/database/test")
+async def test_database():
+    """測試數據庫連接並執行查詢"""
+    logger.info("收到數據庫測試請求")
+
+    result = {
+        "connection_status": "disconnected",
+        "test_query_success": False,
+        "tables": [],
+        "kol_count": 0,
+        "post_count": 0,
+        "schedule_count": 0,
+        "errors": [],
+        "timestamp": datetime.now().isoformat()
+    }
+
+    try:
+        if not db_connection:
+            result["errors"].append("Database connection not initialized")
+            return result
+
+        # Test 1: Basic connection test
+        try:
+            with db_connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+                cursor.fetchone()
+            result["connection_status"] = "connected"
+            result["test_query_success"] = True
+        except Exception as e:
+            result["errors"].append(f"Connection test failed: {str(e)}")
+            return result
+
+        # Test 2: List all tables
+        try:
+            with db_connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT table_name
+                    FROM information_schema.tables
+                    WHERE table_schema = 'public'
+                    ORDER BY table_name
+                """)
+                tables = cursor.fetchall()
+                result["tables"] = [table[0] for table in tables]
+        except Exception as e:
+            result["errors"].append(f"Failed to list tables: {str(e)}")
+
+        # Test 3: Count records in key tables
+        try:
+            with db_connection.cursor() as cursor:
+                # Count KOLs
+                cursor.execute("SELECT COUNT(*) FROM kol_profiles")
+                result["kol_count"] = cursor.fetchone()[0]
+
+                # Count posts
+                cursor.execute("SELECT COUNT(*) FROM post_records")
+                result["post_count"] = cursor.fetchone()[0]
+
+                # Count schedules
+                cursor.execute("SELECT COUNT(*) FROM posting_schedules")
+                result["schedule_count"] = cursor.fetchone()[0]
+        except Exception as e:
+            result["errors"].append(f"Failed to count records: {str(e)}")
+
+        result["success"] = len(result["errors"]) == 0
+
+    except Exception as e:
+        result["errors"].append(f"Database test error: {str(e)}")
+
+    return result
+
+@app.post("/api/admin/reconnect-database")
 async def reconnect_database():
     """重新連接數據庫（管理員功能）"""
     global db_connection
@@ -427,7 +500,7 @@ async def reconnect_database():
 
 # ==================== OHLC API 功能 ====================
 
-@app.get("/after_hours_limit_up")
+@app.get("/api/after_hours_limit_up")
 async def get_after_hours_limit_up_stocks(
     limit: int = Query(1000, description="股票數量限制"),
     changeThreshold: float = Query(9.5, description="漲跌幅閾值百分比"),
@@ -533,7 +606,7 @@ async def get_after_hours_limit_up_stocks(
         logger.error(f"獲取盤後漲停股票失敗: {e}")
         return {"error": str(e)}
 
-@app.get("/after_hours_limit_down")
+@app.get("/api/after_hours_limit_down")
 async def get_after_hours_limit_down_stocks(
     limit: int = Query(1000, description="股票數量限制"),
     changeThreshold: float = Query(-9.5, description="跌幅閾值百分比"),
@@ -639,7 +712,7 @@ async def get_after_hours_limit_down_stocks(
         logger.error(f"獲取盤後跌停股票失敗: {e}")
         return {"error": str(e)}
 
-@app.get("/after_hours_volume_amount_high")
+@app.get("/api/after_hours_volume_amount_high")
 async def get_after_hours_volume_amount_high(
     limit: int = Query(50, description="返回的股票數量"),
     changeThreshold: float = Query(0.0, description="漲跌幅閾值（%）")
@@ -726,7 +799,7 @@ async def get_after_hours_volume_amount_high(
         logger.error(f"獲取盤後成交金額高股票失敗: {e}")
         return {"error": str(e)}
 
-@app.get("/after_hours_volume_amount_low")
+@app.get("/api/after_hours_volume_amount_low")
 async def get_after_hours_volume_amount_low(
     limit: int = Query(50, description="返回的股票數量"),
     changeThreshold: float = Query(0.0, description="漲跌幅閾值（%）")
@@ -813,7 +886,7 @@ async def get_after_hours_volume_amount_low(
         logger.error(f"獲取盤後成交金額低股票失敗: {e}")
         return {"error": str(e)}
 
-@app.get("/after_hours_volume_change_rate_high")
+@app.get("/api/after_hours_volume_change_rate_high")
 async def get_after_hours_volume_change_rate_high(
     limit: int = Query(50, description="返回的股票數量"),
     changeThreshold: float = Query(0.0, description="漲跌幅閾值（%）")
@@ -917,7 +990,7 @@ async def get_after_hours_volume_change_rate_high(
         logger.error(f"獲取盤後成交金額變化率高股票失敗: {e}")
         return {"error": str(e)}
 
-@app.get("/after_hours_volume_change_rate_low")
+@app.get("/api/after_hours_volume_change_rate_low")
 async def get_after_hours_volume_change_rate_low(
     limit: int = Query(50, description="返回的股票數量"),
     changeThreshold: float = Query(0.0, description="漲跌幅閾值（%）")
@@ -1021,7 +1094,7 @@ async def get_after_hours_volume_change_rate_low(
         logger.error(f"獲取盤後成交金額變化率低股票失敗: {e}")
         return {"error": str(e)}
 
-@app.get("/stock_mapping.json")
+@app.get("/api/stock_mapping.json")
 async def get_stock_mapping():
     """獲取完整股票映射表（供前端使用）"""
     logger.info("收到 stock_mapping 請求")
@@ -1037,7 +1110,7 @@ async def get_stock_mapping():
         logger.error(f"獲取股票映射表失敗: {e}")
         return {"error": str(e)}
 
-@app.get("/industries")
+@app.get("/api/industries")
 async def get_industries():
     """獲取所有產業類別"""
     logger.info("收到 industries 請求")
@@ -1063,7 +1136,7 @@ async def get_industries():
         logger.error(f"獲取產業類別失敗: {e}")
         return {"error": str(e)}
 
-@app.get("/stocks_by_industry")
+@app.get("/api/stocks_by_industry")
 async def get_stocks_by_industry(industry: str = Query(..., description="產業類別")):
     """根據產業獲取股票列表"""
     logger.info(f"收到 stocks_by_industry 請求: industry={industry}")
@@ -1092,7 +1165,7 @@ async def get_stocks_by_industry(industry: str = Query(..., description="產業�
         logger.error(f"獲取產業股票失敗: {e}")
         return {"error": str(e)}
 
-@app.get("/get_ohlc")
+@app.get("/api/get_ohlc")
 async def get_ohlc(stock_id: str = Query(..., description="股票代碼")):
     """獲取特定股票的 OHLC 數據"""
     logger.info(f"收到 get_ohlc 請求: stock_id={stock_id}")
@@ -1209,7 +1282,7 @@ async def get_dynamic_auth_token() -> str:
         logger.error(f"❌ 動態取得 CMoney API token 失敗: {e}")
         raise HTTPException(status_code=500, detail=f"認證失敗: {str(e)}")
 
-@app.post("/intraday-trigger/execute")
+@app.post("/api/intraday-trigger/execute")
 async def get_intraday_trigger_stocks(request: Request):
     """獲取盤中觸發器股票列表"""
     try:
@@ -1444,7 +1517,7 @@ async def manual_posting(request: Request):
 
 # ==================== Dashboard API 功能 ====================
 
-@app.get("/dashboard/system-monitoring")
+@app.get("/api/dashboard/system-monitoring")
 async def get_system_monitoring():
     """獲取系統監控數據"""
     logger.info("收到 system-monitoring 請求")
@@ -1465,7 +1538,7 @@ async def get_system_monitoring():
     logger.info("返回系統監控數據")
     return result
 
-@app.get("/dashboard/content-management")
+@app.get("/api/dashboard/content-management")
 async def get_content_management():
     """獲取內容管理數據"""
     logger.info("收到 content-management 請求")
@@ -1485,7 +1558,7 @@ async def get_content_management():
     logger.info("返回內容管理數據")
     return result
 
-@app.get("/dashboard/interaction-analysis")
+@app.get("/api/dashboard/interaction-analysis")
 async def get_interaction_analysis():
     """獲取互動分析數據"""
     logger.info("收到 interaction-analysis 請求")
@@ -1512,7 +1585,7 @@ async def get_interaction_analysis():
 
 # ==================== Posts API 功能 ====================
 
-@app.get("/posts")
+@app.get("/api/posts")
 async def get_posts(
     skip: int = Query(0, description="跳過的記錄數"),
     limit: int = Query(10000, description="返回的記錄數"),
@@ -1630,7 +1703,7 @@ async def get_posts(
 
 # ==================== Trending API 功能 ====================
 
-@app.get("/trending")
+@app.get("/api/trending")
 async def get_trending_topics():
     """獲取熱門話題"""
     logger.info("收到 trending 請求")
@@ -1649,7 +1722,7 @@ async def get_trending_topics():
     logger.info("返回熱門話題數據")
     return result
 
-@app.get("/extract-keywords")
+@app.get("/api/extract-keywords")
 async def extract_keywords(text: str = Query(..., description="要提取關鍵字的文本")):
     """提取關鍵字"""
     logger.info(f"收到 extract-keywords 請求: text={text[:50]}...")
@@ -1669,7 +1742,7 @@ async def extract_keywords(text: str = Query(..., description="要提取關鍵�
     logger.info(f"提取到 {len(keywords)} 個關鍵字")
     return result
 
-@app.get("/search-stocks-by-keywords")
+@app.get("/api/search-stocks-by-keywords")
 async def search_stocks_by_keywords(keywords: str = Query(..., description="關鍵字")):
     """根據關鍵字搜索股票"""
     logger.info(f"收到 search-stocks-by-keywords 請求: keywords={keywords}")
@@ -1693,7 +1766,7 @@ async def search_stocks_by_keywords(keywords: str = Query(..., description="關�
     logger.info(f"找到 {len(stocks)} 支相關股票")
     return result
 
-@app.get("/analyze-topic")
+@app.get("/api/analyze-topic")
 async def analyze_topic(topic: str = Query(..., description="要分析的話題")):
     """分析話題"""
     logger.info(f"收到 analyze-topic 請求: topic={topic}")
@@ -1717,7 +1790,7 @@ async def analyze_topic(topic: str = Query(..., description="要分析的話題"
     logger.info(f"完成話題分析: {topic}")
     return result
 
-@app.get("/generate-content")
+@app.get("/api/generate-content")
 async def generate_content(
     topic: str = Query(..., description="話題"),
     style: str = Query("professional", description="內容風格")
