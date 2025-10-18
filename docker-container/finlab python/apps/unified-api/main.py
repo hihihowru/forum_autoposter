@@ -1418,15 +1418,27 @@ async def execute_cmoney_intraday_trigger(processing: list, trigger_name: str):
                 raise HTTPException(status_code=500, detail=f"CMoney API 請求失敗: {response.status_code}")
 
             raw_data = response.json()
-            stock_codes = [item[7] for item in raw_data if len(item) > 7 and item[7]]
+            # CMoney API columns: 交易時間,傳輸序號,內外盤旗標,即時成交價,即時成交量,最低價,最高價,標的,漲跌,漲跌幅,累計成交總額,累計成交量,開盤價
+            # Index mapping: 0=交易時間, 1=傳輸序號, 2=內外盤旗標, 3=即時成交價, 4=即時成交量, 5=最低價, 6=最高價, 7=標的, 8=漲跌, 9=漲跌幅, 10=累計成交總額, 11=累計成交量, 12=開盤價
 
             stocks_with_info = []
-            for stock_code in stock_codes:
-                stocks_with_info.append({
-                    "stock_code": stock_code,
-                    "stock_name": get_stock_name(stock_code),
-                    "industry": get_stock_industry(stock_code)
-                })
+            for item in raw_data:
+                if len(item) >= 13 and item[7]:  # Ensure we have all fields
+                    stock_code = item[7]
+                    stocks_with_info.append({
+                        "stock_code": stock_code,
+                        "stock_name": get_stock_name(stock_code),
+                        "industry": get_stock_industry(stock_code),
+                        "current_price": float(item[3]) if item[3] else 0.0,  # 即時成交價
+                        "open_price": float(item[12]) if item[12] else 0.0,  # 開盤價
+                        "high_price": float(item[6]) if item[6] else 0.0,  # 最高價
+                        "low_price": float(item[5]) if item[5] else 0.0,  # 最低價
+                        "change_amount": float(item[8]) if item[8] else 0.0,  # 漲跌
+                        "change_percent": float(item[9]) if item[9] else 0.0,  # 漲跌幅
+                        "volume": int(item[11]) if item[11] else 0,  # 累計成交量
+                        "volume_amount": float(item[10]) if item[10] else 0.0,  # 累計成交總額
+                        "trade_time": item[0] if item[0] else ""  # 交易時間
+                    })
 
             logger.info(f"✅ [{trigger_name}] 獲取 {len(stocks_with_info)} 支股票")
 
@@ -1446,7 +1458,12 @@ async def execute_cmoney_intraday_trigger(processing: list, trigger_name: str):
 
 @app.get("/api/intraday/gainers-by-amount")
 async def get_intraday_gainers_by_amount(limit: int = Query(20, description="返回股票數量")):
-    """漲幅排序+成交額"""
+    """
+    盤中觸發器：漲幅排序+成交額
+
+    按成交額排序，篩選出漲幅最大的股票（未漲停）
+    適用場景：找出當日強勢上漲且成交活躍的股票
+    """
     processing = [
         {"ParameterJson":"{ \"TargetPropertyNamePath\" : [ \"TotalTransactionAmount\"]}","ProcessType":"DescOrder"},
         {"ProcessType":"EqualValueFilter","ParameterJson":"{\"TargetPropertyNamePath\": [\"Commodity\", \"IsChipsKPopularStocksSortSubject\"], \"Value\": true}"},
@@ -1461,7 +1478,12 @@ async def get_intraday_gainers_by_amount(limit: int = Query(20, description="返
 
 @app.get("/api/intraday/volume-leaders")
 async def get_intraday_volume_leaders(limit: int = Query(20, description="返回股票數量")):
-    """成交量排序"""
+    """
+    盤中觸發器：成交量排序
+
+    按成交量排序，找出當日成交量最大的熱門股票
+    適用場景：找出市場關注度最高、交易最活躍的股票
+    """
     processing = [
         {"ProcessType":"EqualValueFilter","ParameterJson":"{\"TargetPropertyNamePath\": [\"Commodity\", \"IsChipsKPopularStocksSortSubject\"], \"Value\": true}"},
         {"ProcessType":"DescOrder","ParameterJson":"{\"TargetPropertyNamePath\" :[\"TotalVolume\"]}"},
@@ -1473,7 +1495,12 @@ async def get_intraday_volume_leaders(limit: int = Query(20, description="返回
 
 @app.get("/api/intraday/amount-leaders")
 async def get_intraday_amount_leaders(limit: int = Query(20, description="返回股票數量")):
-    """成交額排序"""
+    """
+    盤中觸發器：成交額排序
+
+    按成交額排序，找出當日成交金額最大的股票
+    適用場景：找出資金流入最多、大戶關注的股票
+    """
     processing = [
         {"ProcessType":"EqualValueFilter","ParameterJson":"{\"TargetPropertyNamePath\":[\"Commodity\", \"IsChipsKPopularStocksSortSubject\"], \"Value\": true}"},
         {"ProcessType":"DescOrder","ParameterJson":"{\"TargetPropertyNamePath\":[\"TotalTransactionAmount\"]}"},
@@ -1485,7 +1512,12 @@ async def get_intraday_amount_leaders(limit: int = Query(20, description="返回
 
 @app.get("/api/intraday/limit-down")
 async def get_intraday_limit_down(limit: int = Query(20, description="返回股票數量")):
-    """跌停篩選"""
+    """
+    盤中觸發器：跌停篩選
+
+    篩選當日跌停的股票
+    適用場景：找出當日表現最弱勢的股票
+    """
     processing = [
         {"ProcessType":"EqualValueFilter","ParameterJson":"{\"TargetPropertyNamePath\": [\"Commodity\", \"IsChipsKPopularStocksSortSubject\"], \"Value\": true}"},
         {"ParameterJson":"{\"TargetPropertyNamePath\": [\"StrikePrice\"], \"ComparePropertyNamePath\": [\"Commodity\", \"LimitDown\"]}","ProcessType":"EqualColumnsFilter"},
@@ -1497,7 +1529,12 @@ async def get_intraday_limit_down(limit: int = Query(20, description="返回股�
 
 @app.get("/api/intraday/limit-up")
 async def get_intraday_limit_up(limit: int = Query(20, description="返回股票數量")):
-    """漲停篩選"""
+    """
+    盤中觸發器：漲停篩選
+
+    篩選當日漲停的股票
+    適用場景：找出當日表現最強勢的股票
+    """
     processing = [
         {"ParameterJson":"{\"TargetPropertyNamePath\": [\"Commodity\", \"IsChipsKPopularStocksSortSubject\"], \"Value\": true}","ProcessType":"EqualValueFilter"},
         {"ProcessType":"EqualColumnsFilter","ParameterJson":"{\"TargetPropertyNamePath\": [\"StrikePrice\"], \"ComparePropertyNamePath\": [\"Commodity\", \"LimitUp\"]}"},
@@ -1509,7 +1546,12 @@ async def get_intraday_limit_up(limit: int = Query(20, description="返回股票
 
 @app.get("/api/intraday/limit-down-by-amount")
 async def get_intraday_limit_down_by_amount(limit: int = Query(20, description="返回股票數量")):
-    """跌停篩選+成交額"""
+    """
+    盤中觸發器：跌停篩選+成交額
+
+    按成交額排序，篩選出跌幅大且成交活躍的股票（接近跌停）
+    適用場景：找出當日弱勢下跌且賣壓大的股票
+    """
     processing = [
         {"ParameterJson":"{ \"TargetPropertyNamePath\" : [ \"TotalTransactionAmount\"]}","ProcessType":"DescOrder"},
         {"ParameterJson":"{\"TargetPropertyNamePath\":[\"Commodity\", \"IsChipsKPopularStocksSortSubject\" ], \"Value\": true}","ProcessType":"EqualValueFilter"},
