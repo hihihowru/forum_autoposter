@@ -52,19 +52,34 @@ app.add_middleware(
 import finlab
 from finlab import data
 import psycopg2
+from psycopg2 import pool
 from psycopg2.extras import RealDictCursor
 
 stock_mapping = {}
-db_connection = None
+db_pool = None  # Connection pool instead of single connection
+
+def get_db_connection():
+    """Get a connection from the pool"""
+    if db_pool is None:
+        raise Exception("Database pool not initialized")
+    return db_pool.getconn()
+
+def return_db_connection(conn):
+    """Return a connection to the pool"""
+    if db_pool and conn:
+        db_pool.putconn(conn)
 
 def create_post_records_table():
     """創建 post_records 表（如果不存在）"""
+    conn = None
     try:
-        if not db_connection:
-            logger.error("❌ 數據庫連接不存在，無法創建表")
+        if not db_pool:
+            logger.error("❌ 數據庫連接池不存在，無法創建表")
             return
-            
-        with db_connection.cursor() as cursor:
+
+        conn = get_db_connection()
+
+        with conn.cursor() as cursor:
             logger.info("🔍 檢查 post_records 表是否存在...")
             # 檢查表是否存在
             cursor.execute("""
@@ -118,22 +133,27 @@ def create_post_records_table():
                         alternative_versions TEXT
                     );
                 """)
-                db_connection.commit()
+                conn.commit()
                 logger.info("✅ post_records 表創建成功")
             else:
                 logger.info("✅ post_records 表已存在")
-                
+
     except Exception as e:
         logger.error(f"❌ 創建 post_records 表失敗: {e}")
         logger.error(f"❌ 錯誤詳情: {type(e).__name__}: {str(e)}")
         import traceback
         logger.error(f"❌ 完整錯誤堆疊: {traceback.format_exc()}")
+        if conn:
+            conn.rollback()
         raise
+    finally:
+        if conn:
+            return_db_connection(conn)
 
 @app.on_event("startup")
 def startup_event():
     """啟動時初始化 FinLab 和數據庫連接"""
-    global stock_mapping, db_connection
+    global stock_mapping, db_pool
 
     # 檢查所有關鍵環境變數
     logger.info("🔍 [啟動檢查] 開始檢查環境變數...")
@@ -170,40 +190,35 @@ def startup_event():
                 'keepalives_count': 3
             }
             
-            # 重試連接邏輯
-            max_retries = 3
-            for attempt in range(max_retries):
+            # Create connection pool (5-20 concurrent connections)
+            try:
+                logger.info(f"🔗 創建數據庫連接池...")
+                global db_pool
+                db_pool = pool.SimpleConnectionPool(
+                    minconn=2,  # Minimum 2 connections
+                    maxconn=10,  # Maximum 10 concurrent connections
+                    **connect_kwargs
+                )
+                logger.info("✅ PostgreSQL 連接池創建成功 (2-10 connections)")
+
+                # Test pool with a connection
+                test_conn = db_pool.getconn()
                 try:
-                    logger.info(f"🔗 嘗試連接數據庫 (第 {attempt + 1}/{max_retries} 次)...")
-                    db_connection = psycopg2.connect(**connect_kwargs)
-                    logger.info("✅ PostgreSQL 數據庫連接成功")
-                    
-                    # 測試連接
-                    with db_connection.cursor() as cursor:
+                    with test_conn.cursor() as cursor:
                         cursor.execute("SELECT 1")
                         cursor.fetchone()
-                    logger.info("✅ 數據庫連接測試成功")
-                    
-                    # 創建 post_records 表（如果不存在）
-                    logger.info("📋 開始創建 post_records 表...")
-                    create_post_records_table()
-                    logger.info("✅ post_records 表創建完成")
-                    break
-                    
-                except psycopg2.OperationalError as e:
-                    logger.warning(f"⚠️ 數據庫連接失敗 (第 {attempt + 1} 次): {e}")
-                    if attempt < max_retries - 1:
-                        import time
-                        wait_time = (attempt + 1) * 5  # 5, 10, 15 秒
-                        logger.info(f"⏳ 等待 {wait_time} 秒後重試...")
-                        time.sleep(wait_time)
-                    else:
-                        logger.error("❌ 數據庫連接最終失敗，將在無數據庫模式下運行")
-                        db_connection = None
-                except Exception as e:
-                    logger.error(f"❌ 數據庫連接意外錯誤: {e}")
-                    db_connection = None
-                    break
+                    logger.info("✅ 數據庫連接池測試成功")
+                finally:
+                    db_pool.putconn(test_conn)
+
+                # Create tables using pool
+                logger.info("📋 開始創建 post_records 表...")
+                create_post_records_table()
+                logger.info("✅ post_records 表創建完成")
+
+            except Exception as e:
+                logger.error(f"❌ 數據庫連接池創建失敗: {e}")
+                db_pool = None
         else:
             logger.warning("⚠️ 未找到 DATABASE_URL 環境變數，將無法查詢貼文數據")
     except Exception as e:
@@ -1823,12 +1838,11 @@ async def get_posts(
     """獲取貼文列表（從 PostgreSQL 數據庫）"""
     logger.info(f"收到 get_posts 請求: skip={skip}, limit={limit}, status={status}")
 
-    global db_connection
-
+    conn = None
     try:
-        # 檢查數據庫連接狀態
-        if not db_connection:
-            logger.error("❌ 數據庫連接不存在，無法查詢貼文數據")
+        # 檢查數據庫連接池狀態
+        if not db_pool:
+            logger.error("❌ 數據庫連接池不存在，無法查詢貼文數據")
             return {
                 "success": False,
                 "posts": [],
@@ -1839,25 +1853,25 @@ async def get_posts(
                 "timestamp": datetime.now().isoformat()
             }
 
+        # Get connection from pool
+        conn = get_db_connection()
+
         # Reset connection if in failed state
-        try:
-            db_connection.rollback()  # Clear any failed transactions
-        except:
-            pass  # Connection might already be closed
+        conn.rollback()  # Clear any failed transactions
 
         # 查詢 post_records 表
-        with db_connection.cursor(cursor_factory=RealDictCursor) as cursor:
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
             # 首先檢查表是否存在
             cursor.execute("""
                 SELECT EXISTS (
-                    SELECT FROM information_schema.tables 
-                    WHERE table_schema = 'public' 
+                    SELECT FROM information_schema.tables
+                    WHERE table_schema = 'public'
                     AND table_name = 'post_records'
                 );
             """)
             table_exists = cursor.fetchone()[0]
             logger.info(f"📊 post_records 表存在狀態: {table_exists}")
-            
+
             if not table_exists:
                 logger.error("❌ post_records 表不存在")
                 return {
@@ -1877,7 +1891,7 @@ async def get_posts(
                 cursor.execute(count_query, [status])
             else:
                 cursor.execute(count_query)
-            
+
             total_count = cursor.fetchone()['count']
             logger.info(f"📊 數據庫中總貼文數: {total_count}")
 
@@ -1896,7 +1910,7 @@ async def get_posts(
             cursor.execute(query, params)
             posts = cursor.fetchall()
 
-            db_connection.commit()  # Commit after all reads
+            conn.commit()  # Commit after all reads
             logger.info(f"✅ 查詢到 {len(posts)} 條貼文數據，總數: {total_count}")
 
             return {
@@ -1909,8 +1923,8 @@ async def get_posts(
             }
 
     except Exception as e:
-        if db_connection:
-            db_connection.rollback()  # Rollback on error
+        if conn:
+            conn.rollback()  # Rollback on error
         logger.error(f"❌ 查詢貼文數據失敗: {e}")
         logger.error(f"❌ 錯誤詳情: {type(e).__name__}: {str(e)}")
         import traceback
@@ -1922,6 +1936,9 @@ async def get_posts(
             "error": str(e),
             "timestamp": datetime.now().isoformat()
         }
+    finally:
+        if conn:
+            return_db_connection(conn)
 
 @app.post("/api/posts/refresh-all")
 async def refresh_all_interactions():
@@ -1931,10 +1948,15 @@ async def refresh_all_interactions():
     """
     logger.info("收到 refresh-all 請求")
 
-    if not db_connection:
+    if not db_pool:
         return {"success": False, "error": "數據庫連接不可用", "timestamp": datetime.now().isoformat()}
 
+    conn = None
     try:
+        # Get connection from pool
+        conn = get_db_connection()
+        conn.rollback()  # Clear any failed transactions
+
         # Get KOL credentials from environment
         email = os.getenv("FORUM_200_EMAIL")
         password = os.getenv("FORUM_200_PASSWORD")
@@ -1943,7 +1965,7 @@ async def refresh_all_interactions():
             return {"success": False, "error": "KOL credentials not configured", "timestamp": datetime.now().isoformat()}
 
         # Fetch all published posts with article_id
-        with db_connection.cursor(cursor_factory=RealDictCursor) as cursor:
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
             cursor.execute("""
                 SELECT post_id, article_id, kol_serial
                 FROM post_records
@@ -1951,7 +1973,7 @@ async def refresh_all_interactions():
                 ORDER BY created_at DESC
             """)
             posts = cursor.fetchall()
-            db_connection.commit()
+            conn.commit()
 
         logger.info(f"Found {len(posts)} published posts to refresh")
 
@@ -2017,7 +2039,7 @@ async def refresh_all_interactions():
                         }
 
                         # Update database
-                        with db_connection.cursor() as update_cursor:
+                        with conn.cursor() as update_cursor:
                             update_cursor.execute("""
                                 UPDATE post_records
                                 SET likes = %s, comments = %s, shares = %s, bookmarks = %s,
@@ -2031,7 +2053,7 @@ async def refresh_all_interactions():
                     logger.error(f"Failed to update post {post_id}: {e}")
                     failed_count += 1
 
-            db_connection.commit()
+            conn.commit()
 
         logger.info(f"Refresh complete: {updated_count} updated, {failed_count} failed")
 
@@ -2044,10 +2066,13 @@ async def refresh_all_interactions():
         }
 
     except Exception as e:
-        if db_connection:
-            db_connection.rollback()
+        if conn:
+            conn.rollback()
         logger.error(f"❌ Refresh all failed: {e}")
         return {"success": False, "error": str(e), "timestamp": datetime.now().isoformat()}
+    finally:
+        if conn:
+            return_db_connection(conn)
 
 # ==================== Trending API 功能 ====================
 
@@ -2948,11 +2973,10 @@ async def get_scheduler_status():
     """獲取排程器狀態"""
     logger.info("收到 get_scheduler_status 請求")
 
-    global db_connection
-
+    conn = None
     try:
-        if not db_connection:
-            logger.warning("數據庫連接不可用")
+        if not db_pool:
+            logger.warning("數據庫連接池不可用")
             return {
                 "success": False,
                 "data": {},
@@ -2960,13 +2984,13 @@ async def get_scheduler_status():
                 "timestamp": datetime.now().isoformat()
             }
 
-        # Reset connection if in failed state
-        try:
-            db_connection.rollback()
-        except:
-            pass
+        # Get connection from pool
+        conn = get_db_connection()
 
-        with db_connection.cursor(cursor_factory=RealDictCursor) as cursor:
+        # Reset connection if in failed state
+        conn.rollback()
+
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
             # Count active tasks (status='active')
             cursor.execute("""
                 SELECT COUNT(*) as active_tasks
@@ -3031,13 +3055,13 @@ async def get_scheduler_status():
                 "timestamp": datetime.now().isoformat()
             }
 
-            db_connection.commit()  # Commit transaction
+            conn.commit()  # Commit transaction
             logger.info(f"返回排程器狀態數據: {result['data']}")
             return result
 
     except Exception as e:
-        if db_connection:
-            db_connection.rollback()
+        if conn:
+            conn.rollback()
         logger.error(f"查詢排程器狀態失敗: {e}")
         return {
             "success": False,
@@ -3045,6 +3069,9 @@ async def get_scheduler_status():
             "error": str(e),
             "timestamp": datetime.now().isoformat()
         }
+    finally:
+        if conn:
+            return_db_connection(conn)
 
 if __name__ == "__main__":
     import uvicorn
