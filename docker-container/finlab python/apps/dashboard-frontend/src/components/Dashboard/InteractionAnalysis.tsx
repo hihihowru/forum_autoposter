@@ -32,7 +32,7 @@ const InteractionAnalysis: React.FC<InteractionAnalysisProps> = ({ data, loading
   const refreshAllInteractions = async () => {
     setFetchingData(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/interactions/refresh-all`, {
+      const response = await fetch(`${API_BASE_URL}/api/posts/refresh-all`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -66,7 +66,7 @@ const InteractionAnalysis: React.FC<InteractionAnalysisProps> = ({ data, loading
   const fetchAllPostsData = async () => {
     setFetchingData(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/posts?skip=0&limit=10000`);
+      const response = await fetch(`${API_BASE_URL}/api/posts?skip=0&limit=10000`);
       if (response.ok) {
         const result = await response.json();
         message.success(`成功抓取 ${result.posts?.length || 0} 筆貼文數據`);

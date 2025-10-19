@@ -1262,7 +1262,7 @@ const SelfLearningPage: React.FC = () => {
       params.append('include_external', includeExternal.toString());
 
       // 使用與 InteractionAnalysisPage 相同的 API 端點
-      const response = await fetch(`${API_BASE_URL}/posts?limit=10000&status=published`);
+      const response = await fetch(`${API_BASE_URL}/api/posts?limit=10000&status=published`);
       const result = await response.json();
 
       if (result.posts) {
