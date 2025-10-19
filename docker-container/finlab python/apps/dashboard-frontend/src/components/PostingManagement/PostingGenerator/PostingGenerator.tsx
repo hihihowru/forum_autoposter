@@ -339,9 +339,14 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
       });
       
       // 創建發文會話
+      // ✅ 修復：當 triggerType === 'individual' 時，使用 triggerKey 作為 trigger_type
+      const triggerType = generationConfig.triggers?.triggerConfig?.triggerType;
+      const triggerKey = generationConfig.triggers?.triggerConfig?.triggerKey;
+      const actualTriggerType = (triggerType === 'individual' && triggerKey) ? triggerKey : (triggerType || 'custom_stocks');
+
       const session = await PostingManagementAPI.createSession({
         session_name: `批量發文_${new Date().toLocaleString()}`,
-        trigger_type: generationConfig.triggers?.triggerConfig?.triggerType || 'custom_stocks',
+        trigger_type: actualTriggerType,
         trigger_data: generationConfig.triggers,
         config: generationConfig
       });
