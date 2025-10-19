@@ -2861,6 +2861,7 @@ async def get_schedule_tasks(
     """獲取排程任務列表"""
     logger.info(f"收到 get_schedule_tasks 請求: status={status}, limit={limit}")
 
+    conn = None
     try:
         if not db_pool:
             logger.warning("數據庫連接不可用，返回空數據")
@@ -2871,6 +2872,9 @@ async def get_schedule_tasks(
                 "error": "數據庫連接不可用",
                 "timestamp": datetime.now().isoformat()
             }
+
+        conn = get_db_connection()
+        conn.rollback()  # Clear any failed transactions
 
         with conn.cursor(cursor_factory=RealDictCursor) as cursor:
             query = "SELECT * FROM schedule_tasks"
@@ -2889,6 +2893,8 @@ async def get_schedule_tasks(
 
             logger.info(f"查詢到 {len(tasks)} 個排程任務")
 
+            conn.commit()
+
             return {
                 "success": True,
                 "tasks": [dict(task) for task in tasks],
@@ -2898,6 +2904,8 @@ async def get_schedule_tasks(
 
     except Exception as e:
         logger.error(f"查詢排程任務失敗: {e}")
+        if conn:
+            conn.rollback()
         return {
             "success": False,
             "tasks": [],
@@ -2905,12 +2913,16 @@ async def get_schedule_tasks(
             "error": str(e),
             "timestamp": datetime.now().isoformat()
         }
+    finally:
+        if conn:
+            return_db_connection(conn)
 
 @app.get("/api/schedule/daily-stats")
 async def get_daily_stats():
     """獲取每日排程統計"""
     logger.info("收到 get_daily_stats 請求")
 
+    conn = None
     try:
         if not db_pool:
             logger.warning("數據庫連接不可用")
@@ -2920,6 +2932,9 @@ async def get_daily_stats():
                 "error": "數據庫連接不可用",
                 "timestamp": datetime.now().isoformat()
             }
+
+        conn = get_db_connection()
+        conn.rollback()  # Clear any failed transactions
 
         with conn.cursor(cursor_factory=RealDictCursor) as cursor:
             # Get today's date range
@@ -2970,6 +2985,8 @@ async def get_daily_stats():
             cursor.execute("SELECT COUNT(*) as total_schedules FROM schedule_tasks")
             total_schedules = cursor.fetchone()['total_schedules']
 
+            conn.commit()
+
             result = {
                 "success": True,
                 "data": {
@@ -2988,12 +3005,17 @@ async def get_daily_stats():
 
     except Exception as e:
         logger.error(f"查詢每日統計失敗: {e}")
+        if conn:
+            conn.rollback()
         return {
             "success": False,
             "data": {},
             "error": str(e),
             "timestamp": datetime.now().isoformat()
         }
+    finally:
+        if conn:
+            return_db_connection(conn)
 
 @app.get("/api/schedule/scheduler/status")
 async def get_scheduler_status():
@@ -3094,6 +3116,112 @@ async def get_scheduler_status():
             "success": False,
             "data": {},
             "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+@app.post("/api/schedule/scheduler/start")
+async def start_scheduler():
+    """啟動全局排程器 - 將所有 paused 狀態的任務設置為 active"""
+    logger.info("收到 start_scheduler 請求 - 啟動全局排程器")
+
+    conn = None
+    try:
+        if not db_pool:
+            logger.warning("數據庫連接不可用")
+            return {
+                "success": False,
+                "message": "數據庫連接不可用",
+                "timestamp": datetime.now().isoformat()
+            }
+
+        conn = get_db_connection()
+        conn.rollback()  # Clear any failed transactions
+
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            # Update all paused tasks to active
+            cursor.execute("""
+                UPDATE schedule_tasks
+                SET status = 'active', updated_at = NOW()
+                WHERE status = 'paused'
+                RETURNING id, kol_nickname, schedule_type
+            """)
+            activated_tasks = cursor.fetchall()
+
+            conn.commit()
+
+            logger.info(f"全局排程器已啟動，激活了 {len(activated_tasks)} 個任務")
+
+            return {
+                "success": True,
+                "message": f"全局排程器已啟動，激活了 {len(activated_tasks)} 個任務",
+                "activated_count": len(activated_tasks),
+                "activated_tasks": [dict(task) for task in activated_tasks],
+                "timestamp": datetime.now().isoformat()
+            }
+
+    except Exception as e:
+        logger.error(f"啟動全局排程器失敗: {e}")
+        if conn:
+            conn.rollback()
+        return {
+            "success": False,
+            "message": f"啟動失敗: {str(e)}",
+            "timestamp": datetime.now().isoformat()
+        }
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+@app.post("/api/schedule/scheduler/stop")
+async def stop_scheduler():
+    """停止全局排程器 - 將所有 active 狀態的任務設置為 paused"""
+    logger.info("收到 stop_scheduler 請求 - 停止全局排程器")
+
+    conn = None
+    try:
+        if not db_pool:
+            logger.warning("數據庫連接不可用")
+            return {
+                "success": False,
+                "message": "數據庫連接不可用",
+                "timestamp": datetime.now().isoformat()
+            }
+
+        conn = get_db_connection()
+        conn.rollback()  # Clear any failed transactions
+
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            # Update all active tasks to paused
+            cursor.execute("""
+                UPDATE schedule_tasks
+                SET status = 'paused', updated_at = NOW()
+                WHERE status = 'active'
+                RETURNING id, kol_nickname, schedule_type
+            """)
+            paused_tasks = cursor.fetchall()
+
+            conn.commit()
+
+            logger.info(f"全局排程器已停止，暫停了 {len(paused_tasks)} 個任務")
+
+            return {
+                "success": True,
+                "message": f"全局排程器已停止，暫停了 {len(paused_tasks)} 個任務",
+                "paused_count": len(paused_tasks),
+                "paused_tasks": [dict(task) for task in paused_tasks],
+                "timestamp": datetime.now().isoformat()
+            }
+
+    except Exception as e:
+        logger.error(f"停止全局排程器失敗: {e}")
+        if conn:
+            conn.rollback()
+        return {
+            "success": False,
+            "message": f"停止失敗: {str(e)}",
             "timestamp": datetime.now().isoformat()
         }
     finally:
