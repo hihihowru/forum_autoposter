@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Table, Spin, Alert, Tag, Typography, Space, Button, Popconfirm } from 'antd';
 import { BarChartOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
+import { getApiBaseUrl } from '../../../config/api';
 
+const API_BASE_URL = getApiBaseUrl();
 const { Title, Text } = Typography;
 
 interface StockData {
@@ -36,7 +38,8 @@ const StockFilterDisplay: React.FC<StockFilterDisplayProps> = ({
   useEffect(() => {
     const loadStockMapping = async () => {
       try {
-        const response = await fetch('/stock_mapping.json');
+        // ✅ FIXED: Use Railway API URL with /api prefix
+        const response = await fetch(`${API_BASE_URL}/api/stock_mapping.json`);
         const mapping = await response.json();
         setStockMapping(mapping);
         console.log('📋 [股票映射] 載入成功:', Object.keys(mapping).length, '支股票');
@@ -44,7 +47,7 @@ const StockFilterDisplay: React.FC<StockFilterDisplayProps> = ({
         console.error('❌ [股票映射] 載入失敗:', error);
       }
     };
-    
+
     loadStockMapping();
   }, []);
 

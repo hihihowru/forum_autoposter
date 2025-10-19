@@ -33,15 +33,15 @@ class KOLService {
   async getKOLs(): Promise<KOLProfile[]> {
     try {
       console.log('KOLService.getKOLs() 被調用');
-      
-      // 嘗試從 posting-service 獲取 KOL 數據
-      const response = await axios.get(`${POSTING_SERVICE_URL}/kol/list`);
-      
-      if (response.data && Array.isArray(response.data)) {
-        console.log('從後端API獲取到KOL數據:', response.data.length, '個KOL');
-        
+
+      // ✅ FIXED: Use /api/kol/list endpoint and check response.data.data
+      const response = await axios.get(`${POSTING_SERVICE_URL}/api/kol/list`);
+
+      if (response.data && response.data.success && Array.isArray(response.data.data)) {
+        console.log('從後端API獲取到KOL數據:', response.data.data.length, '個KOL');
+
         // 轉換為前端期望的格式
-        const kols = response.data.map((kol: any) => ({
+        const kols = response.data.data.map((kol: any) => ({
           serial: kol.serial,
           nickname: kol.nickname || `KOL-${kol.serial}`,
           member_id: kol.serial.toString(),
