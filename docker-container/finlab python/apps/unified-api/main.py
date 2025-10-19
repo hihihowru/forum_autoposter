@@ -1946,6 +1946,8 @@ async def get_posts(
             "posts": [],
             "count": 0,
             "error": str(e),
+            "error_type": type(e).__name__,
+            "error_details": f"{type(e).__name__}: {str(e)}",
             "timestamp": datetime.now().isoformat()
         }
     finally:
