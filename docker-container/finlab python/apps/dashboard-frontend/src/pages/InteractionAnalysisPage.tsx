@@ -672,60 +672,19 @@ const InteractionAnalysisPage: React.FC = () => {
     }
   };
 
-  // 一鍵抓取所有互動數據
+  // ❌ REMOVED: fetchAllInteractions - endpoint /interactions/fetch-all-interactions doesn't exist
+  // Use refreshAllInteractions instead which calls /api/posts/refresh-all
   const fetchAllInteractions = async () => {
-    setRefreshing(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}/interactions/fetch-all-interactions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-      
-      const result = await response.json();
-      
-      if (result.success) {
-        message.success(result.message);
-        // 重新獲取數據
-        await fetchInteractionAnalysis();
-      } else {
-        message.error('一鍵抓取失敗');
-      }
-    } catch (error) {
-      console.error('一鍵抓取失敗:', error);
-      message.error('一鍵抓取失敗');
-    } finally {
-      setRefreshing(false);
-    }
+    // Redirect to refreshAllInteractions which uses the correct endpoint
+    await refreshAllInteractions();
   };
 
-  // 去重功能
+  // ❌ REMOVED: deduplicatePosts - endpoint /interactions/deduplicate doesn't exist
+  // Deduplication is now handled automatically by /api/posts/refresh-all
   const deduplicatePosts = async () => {
-    setRefreshing(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}/interactions/deduplicate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-      
-      const result = await response.json();
-      
-      if (result.success) {
-        message.success(result.message);
-        // 重新獲取數據
-        await fetchInteractionAnalysis();
-      } else {
-        message.error('去重失敗');
-      }
-    } catch (error) {
-      console.error('去重失敗:', error);
-      message.error('去重失敗');
-    } finally {
-      setRefreshing(false);
-    }
+    // Redirect to refreshAllInteractions which handles deduplication
+    message.info('去重功能已整合至批量刷新功能中');
+    await refreshAllInteractions();
   };
 
   // 打開外部連結
