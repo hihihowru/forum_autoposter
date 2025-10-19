@@ -1879,9 +1879,10 @@ async def get_posts(
                     SELECT FROM information_schema.tables
                     WHERE table_schema = 'public'
                     AND table_name = 'post_records'
-                );
+                ) as exists;
             """)
-            table_exists = cursor.fetchone()[0]
+            result = cursor.fetchone()
+            table_exists = result['exists'] if result else False
             logger.info(f"📊 post_records 表存在狀態: {table_exists}")
 
             if not table_exists:
