@@ -34,8 +34,8 @@ class KOLService {
     try {
       console.log('KOLService.getKOLs() 被調用');
 
-      // ✅ FIXED: Use /api/kol/list endpoint and check response.data.data
-      const response = await axios.get(`${POSTING_SERVICE_URL}/api/kol/list`);
+      // ✅ FIXED: POSTING_SERVICE_URL already includes /api, don't add it again
+      const response = await axios.get(`${POSTING_SERVICE_URL}/kol/list`);
 
       if (response.data && response.data.success && Array.isArray(response.data.data)) {
         console.log('從後端API獲取到KOL數據:', response.data.data.length, '個KOL');

@@ -1494,6 +1494,10 @@ async def execute_cmoney_intraday_trigger(processing: list, trigger_name: str):
             for item in raw_data:
                 if len(item) >= 13 and item[7]:  # Ensure we have all fields
                     stock_code = item[7]
+
+                    # Calculate 5-day trading statistics
+                    stats = calculate_trading_stats(stock_code)
+
                     stocks_with_info.append({
                         "stock_code": stock_code,
                         "stock_name": get_stock_name(stock_code),
@@ -1506,7 +1510,10 @@ async def execute_cmoney_intraday_trigger(processing: list, trigger_name: str):
                         "change_percent": float(item[9]) if item[9] else 0.0,  # 漲跌幅
                         "volume": int(item[11]) if item[11] else 0,  # 累計成交量
                         "volume_amount": float(item[10]) if item[10] else 0.0,  # 累計成交總額
-                        "trade_time": item[0] if item[0] else ""  # 交易時間
+                        "trade_time": item[0] if item[0] else "",  # 交易時間
+                        # Add 5-day statistics
+                        "up_days_5": stats['up_days_5'],  # 五日上漲天數
+                        "five_day_change": stats['five_day_change']  # 五日漲跌幅
                     })
 
             logger.info(f"✅ [{trigger_name}] 獲取 {len(stocks_with_info)} 支股票")
