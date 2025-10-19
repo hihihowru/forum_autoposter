@@ -55,6 +55,23 @@ import psycopg2
 from psycopg2 import pool
 from psycopg2.extras import RealDictCursor
 
+# ==================== GPT 內容生成器初始化 ====================
+
+# 添加 posting-service 到 Python 路徑
+posting_service_path = os.path.join(os.path.dirname(__file__), '../posting-service')
+if posting_service_path not in sys.path:
+    sys.path.insert(0, posting_service_path)
+
+# 導入 GPT 內容生成器
+try:
+    import openai
+    from gpt_content_generator import GPTContentGenerator
+    gpt_generator = GPTContentGenerator()
+    logger.info("✅ GPT 內容生成器初始化成功")
+except Exception as e:
+    logger.warning(f"⚠️  GPT 內容生成器導入失敗: {e}，將使用模板生成")
+    gpt_generator = None
+
 stock_mapping = {}
 db_pool = None  # Connection pool instead of single connection
 
@@ -1749,34 +1766,202 @@ async def create_posting(request: Request):
 
 @app.post("/api/manual-posting")
 async def manual_posting(request: Request):
-    """手動貼文"""
+    """手動貼文 - 生成內容並寫入數據庫"""
     logger.info("收到 manual_posting 請求")
 
+    conn = None
     try:
         body = await request.json()
-        logger.info(f"手動貼文內容: {body}")
+        logger.info(f"手動貼文參數: stock_code={body.get('stock_code')}, kol_serial={body.get('kol_serial')}, session_id={body.get('session_id')}")
 
-        result = {
-            "success": True,
-            "message": "手動貼文成功",
-            "post_id": "manual_post_67890",
-            "data": body,
-            "timestamp": datetime.now().isoformat()
+        # 提取參數
+        stock_code = body.get('stock_code', '')
+        stock_name = body.get('stock_name', stock_code)
+        kol_serial = int(body.get('kol_serial', 200))
+        kol_persona = body.get('kol_persona', 'technical')
+        session_id = body.get('session_id')
+        trigger_type = body.get('trigger_type', 'custom_stocks')
+        posting_type = body.get('posting_type', 'analysis')
+        max_words = body.get('max_words', 200)
+
+        # 使用 GPT 生成內容
+        if gpt_generator:
+            logger.info(f"使用 GPT 生成器生成內容: stock_code={stock_code}, kol_persona={kol_persona}")
+            try:
+                gpt_result = gpt_generator.generate_stock_analysis(
+                    stock_id=stock_code,
+                    stock_name=stock_name,
+                    kol_persona=kol_persona,
+                    serper_analysis={},  # 可選：可接入 Serper API 獲取新聞
+                    data_sources=[],
+                    content_length="medium",
+                    max_words=max_words
+                )
+                title = gpt_result.get('title', f"{stock_name}({stock_code}) 分析")
+                content = gpt_result.get('content', '')
+                logger.info(f"✅ GPT 內容生成成功: title={title[:30]}...")
+            except Exception as gpt_error:
+                logger.error(f"❌ GPT 生成失敗，使用模板: {gpt_error}")
+                title = f"{stock_name}({stock_code}) 技術分析與操作策略"
+                content = f"""【{stock_name}({stock_code}) 深度分析】
+
+一、技術面分析
+從技術指標來看，{stock_name}目前呈現出值得關注的訊號。RSI指標顯示股價動能變化，MACD指標則反映短中期趨勢。成交量方面，近期量能有所放大，顯示市場關注度提升。
+
+二、基本面觀察
+{stock_name}作為產業中的重要成員，營運狀況值得持續追蹤。投資人應關注公司財報數據、營收表現，以及產業整體景氣變化。
+
+三、操作建議
+短線操作者可觀察關鍵價位突破情況，配合量能變化做進出判斷。中長線投資者則需評估基本面是否支撐目前股價水準。
+
+四、風險提醒
+- 注意整體市場系統性風險
+- 留意產業競爭態勢變化
+- 設定合理停損停利點
+- 嚴格控制持股比重
+
+以上分析僅供參考，投資需謹慎評估自身風險承受能力。"""
+        else:
+            logger.warning("⚠️  GPT 生成器不可用，使用模板生成")
+            title = f"{stock_name}({stock_code}) 技術分析與操作策略"
+            content = f"""【{stock_name}({stock_code}) 深度分析】
+
+一、技術面分析
+從技術指標來看，{stock_name}目前呈現出值得關注的訊號。RSI指標顯示股價動能變化，MACD指標則反映短中期趨勢。成交量方面，近期量能有所放大，顯示市場關注度提升。
+
+二、基本面觀察
+{stock_name}作為產業中的重要成員，營運狀況值得持續追蹤。投資人應關注公司財報數據、營收表現，以及產業整體景氣變化。
+
+三、操作建議
+短線操作者可觀察關鍵價位突破情況，配合量能變化做進出判斷。中長線投資者則需評估基本面是否支撐目前股價水準。
+
+四、風險提醒
+- 注意整體市場系統性風險
+- 留意產業競爭態勢變化
+- 設定合理停損停利點
+- 嚴格控制持股比重
+
+以上分析僅供參考，投資需謹慎評估自身風險承受能力。"""
+
+        # 生成 UUID 作為 post_id
+        import uuid
+        post_id = str(uuid.uuid4())
+
+        # 準備數據庫寫入數據
+        now = datetime.now()
+
+        # 生成商品標籤
+        commodity_tags_data = [
+            {"type": "Market", "key": "TWA00", "bullOrBear": 0},
+            {"type": "Stock", "key": stock_code, "bullOrBear": 0}
+        ]
+
+        # 生成參數記錄
+        generation_params = {
+            "method": "manual",
+            "kol_persona": kol_persona,
+            "content_style": body.get('content_style', 'chart_analysis'),
+            "target_audience": body.get('target_audience', 'active_traders'),
+            "trigger_type": trigger_type,
+            "posting_type": posting_type,
+            "created_at": now.isoformat()
         }
 
-        logger.info("手動貼文成功")
+        # 確認數據庫連接可用
+        if not db_pool:
+            logger.error("數據庫連接池不可用")
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "success": False,
+                    "message": "數據庫連接不可用",
+                    "timestamp": now.isoformat()
+                }
+            )
+
+        # 寫入數據庫
+        conn = get_db_connection()
+        conn.rollback()  # 清除任何失敗的事務
+
+        with conn.cursor() as cursor:
+            insert_query = """
+                INSERT INTO post_records (
+                    post_id, created_at, updated_at, session_id,
+                    kol_serial, kol_nickname, kol_persona,
+                    stock_code, stock_name,
+                    title, content, content_md,
+                    status, commodity_tags, generation_params
+                ) VALUES (
+                    %s, %s, %s, %s,
+                    %s, %s, %s,
+                    %s, %s,
+                    %s, %s, %s,
+                    %s, %s, %s
+                )
+            """
+
+            cursor.execute(insert_query, (
+                post_id, now, now, session_id,
+                kol_serial, f"KOL-{kol_serial}", kol_persona,
+                stock_code, stock_name,
+                title, content, content,
+                'draft',  # 預設為草稿狀態
+                json.dumps(commodity_tags_data, ensure_ascii=False),
+                json.dumps(generation_params, ensure_ascii=False)
+            ))
+
+            conn.commit()
+            logger.info(f"✅ 成功寫入數據庫: post_id={post_id}, session_id={session_id}")
+
+        # 返回成功響應
+        result = {
+            "success": True,
+            "message": "手動貼文生成成功",
+            "post_id": post_id,
+            "content": {
+                "title": title,
+                "content": content,
+                "content_md": content
+            },
+            "stock_info": {
+                "stock_code": stock_code,
+                "stock_name": stock_name
+            },
+            "kol_info": {
+                "kol_serial": kol_serial,
+                "kol_nickname": f"KOL-{kol_serial}",
+                "kol_persona": kol_persona
+            },
+            "commodity_tags": commodity_tags_data,
+            "timestamp": now.isoformat()
+        }
+
+        logger.info("✅ 手動貼文生成成功")
         return result
 
     except Exception as e:
-        logger.error(f"手動貼文失敗: {e}")
+        logger.error(f"❌ 手動貼文失敗: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
+
+        if conn:
+            try:
+                conn.rollback()
+            except:
+                pass
+
         return JSONResponse(
             status_code=500,
             content={
                 "success": False,
                 "message": f"手動貼文失敗: {str(e)}",
+                "error_type": type(e).__name__,
                 "timestamp": datetime.now().isoformat()
             }
         )
+    finally:
+        if conn:
+            return_db_connection(conn)
 
 # ==================== Dashboard API 功能 ====================
 
