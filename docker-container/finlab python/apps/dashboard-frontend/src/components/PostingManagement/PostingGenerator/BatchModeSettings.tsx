@@ -1,13 +1,14 @@
 import React from 'react';
 import { Card, Typography, Radio, Space, InputNumber, Select, Divider, Tag, Row, Col, Button, Steps } from 'antd';
-import { 
-  PlayCircleOutlined, 
-  EyeOutlined, 
-  CheckCircleOutlined, 
+import {
+  PlayCircleOutlined,
+  EyeOutlined,
+  CheckCircleOutlined,
   ClockCircleOutlined,
   UserOutlined,
   FileTextOutlined,
-  SettingOutlined
+  SettingOutlined,
+  ExperimentOutlined
 } from '@ant-design/icons';
 
 const { Title, Text } = Typography;
@@ -25,7 +26,7 @@ interface BatchModeConfig {
   // 新增：生成模式
   generation_mode: 'simple' | 'trash' | 'high_quality';
   // 新增：發文類型
-  posting_type: 'interaction' | 'analysis';
+  posting_type: 'interaction' | 'analysis' | 'personalized';
 }
 
 interface BatchModeSettingsProps {
@@ -266,7 +267,18 @@ const BatchModeSettings: React.FC<BatchModeSettingsProps> = ({
                   <Space direction="vertical" size={0}>
                     <Text strong>互動發問</Text>
                     <Text type="secondary" style={{ fontSize: '12px' }}>
-                      簡短疑問句內容，促進用戶互動和參與（跳過個人化模組）
+                      簡短疑問句內容，促進用戶互動和參與
+                    </Text>
+                  </Space>
+                </Space>
+              </Radio>
+              <Radio value="personalized" style={{ width: '100%' }}>
+                <Space>
+                  <ExperimentOutlined />
+                  <Space direction="vertical" size={0}>
+                    <Text strong>個人化內容</Text>
+                    <Text type="secondary" style={{ fontSize: '12px' }}>
+                      使用個人化模組，生成5個不同角度版本供選擇
                     </Text>
                   </Space>
                 </Space>

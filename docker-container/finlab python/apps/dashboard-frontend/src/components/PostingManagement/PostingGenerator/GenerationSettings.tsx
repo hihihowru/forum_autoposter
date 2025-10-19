@@ -1,6 +1,6 @@
 import React from 'react';
 import { Card, Typography, Radio, Space, InputNumber, Select, Divider, Tag, Row, Col } from 'antd';
-import { OneToOneOutlined, ClusterOutlined, FileTextOutlined, ClockCircleOutlined } from '@ant-design/icons';
+import { OneToOneOutlined, ClusterOutlined, FileTextOutlined, ClockCircleOutlined, ExperimentOutlined } from '@ant-design/icons';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -17,7 +17,7 @@ interface GenerationSettings {
   // 新增：自定義字數
   custom_word_count?: number;
   // 新增：發文類型
-  posting_type: 'interaction' | 'analysis';
+  posting_type: 'interaction' | 'analysis' | 'personalized';
   // 新增：互動發問相關設定
   include_questions: boolean;
   include_emoji: boolean;
@@ -271,6 +271,17 @@ const GenerationSettings: React.FC<GenerationSettingsProps> = ({ value, onChange
                     <Text strong>互動發問</Text>
                     <Text type="secondary" style={{ fontSize: '12px' }}>
                       簡短疑問句內容，促進用戶互動和參與
+                    </Text>
+                  </Space>
+                </Space>
+              </Radio>
+              <Radio value="personalized" style={{ width: '100%' }}>
+                <Space>
+                  <ExperimentOutlined />
+                  <Space direction="vertical" size={0}>
+                    <Text strong>個人化內容</Text>
+                    <Text type="secondary" style={{ fontSize: '12px' }}>
+                      使用個人化模組，生成5個不同角度版本供選擇
                     </Text>
                   </Space>
                 </Space>

@@ -1851,10 +1851,10 @@ async def manual_posting(request: Request):
 
 以上分析僅供參考，投資需謹慎評估自身風險承受能力。"""
 
-        # 個人化處理 - 生成多個隨機版本
+        # 個人化處理 - 生成多個隨機版本（僅在 posting_type === 'personalized' 時執行）
         alternative_versions = []
-        if enhanced_personalization_processor:
-            logger.info(f"🎯 開始個人化處理: KOL={kol_serial}")
+        if posting_type == 'personalized' and enhanced_personalization_processor:
+            logger.info(f"🎯 開始個人化處理: KOL={kol_serial}, posting_type={posting_type}")
             try:
                 personalized_title, personalized_content, random_metadata = enhanced_personalization_processor.personalize_content(
                     standard_title=title,
@@ -1877,6 +1877,8 @@ async def manual_posting(request: Request):
                     logger.info(f"✅ 個人化完成，生成了 {len(alternative_versions)} 個替代版本")
             except Exception as e:
                 logger.error(f"⚠️  個人化處理失敗: {e}，使用原始內容")
+        else:
+            logger.info(f"⏭️  跳過個人化處理: posting_type={posting_type}")
 
         # 生成 UUID 作為 post_id
         import uuid
