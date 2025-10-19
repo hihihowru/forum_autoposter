@@ -1851,11 +1851,12 @@ async def get_interaction_analysis():
 @app.get("/api/posts")
 async def get_posts(
     skip: int = Query(0, description="跳過的記錄數"),
-    limit: int = Query(10000, description="返回的記錄數"),
-    status: str = Query(None, description="狀態篩選")
+    limit: int = Query(100, description="返回的記錄數，默認100條"),
+    status: str = Query(None, description="狀態篩選"),
+    session_id: int = Query(None, description="Session ID篩選")
 ):
     """獲取貼文列表（從 PostgreSQL 數據庫）"""
-    logger.info(f"收到 get_posts 請求: skip={skip}, limit={limit}, status={status}")
+    logger.info(f"收到 get_posts 請求: skip={skip}, limit={limit}, status={status}, session_id={session_id}")
 
     conn = None
     try:
@@ -1906,22 +1907,31 @@ async def get_posts(
 
             # 獲取總數（在查詢前先檢查）
             count_query = "SELECT COUNT(*) as count FROM post_records"
-            if status:
-                count_query += " WHERE status = %s"
-                cursor.execute(count_query, [status])
-            else:
-                cursor.execute(count_query)
+            count_params = []
+            where_clauses = []
 
+            if status:
+                where_clauses.append("status = %s")
+                count_params.append(status)
+
+            if session_id is not None:
+                where_clauses.append("session_id = %s")
+                count_params.append(session_id)
+
+            if where_clauses:
+                count_query += " WHERE " + " AND ".join(where_clauses)
+
+            cursor.execute(count_query, count_params)
             total_count = cursor.fetchone()['count']
-            logger.info(f"📊 數據庫中總貼文數: {total_count}")
+            logger.info(f"📊 數據庫中總貼文數 (filtered): {total_count}")
 
             # 構建查詢
             query = "SELECT * FROM post_records"
             params = []
 
-            if status:
-                query += " WHERE status = %s"
-                params.append(status)
+            if where_clauses:
+                query += " WHERE " + " AND ".join(where_clauses)
+                params.extend(count_params)
 
             query += " ORDER BY created_at DESC LIMIT %s OFFSET %s"
             params.extend([limit, skip])
