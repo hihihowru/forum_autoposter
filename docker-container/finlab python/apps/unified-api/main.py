@@ -72,6 +72,14 @@ except Exception as e:
     logger.warning(f"⚠️  GPT 內容生成器導入失敗: {e}，將使用模板生成")
     gpt_generator = None
 
+# 導入個人化模組
+try:
+    from personalization_module import enhanced_personalization_processor
+    logger.info("✅ 個人化模組初始化成功")
+except Exception as e:
+    logger.warning(f"⚠️  個人化模組導入失敗: {e}，將跳過個人化處理")
+    enhanced_personalization_processor = None
+
 stock_mapping = {}
 db_pool = None  # Connection pool instead of single connection
 
@@ -1843,6 +1851,33 @@ async def manual_posting(request: Request):
 
 以上分析僅供參考，投資需謹慎評估自身風險承受能力。"""
 
+        # 個人化處理 - 生成多個隨機版本
+        alternative_versions = []
+        if enhanced_personalization_processor:
+            logger.info(f"🎯 開始個人化處理: KOL={kol_serial}")
+            try:
+                personalized_title, personalized_content, random_metadata = enhanced_personalization_processor.personalize_content(
+                    standard_title=title,
+                    standard_content=content,
+                    kol_serial=kol_serial,
+                    batch_config={},
+                    serper_analysis={},
+                    trigger_type=trigger_type,
+                    real_time_price_data={},
+                    posting_type=posting_type
+                )
+
+                # 更新為個人化後的內容
+                title = personalized_title
+                content = personalized_content
+
+                # 提取其他版本
+                if random_metadata:
+                    alternative_versions = random_metadata.get('alternative_versions', [])
+                    logger.info(f"✅ 個人化完成，生成了 {len(alternative_versions)} 個替代版本")
+            except Exception as e:
+                logger.error(f"⚠️  個人化處理失敗: {e}，使用原始內容")
+
         # 生成 UUID 作為 post_id
         import uuid
         post_id = str(uuid.uuid4())
@@ -1890,15 +1925,18 @@ async def manual_posting(request: Request):
                     kol_serial, kol_nickname, kol_persona,
                     stock_code, stock_name,
                     title, content, content_md,
-                    status, commodity_tags, generation_params
+                    status, commodity_tags, generation_params, alternative_versions
                 ) VALUES (
                     %s, %s, %s, %s,
                     %s, %s, %s,
                     %s, %s,
                     %s, %s, %s,
-                    %s, %s, %s
+                    %s, %s, %s, %s
                 )
             """
+
+            # 準備 alternative_versions JSON
+            alternative_versions_json = json.dumps(alternative_versions, ensure_ascii=False) if alternative_versions else None
 
             cursor.execute(insert_query, (
                 post_id, now, now, session_id,
@@ -1907,7 +1945,8 @@ async def manual_posting(request: Request):
                 title, content, content,
                 'draft',  # 預設為草稿狀態
                 json.dumps(commodity_tags_data, ensure_ascii=False),
-                json.dumps(generation_params, ensure_ascii=False)
+                json.dumps(generation_params, ensure_ascii=False),
+                alternative_versions_json  # 添加替代版本
             ))
 
             conn.commit()
