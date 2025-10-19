@@ -276,7 +276,7 @@ export class PostingManagementAPI {
         const post = posts[i];
         try {
           console.log(`🚀 開始生成貼文 ${i + 1}/${posts.length} ${post.stock_code}-${post.kol_serial}:`, {
-            url: `${POSTING_SERVICE_URL}/manual-posting`,
+            url: `${POSTING_SERVICE_URL}/api/manual-posting`,
             analysis_depth_debug: {
               raw_value: batchConfig.analysis_depth,
               type: typeof batchConfig.analysis_depth,
@@ -310,7 +310,7 @@ export class PostingManagementAPI {
           
           const startTime = Date.now();
           // 調用單個貼文生成 API
-          const response = await axios.post(`${POSTING_SERVICE_URL}/manual-posting`, {
+          const response = await axios.post(`${POSTING_SERVICE_URL}/api/manual-posting`, {
             stock_code: post.stock_code,
             stock_name: post.stock_name,
             kol_serial: String(post.kol_serial),
@@ -550,7 +550,7 @@ export class PostingManagementAPI {
   static async generatePosts(sessionId: number, config?: any): Promise<GeneratePostsResponse> {
     try {
       // 使用現有的手動發文API
-      const response = await axios.post(`${POSTING_SERVICE_URL}/manual-posting`, {
+      const response = await axios.post(`${POSTING_SERVICE_URL}/api/manual-posting`, {
         kol_persona: config?.kol?.persona || 'technical',
         content_style: config?.settings?.content_style || 'chart_analysis',
         target_audience: config?.settings?.target_audience || 'active_traders',
