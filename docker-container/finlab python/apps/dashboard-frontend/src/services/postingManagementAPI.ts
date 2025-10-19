@@ -599,12 +599,16 @@ export class PostingManagementAPI {
   }
   
   static async getSessionPosts(
-    sessionId: number, 
+    sessionId: number,
     status?: string
   ): Promise<{ success: boolean; posts: Post[]; count: number; session_id: number; timestamp: string }> {
-    // 使用新的posting-service API
-    const response = await axios.get(`${POSTING_SERVICE_URL}/posts/session/${sessionId}`, {
-      params: { status }
+    // ✅ FIXED: /api/posts/session/{id} doesn't exist, use /api/posts with filter
+    const response = await axios.get(`${POSTING_SERVICE_URL}/api/posts`, {
+      params: {
+        session_id: sessionId,
+        status: status,
+        limit: 10000  // Get all posts for this session
+      }
     });
     
     // 轉換後端數據格式為前端期望的格式
@@ -788,7 +792,7 @@ export class PostingManagementAPI {
     timestamp: string;
   }> {
     try {
-      const response = await axios.get(`${POSTING_SERVICE_URL}/posts/review-sidebar`);
+      const response = await axios.get(`${POSTING_SERVICE_URL}/api/posts/review-sidebar`);
       return response.data;
     } catch (error) {
       console.error('獲取審核 sidebar 數據失敗:', error);
@@ -806,7 +810,7 @@ export class PostingManagementAPI {
     timestamp: string;
   }> {
     try {
-      const response = await axios.get(`${POSTING_SERVICE_URL}/posts/${postId}/self-learning-data`);
+      const response = await axios.get(`${POSTING_SERVICE_URL}/api/posts/${postId}/self-learning-data`);
       return response.data;
     } catch (error) {
       console.error('獲取自我學習數據失敗:', error);
@@ -837,7 +841,7 @@ export class PostingManagementAPI {
   }> {
     try {
       // 使用現有的 /posts 端點獲取所有貼文數據
-      const response = await axios.get(`${POSTING_SERVICE_URL}/posts`, {
+      const response = await axios.get(`${POSTING_SERVICE_URL}/api/posts`, {
         params: { limit: 10000 } // 獲取大量數據
       });
       
@@ -963,18 +967,18 @@ export class PostingManagementAPI {
   }
   
   static async getPost(postId: string): Promise<Post> {
-    const response = await axios.get(`${POSTING_SERVICE_URL}/posts/${postId}`);
+    const response = await axios.get(`${POSTING_SERVICE_URL}/api/posts/${postId}`);
     return response.data.post;
   }
   
   static async updatePost(postId: string, post: Partial<Post>): Promise<Post> {
     // 暫時使用現有API，後續可以擴展
-    const response = await apiClient.put(`/api/posting-management/posts/${postId}`, post);
+    const response = await apiClient.put(`/api/posting-management/api/posts/${postId}`, post);
     return response.data;
   }
   
   static async approvePost(postId: string, reviewerNotes?: string, approvedBy = 'system', editedTitle?: string, editedContent?: string): Promise<void> {
-    await axios.post(`${POSTING_SERVICE_URL}/posts/${postId}/approve`, {
+    await axios.post(`${POSTING_SERVICE_URL}/api/posts/${postId}/approve`, {
       reviewer_notes: reviewerNotes,
       approved_by: approvedBy,
       edited_title: editedTitle,
@@ -983,14 +987,14 @@ export class PostingManagementAPI {
   }
   
   static async rejectPost(postId: string, reviewerNotes: string): Promise<void> {
-    await axios.post(`${POSTING_SERVICE_URL}/posts/${postId}/reject`, {
+    await axios.post(`${POSTING_SERVICE_URL}/api/posts/${postId}/reject`, {
       reviewer_notes: reviewerNotes
     });
   }
   
   static async publishPost(postId: string): Promise<any> {
     // 使用正確的 posting-service API 端點
-    const response = await axios.post(`${POSTING_SERVICE_URL}/posts/${postId}/publish`);
+    const response = await axios.post(`${POSTING_SERVICE_URL}/api/posts/${postId}/publish`);
     return response.data;
   }
 
@@ -999,7 +1003,7 @@ export class PostingManagementAPI {
    */
   static async publishToCMoney(postId: string, cmoneyConfig?: any): Promise<{success: boolean, article_id?: string, article_url?: string, error?: string}> {
     try {
-      const response = await axios.post(`${POSTING_SERVICE_URL}/posts/${postId}/publish`, cmoneyConfig);
+      const response = await axios.post(`${POSTING_SERVICE_URL}/api/posts/${postId}/publish`, cmoneyConfig);
       return response.data;
     } catch (error: any) {
       console.error('發布到CMoney失敗:', error);
@@ -1012,7 +1016,7 @@ export class PostingManagementAPI {
 
   static async deleteFromCMoney(postId: string): Promise<{success: boolean, error?: string}> {
     try {
-      const response = await axios.delete(`${POSTING_SERVICE_URL}/posts/${postId}/delete`);
+      const response = await axios.delete(`${POSTING_SERVICE_URL}/api/posts/${postId}/delete`);
       return response.data;
     } catch (error: any) {
       console.error('從CMoney刪除失敗:', error);
@@ -1028,7 +1032,7 @@ export class PostingManagementAPI {
    */
   static async deletePost(postId: string): Promise<{success: boolean, error?: string}> {
     try {
-      const response = await axios.delete(`${POSTING_SERVICE_URL}/posts/${postId}`);
+      const response = await axios.delete(`${POSTING_SERVICE_URL}/api/posts/${postId}`);
       return response.data;
     } catch (error: any) {
       console.error('刪除貼文失敗:', error);
@@ -1048,7 +1052,7 @@ export class PostingManagementAPI {
     content_md?: string;
   }): Promise<{success: boolean, error?: string}> {
     try {
-      const response = await axios.put(`${POSTING_SERVICE_URL}/posts/${postId}/content`, content);
+      const response = await axios.put(`${POSTING_SERVICE_URL}/api/posts/${postId}/content`, content);
       return response.data;
     } catch (error: any) {
       console.error('更新貼文內容失敗:', error);
@@ -1064,7 +1068,7 @@ export class PostingManagementAPI {
    */
   static async restorePost(postId: string): Promise<{success: boolean, error?: string}> {
     try {
-      const response = await axios.post(`${POSTING_SERVICE_URL}/posts/${postId}/restore`);
+      const response = await axios.post(`${POSTING_SERVICE_URL}/api/posts/${postId}/restore`);
       return response.data;
     } catch (error: any) {
       console.error('還原貼文失敗:', error);
@@ -1760,7 +1764,7 @@ export class PostingManagementAPI {
   // ==================== 分析數據 ====================
   
   static async getPostAnalytics(postId: number, days = 7): Promise<any[]> {
-    const response = await apiClient.get(`/api/posting-management/analytics/posts/${postId}`, {
+    const response = await apiClient.get(`/api/posting-management/analytics/api/posts/${postId}`, {
       params: { days }
     });
     return response.data;
