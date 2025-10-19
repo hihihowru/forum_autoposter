@@ -483,7 +483,7 @@ async def reconnect_database():
             }
         
         # 關閉現有連接
-        if db_connection:
+        if db_pool:
             try:
                 db_connection.close()
                 logger.info("已關閉現有數據庫連接")
@@ -510,7 +510,7 @@ async def reconnect_database():
         db_connection = psycopg2.connect(**connect_kwargs)
         
         # 測試連接
-        with db_connection.cursor() as cursor:
+        with conn.cursor() as cursor:
             cursor.execute("SELECT 1")
             cursor.fetchone()
         
@@ -1688,8 +1688,8 @@ async def create_posting(request: Request):
         }
         
         # 插入到數據庫
-        if db_connection:
-            with db_connection.cursor() as cursor:
+        if db_pool:
+            with conn.cursor() as cursor:
                 insert_sql = """
                     INSERT INTO post_records (
                         post_id, created_at, updated_at, session_id, kol_serial, kol_nickname, 
@@ -1713,7 +1713,7 @@ async def create_posting(request: Request):
                 """
                 
                 cursor.execute(insert_sql, post_data)
-                db_connection.commit()
+                conn.commit()
                 logger.info(f"✅ 貼文已插入數據庫: {post_id}")
         else:
             logger.warning("⚠️ 數據庫連接不存在，無法保存貼文")
@@ -2204,7 +2204,7 @@ async def generate_content(
 async def import_1788_posts():
     """導入 1788 筆 post_records 數據（管理員功能）"""
     try:
-        if not db_connection:
+        if not db_pool:
             return {"error": "數據庫連接不存在"}
         
         # 讀取 JSON 數據文件
@@ -2217,7 +2217,7 @@ async def import_1788_posts():
         
         logger.info(f"📊 從 JSON 文件加載 {len(records)} 筆記錄")
         
-        with db_connection.cursor() as cursor:
+        with conn.cursor() as cursor:
             # 清空現有數據
             cursor.execute("DELETE FROM post_records")
             logger.info("🗑️ 清空現有數據")
@@ -2285,7 +2285,7 @@ async def import_1788_posts():
             # 批量插入
             logger.info(f"📥 開始插入 {len(records_dict)} 筆記錄...")
             cursor.executemany(insert_sql, records_dict)
-            db_connection.commit()
+            conn.commit()
             
             logger.info(f"✅ 成功導入 {len(records_dict)} 筆記錄")
             
@@ -2313,10 +2313,10 @@ async def import_1788_posts():
 async def insert_sample_data():
     """插入樣本數據到 post_records 表（測試功能）"""
     try:
-        if not db_connection:
+        if not db_pool:
             return {"error": "數據庫連接不存在"}
         
-        with db_connection.cursor() as cursor:
+        with conn.cursor() as cursor:
             # 創建樣本記錄
             sample_records = [
                 {
@@ -2419,7 +2419,7 @@ async def insert_sample_data():
             """
             
             cursor.executemany(insert_sql, sample_records)
-            db_connection.commit()
+            conn.commit()
             
             logger.info(f"✅ 成功插入 {len(sample_records)} 筆樣本記錄")
             
@@ -2447,7 +2447,7 @@ async def insert_sample_data():
 async def create_table_manually():
     """手動創建 post_records 表（管理員功能）"""
     try:
-        if not db_connection:
+        if not db_pool:
             return {"error": "數據庫連接不存在"}
         
         create_post_records_table()
@@ -2464,13 +2464,13 @@ async def create_table_manually():
 async def drop_and_recreate_table():
     """刪除並重新創建 post_records 表（管理員功能）"""
     try:
-        if not db_connection:
+        if not db_pool:
             return {"error": "數據庫連接不存在"}
         
-        with db_connection.cursor() as cursor:
+        with conn.cursor() as cursor:
             # 刪除現有表
             cursor.execute("DROP TABLE IF EXISTS post_records CASCADE")
-            db_connection.commit()
+            conn.commit()
             logger.info("🗑️ 刪除現有 post_records 表")
             
             # 重新創建表
@@ -2513,7 +2513,7 @@ async def drop_and_recreate_table():
                     alternative_versions TEXT
                 );
             """)
-            db_connection.commit()
+            conn.commit()
             logger.info("✅ 重新創建 post_records 表成功")
             
         return {
@@ -2529,13 +2529,13 @@ async def drop_and_recreate_table():
 async def reset_database():
     """重置數據庫（管理員功能）"""
     try:
-        if not db_connection:
+        if not db_pool:
             return {"error": "數據庫連接不存在"}
         
-        with db_connection.cursor() as cursor:
+        with conn.cursor() as cursor:
             # 刪除現有表
             cursor.execute("DROP TABLE IF EXISTS post_records CASCADE")
-            db_connection.commit()
+            conn.commit()
             logger.info("🗑️ 刪除現有 post_records 表")
             
         return {
@@ -2560,13 +2560,13 @@ async def debug_database():
             "error": None
         }
         
-        if not db_connection:
+        if not db_pool:
             debug_info["error"] = "數據庫連接不存在"
             return debug_info
         
         # 測試數據庫連接
         try:
-            with db_connection.cursor() as cursor:
+            with conn.cursor() as cursor:
                 cursor.execute("SELECT 1")
                 cursor.fetchone()
             debug_info["database_connection"] = "✅ 連接正常"
@@ -2577,7 +2577,7 @@ async def debug_database():
         
         # 檢查表是否存在
         try:
-            with db_connection.cursor() as cursor:
+            with conn.cursor() as cursor:
                 cursor.execute("""
                     SELECT EXISTS (
                         SELECT FROM information_schema.tables 
@@ -2616,7 +2616,7 @@ async def debug_database():
 async def fix_database():
     """修復數據庫（管理員功能）"""
     try:
-        if not db_connection:
+        if not db_pool:
             return {"error": "數據庫連接不存在"}
         
         # 創建新的連接來避免事務問題
@@ -2704,7 +2704,7 @@ async def import_post_records():
         
         logger.info(f"📊 從 JSON 文件加載 {len(records)} 筆記錄")
         
-        with db_connection.cursor() as cursor:
+        with conn.cursor() as cursor:
             # 清空現有數據
             cursor.execute("DELETE FROM post_records")
             logger.info("🗑️ 清空現有數據")
@@ -2771,7 +2771,7 @@ async def import_post_records():
             
             # 批量插入
             cursor.executemany(insert_sql, records_dict)
-            db_connection.commit()
+            conn.commit()
             
             logger.info(f"✅ 成功導入 {len(records_dict)} 筆記錄")
             
@@ -2802,8 +2802,9 @@ async def get_kol_list():
     """獲取 KOL 列表"""
     logger.info("收到 get_kol_list 請求")
 
+    conn = None
     try:
-        if not db_connection:
+        if not db_pool:
             logger.warning("數據庫連接不可用，返回空數據")
             return {
                 "success": False,
@@ -2813,7 +2814,8 @@ async def get_kol_list():
                 "timestamp": datetime.now().isoformat()
             }
 
-        with db_connection.cursor(cursor_factory=RealDictCursor) as cursor:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
             cursor.execute("SELECT * FROM kol_profiles ORDER BY serial")
             kols = cursor.fetchall()
 
@@ -2835,6 +2837,9 @@ async def get_kol_list():
             "error": str(e),
             "timestamp": datetime.now().isoformat()
         }
+    finally:
+        if conn:
+            return_db_connection(conn)
 
 # ==================== Schedule API 功能 ====================
 
@@ -2847,7 +2852,7 @@ async def get_schedule_tasks(
     logger.info(f"收到 get_schedule_tasks 請求: status={status}, limit={limit}")
 
     try:
-        if not db_connection:
+        if not db_pool:
             logger.warning("數據庫連接不可用，返回空數據")
             return {
                 "success": False,
@@ -2857,7 +2862,7 @@ async def get_schedule_tasks(
                 "timestamp": datetime.now().isoformat()
             }
 
-        with db_connection.cursor(cursor_factory=RealDictCursor) as cursor:
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
             query = "SELECT * FROM schedule_tasks"
             params = []
 
@@ -2897,7 +2902,7 @@ async def get_daily_stats():
     logger.info("收到 get_daily_stats 請求")
 
     try:
-        if not db_connection:
+        if not db_pool:
             logger.warning("數據庫連接不可用")
             return {
                 "success": False,
@@ -2906,7 +2911,7 @@ async def get_daily_stats():
                 "timestamp": datetime.now().isoformat()
             }
 
-        with db_connection.cursor(cursor_factory=RealDictCursor) as cursor:
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
             # Get today's date range
             today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
             today_end = datetime.now().replace(hour=23, minute=59, second=59, microsecond=999999)
