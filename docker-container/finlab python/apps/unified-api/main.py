@@ -2213,20 +2213,24 @@ async def generate_content(
 @app.post("/admin/import-1788-posts")
 async def import_1788_posts():
     """導入 1788 筆 post_records 數據（管理員功能）"""
+    conn = None
     try:
         if not db_pool:
             return {"error": "數據庫連接不存在"}
-        
+
         # 讀取 JSON 數據文件
         json_file_path = '/app/post_records_1788.json'
         if not os.path.exists(json_file_path):
             return {"error": "post_records_1788.json 文件不存在"}
-        
+
         with open(json_file_path, 'r', encoding='utf-8') as f:
             records = json.load(f)
-        
+
         logger.info(f"📊 從 JSON 文件加載 {len(records)} 筆記錄")
-        
+
+        conn = get_db_connection()
+        conn.rollback()  # Clear failed transactions
+
         with conn.cursor() as cursor:
             # 清空現有數據
             cursor.execute("DELETE FROM post_records")
@@ -2314,18 +2318,27 @@ async def import_1788_posts():
                 "status_stats": {status: count for status, count in status_stats},
                 "timestamp": datetime.now().isoformat()
             }
-            
+
     except Exception as e:
         logger.error(f"❌ 導入 1788 筆記錄失敗: {e}")
+        if conn:
+            conn.rollback()
         return {"error": str(e)}
+    finally:
+        if conn:
+            return_db_connection(conn)
 
 @app.post("/test/insert-sample-data")
 async def insert_sample_data():
     """插入樣本數據到 post_records 表（測試功能）"""
+    conn = None
     try:
         if not db_pool:
             return {"error": "數據庫連接不存在"}
-        
+
+        conn = get_db_connection()
+        conn.rollback()  # Clear failed transactions
+
         with conn.cursor() as cursor:
             # 創建樣本記錄
             sample_records = [
@@ -2448,10 +2461,15 @@ async def insert_sample_data():
                 "status_stats": {status: count for status, count in status_stats},
                 "timestamp": datetime.now().isoformat()
             }
-            
+
     except Exception as e:
         logger.error(f"❌ 插入樣本數據失敗: {e}")
+        if conn:
+            conn.rollback()
         return {"error": str(e)}
+    finally:
+        if conn:
+            return_db_connection(conn)
 
 @app.post("/admin/create-post-records-table")
 async def create_table_manually():
@@ -2473,16 +2491,20 @@ async def create_table_manually():
 @app.post("/admin/drop-and-recreate-post-records-table")
 async def drop_and_recreate_table():
     """刪除並重新創建 post_records 表（管理員功能）"""
+    conn = None
     try:
         if not db_pool:
             return {"error": "數據庫連接不存在"}
-        
+
+        conn = get_db_connection()
+        conn.rollback()  # Clear failed transactions
+
         with conn.cursor() as cursor:
             # 刪除現有表
             cursor.execute("DROP TABLE IF EXISTS post_records CASCADE")
             conn.commit()
             logger.info("🗑️ 刪除現有 post_records 表")
-            
+
             # 重新創建表
             cursor.execute("""
                 CREATE TABLE post_records (
@@ -2525,7 +2547,7 @@ async def drop_and_recreate_table():
             """)
             conn.commit()
             logger.info("✅ 重新創建 post_records 表成功")
-            
+
         return {
             "success": True,
             "message": "post_records 表已刪除並重新創建",
@@ -2533,21 +2555,30 @@ async def drop_and_recreate_table():
         }
     except Exception as e:
         logger.error(f"❌ 刪除並重新創建表失敗: {e}")
+        if conn:
+            conn.rollback()
         return {"error": str(e)}
+    finally:
+        if conn:
+            return_db_connection(conn)
 
 @app.post("/admin/reset-database")
 async def reset_database():
     """重置數據庫（管理員功能）"""
+    conn = None
     try:
         if not db_pool:
             return {"error": "數據庫連接不存在"}
-        
+
+        conn = get_db_connection()
+        conn.rollback()  # Clear failed transactions
+
         with conn.cursor() as cursor:
             # 刪除現有表
             cursor.execute("DROP TABLE IF EXISTS post_records CASCADE")
             conn.commit()
             logger.info("🗑️ 刪除現有 post_records 表")
-            
+
         return {
             "success": True,
             "message": "數據庫已重置，表已刪除",
@@ -2555,7 +2586,12 @@ async def reset_database():
         }
     except Exception as e:
         logger.error(f"❌ 重置數據庫失敗: {e}")
+        if conn:
+            conn.rollback()
         return {"error": str(e)}
+    finally:
+        if conn:
+            return_db_connection(conn)
 
 @app.get("/admin/debug-database")
 async def debug_database():
