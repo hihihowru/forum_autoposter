@@ -492,6 +492,58 @@ async def test_database():
 
     return result
 
+@app.post("/api/database/migrate-trigger-type")
+async def migrate_trigger_type():
+    """
+    Database Migration: Add trigger_type column to post_records table
+
+    This endpoint should be called ONCE after deploying the trigger_type fix.
+    It adds the missing trigger_type column to the post_records table.
+    """
+    logger.info("🔧 開始數據庫遷移: 添加 trigger_type 列")
+
+    conn = None
+    try:
+        if not db_pool:
+            return {
+                "success": False,
+                "error": "Database pool not initialized",
+                "timestamp": datetime.now().isoformat()
+            }
+
+        conn = get_db_connection()
+        conn.rollback()  # Clear any failed transactions
+
+        with conn.cursor() as cursor:
+            # Add trigger_type column if it doesn't exist
+            cursor.execute("""
+                ALTER TABLE post_records
+                ADD COLUMN IF NOT EXISTS trigger_type VARCHAR(100);
+            """)
+
+            conn.commit()
+
+        logger.info("✅ 數據庫遷移成功: trigger_type 列已添加")
+        return {
+            "success": True,
+            "message": "Migration successful: trigger_type column added to post_records table",
+            "timestamp": datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"❌ 數據庫遷移失敗: {e}")
+        if conn:
+            conn.rollback()
+        return {
+            "success": False,
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "timestamp": datetime.now().isoformat()
+        }
+    finally:
+        if conn:
+            return_db_connection(conn)
+
 @app.post("/api/admin/reconnect-database")
 async def reconnect_database():
     """重新連接數據庫（管理員功能）"""
