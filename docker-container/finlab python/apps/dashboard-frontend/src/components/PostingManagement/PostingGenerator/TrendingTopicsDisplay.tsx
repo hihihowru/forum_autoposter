@@ -285,6 +285,88 @@ const TrendingTopicsDisplay: React.FC<TrendingTopicsDisplayProps> = ({
             </Space>
           </Card>
 
+          {/* 生成貼文詳情區域 */}
+          {selectedTopics.length > 0 && (
+            <Card
+              title="📋 生成貼文詳情"
+              size="small"
+              style={{ marginBottom: 16, backgroundColor: '#fffbe6', borderColor: '#faad14' }}
+            >
+              <Space direction="vertical" style={{ width: '100%' }} size="middle">
+                <div>
+                  <Text strong style={{ fontSize: '14px' }}>
+                    總計將生成 {totalPostCount} 篇貼文
+                  </Text>
+                </div>
+
+                <div>
+                  <Text strong style={{ fontSize: '13px' }}>話題與股票組合:</Text>
+                  <div style={{ marginTop: 8 }}>
+                    {topics
+                      .filter(topic => selectedTopics.includes(topic.id))
+                      .map((topic, index) => {
+                        const hasStocks = topic.stock_ids && topic.stock_ids.length > 0;
+                        const postCount = hasStocks ? 1 + topic.stock_ids.length : 1;
+
+                        return (
+                          <Card
+                            key={topic.id}
+                            size="small"
+                            style={{ marginBottom: 8, backgroundColor: '#fff' }}
+                          >
+                            <Space direction="vertical" style={{ width: '100%' }} size="small">
+                              <div>
+                                <Tag color="blue">話題 {index + 1}</Tag>
+                                <Text strong>{topic.title}</Text>
+                              </div>
+
+                              {hasStocks ? (
+                                <div>
+                                  <Text type="secondary" style={{ fontSize: '12px' }}>
+                                    📊 將生成 {postCount} 篇貼文:
+                                  </Text>
+                                  <ul style={{ margin: '4px 0', paddingLeft: '20px', fontSize: '12px' }}>
+                                    <li>
+                                      <Tag color="orange">純話題</Tag>
+                                      {topic.title} (使用 serper 搜尋生成)
+                                    </li>
+                                    {topic.stock_ids.map(stockId => (
+                                      <li key={stockId}>
+                                        <Tag color="green">股票標籤</Tag>
+                                        {topic.title} + {stockId === 'TWA00' ? '台指期' : stockId}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              ) : (
+                                <div>
+                                  <Text type="secondary" style={{ fontSize: '12px' }}>
+                                    📊 將生成 {postCount} 篇貼文:
+                                  </Text>
+                                  <ul style={{ margin: '4px 0', paddingLeft: '20px', fontSize: '12px' }}>
+                                    <li>
+                                      <Tag color="orange">純話題</Tag>
+                                      {topic.title} (無股票標籤，使用 serper 搜尋生成)
+                                    </li>
+                                  </ul>
+                                </div>
+                              )}
+                            </Space>
+                          </Card>
+                        );
+                      })}
+                  </div>
+                </div>
+
+                <div style={{ paddingTop: 8, borderTop: '1px solid #d9d9d9' }}>
+                  <Text type="secondary" style={{ fontSize: '12px' }}>
+                    💡 提示: 點擊「批量生成選中話題」後，系統將按照上述組合生成 {totalPostCount} 篇貼文
+                  </Text>
+                </div>
+              </Space>
+            </Card>
+          )}
+
           {/* 話題列表 - 可選擇 */}
           <Title level={5}>熱門話題列表</Title>
           <Text type="secondary" style={{ fontSize: '12px', marginBottom: '16px', display: 'block' }}>

@@ -337,51 +337,17 @@ const KOLManagementPage: React.FC = () => {
     }
   };
 
-  // 確認創建 KOL（顯示確認對話框）
+  // 確認創建 KOL（直接創建，不再顯示確認對話框）
   const handleCreateKOL = async () => {
     try {
       const values = await createForm.validateFields();
-      console.log('📝 表單驗證通過，準備顯示確認對話框');
+      console.log('📝 表單驗證通過，直接創建 KOL');
 
-      // Populate confirmation form with all values including defaults for prompt fields
-      confirmForm.setFieldsValue({
-        // Basic fields from create form
-        email: values.email,
-        password: values.password,
-        nickname: values.nickname,
-        member_id: values.member_id || '',
-        model_id: values.model_id || 'gpt-4o-mini',
-        ai_description: values.ai_description || '',
-
-        // Prompt fields with defaults
-        prompt_persona: values.prompt_persona || ["技術分析師：專精於技術指標、K線、均線、KD、MACD等分析，善於從圖表找出買賣時機點"],
-        prompt_style: values.prompt_style || ["邏輯清晰：論述結構嚴謹，層次分明，因果關係明確，結論有理有據"],
-        prompt_guardrails: values.prompt_guardrails || ["不提供具體買賣建議，不明示買進賣出價位，不保證獲利，僅供參考"],
-        prompt_skeleton: values.prompt_skeleton || ["【標題】\n1. 當前狀況\n2. 技術分析\n3. 買賣策略\n4. 風險提醒"]
-      });
-
-      // Open comprehensive confirmation modal
-      setConfirmModalVisible(true);
+      // Directly proceed with creation
+      await proceedWithCreation(values);
 
     } catch (error) {
       console.error('❌ 表單驗證失敗:', error);
-      message.error('請填寫所有必填欄位');
-    }
-  };
-
-  // 處理確認Modal的最終提交
-  const handleConfirmSubmit = async () => {
-    try {
-      const values = await confirmForm.validateFields();
-      console.log('✅ 確認表單驗證通過，開始創建 KOL:', values);
-
-      // Close confirmation modal
-      setConfirmModalVisible(false);
-
-      // Proceed with creation using confirmed values
-      await proceedWithCreation(values);
-    } catch (error) {
-      console.error('❌ 確認表單驗證失敗:', error);
       message.error('請填寫所有必填欄位');
     }
   };
