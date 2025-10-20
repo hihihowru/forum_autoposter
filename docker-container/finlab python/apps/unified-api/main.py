@@ -2008,9 +2008,47 @@ async def manual_posting(request: Request):
         posting_type = body.get('posting_type', 'analysis')
         max_words = body.get('max_words', 200)
 
+        # 🔥 新增：模型 ID 選擇邏輯
+        model_id_override = body.get('model_id_override')  # 批量覆蓋模型
+        use_kol_default_model = body.get('use_kol_default_model', True)  # 預設使用 KOL 模型
+
+        # 確定使用的模型
+        chosen_model_id = None
+
+        # 優先級 1: 批量覆蓋模型（如果設定且不使用 KOL 預設）
+        if not use_kol_default_model and model_id_override:
+            chosen_model_id = model_id_override
+            logger.info(f"🤖 使用批量覆蓋模型: {chosen_model_id}")
+        else:
+            # 優先級 2: 從數據庫獲取 KOL 的預設模型
+            try:
+                conn = await asyncpg.connect(
+                    host=DB_CONFIG['host'],
+                    port=DB_CONFIG['port'],
+                    database=DB_CONFIG['database'],
+                    user=DB_CONFIG['user'],
+                    password=DB_CONFIG['password']
+                )
+                kol_model_id = await conn.fetchval(
+                    "SELECT model_id FROM kol_profiles WHERE serial = $1",
+                    str(kol_serial)
+                )
+                await conn.close()
+
+                if kol_model_id:
+                    chosen_model_id = kol_model_id
+                    logger.info(f"🤖 使用 KOL 預設模型: {chosen_model_id} (KOL serial: {kol_serial})")
+                else:
+                    # 優先級 3: 備用預設模型
+                    chosen_model_id = "gpt-4o-mini"
+                    logger.info(f"🤖 KOL 未設定模型，使用預設: {chosen_model_id}")
+            except Exception as db_error:
+                logger.warning(f"⚠️  無法獲取 KOL 模型設定: {db_error}，使用預設模型")
+                chosen_model_id = "gpt-4o-mini"
+
         # 使用 GPT 生成內容
         if gpt_generator:
-            logger.info(f"使用 GPT 生成器生成內容: stock_code={stock_code}, kol_persona={kol_persona}")
+            logger.info(f"使用 GPT 生成器生成內容: stock_code={stock_code}, kol_persona={kol_persona}, model={chosen_model_id}")
             try:
                 gpt_result = gpt_generator.generate_stock_analysis(
                     stock_id=stock_code,
@@ -2019,7 +2057,8 @@ async def manual_posting(request: Request):
                     serper_analysis={},  # 可選：可接入 Serper API 獲取新聞
                     data_sources=[],
                     content_length="medium",
-                    max_words=max_words
+                    max_words=max_words,
+                    model=chosen_model_id  # 🔥 傳遞選定的模型
                 )
                 title = gpt_result.get('title', f"{stock_name}({stock_code}) 分析")
                 content = gpt_result.get('content', '')

@@ -332,7 +332,11 @@ export class PostingManagementAPI {
             topic_id: (post as any).topic_id || batch_config.topic_id || null,  // 優先使用貼文級別的 topic_id
             topic_title: (post as any).topic_title || batch_config.topic_title || null,  // 優先使用貼文級別的 topic_title
             posting_type: batchConfig.posting_type || 'analysis',  // 🔥 新增：發文類型
-            
+
+            // 🔥 新增：模型 ID 覆蓋選項
+            model_id_override: (batchConfig as any).settings?.model_id_override || null,
+            use_kol_default_model: (batchConfig as any).settings?.use_kol_default_model !== false,
+
             // 新增：所有步驟的配置
             stock_count_limit: batch_config.stock_count_limit,
             stock_filter_criteria: batch_config.stock_filter_criteria,

@@ -33,20 +33,29 @@ class GPTContentGenerator:
         else:
             logger.warning("OPENAI_API_KEY 未設定，將使用模板生成")
     
-    def generate_stock_analysis(self, 
-                             stock_id: str, 
-                             stock_name: str, 
+    def generate_stock_analysis(self,
+                             stock_id: str,
+                             stock_name: str,
                              kol_persona: str,
                              serper_analysis: Dict[str, Any],
                              data_sources: List[str],
                              content_length: str = "medium",
-                             max_words: int = 200) -> Dict[str, Any]:
-        """使用GPT生成股票分析內容"""
-        
+                             max_words: int = 200,
+                             model: Optional[str] = None) -> Dict[str, Any]:
+        """使用GPT生成股票分析內容
+
+        Args:
+            model: 可選的模型ID，如果提供則覆蓋預設模型
+        """
+
         try:
             if not self.api_key:
                 return self._fallback_generation(stock_id, stock_name, kol_persona)
-            
+
+            # 🔥 確定使用的模型：傳入的model參數 > 實例預設model
+            chosen_model = model if model else self.model
+            logger.info(f"🤖 GPT 生成器使用模型: {chosen_model}")
+
             # 優先使用新聞分析Agent
             news_items = serper_analysis.get('news_items', [])
             if news_items:
@@ -55,15 +64,15 @@ class GPTContentGenerator:
                 return news_analysis_agent.analyze_stock_news(
                     stock_id, stock_name, news_items, kol_persona
                 )
-            
+
             # 如果沒有新聞，使用基本GPT分析
             prompt = self._build_analysis_prompt(
                 stock_id, stock_name, kol_persona, serper_analysis, data_sources, content_length, max_words
             )
-            
+
             # 調用GPT API
             response = openai.chat.completions.create(
-                model=self.model,
+                model=chosen_model,  # 🔥 使用選定的模型
                 messages=[
                     {
                         "role": "system",
