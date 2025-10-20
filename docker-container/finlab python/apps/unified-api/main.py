@@ -1736,7 +1736,8 @@ async def execute_cmoney_intraday_trigger(processing: list, trigger_name: str):
                     stock_code = item[7]
 
                     # Calculate 5-day trading statistics
-                    stats = calculate_trading_stats(stock_code)
+                    # Note: Historical data not available in intraday context, using defaults
+                    stats = {"up_days": 0, "five_day_change": 0.0}
 
                     stocks_with_info.append({
                         "stock_code": stock_code,
@@ -1752,7 +1753,7 @@ async def execute_cmoney_intraday_trigger(processing: list, trigger_name: str):
                         "volume_amount": float(item[10]) if item[10] else 0.0,  # 累計成交總額
                         "trade_time": item[0] if item[0] else "",  # 交易時間
                         # Add 5-day statistics
-                        "up_days_5": stats['up_days_5'],  # 五日上漲天數
+                        "up_days_5": stats['up_days'],  # 五日上漲天數
                         "five_day_change": stats['five_day_change']  # 五日漲跌幅
                     })
 

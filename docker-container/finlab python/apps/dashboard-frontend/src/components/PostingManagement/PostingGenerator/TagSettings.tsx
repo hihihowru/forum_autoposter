@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Typography, Radio, Space, Tag, Button, Input, Divider, Row, Col, Select, Spin, message, Switch } from 'antd';
 import { TagsOutlined, PlusOutlined, DeleteOutlined, StockOutlined, FireOutlined } from '@ant-design/icons';
+import { getApiBaseUrl } from '../../../config/api';
 
+const API_BASE_URL = getApiBaseUrl();
 const { Title, Text } = Typography;
 const { Option } = Select;
 
@@ -64,7 +66,7 @@ const TagSettings: React.FC<TagSettingsProps> = ({ value, onChange, triggerData,
   const fetchTrendingTopics = async () => {
     setLoadingTrendingTopics(true);
     try {
-      const response = await fetch('/api/trending?limit=10');
+      const response = await fetch(`${API_BASE_URL}/api/trending?limit=10`);
       const data = await response.json();
       
       if (data.topics) {
