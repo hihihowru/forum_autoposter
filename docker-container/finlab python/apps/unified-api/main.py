@@ -4,6 +4,8 @@ Railway 部署時使用此服務作為唯一的 API 入口
 整合所有微服務功能到一個 API
 
 Recent Updates:
+- 2025-10-20: Fixed posting-service imports with robust multi-strategy path resolution
+- 2025-10-20: Enabled alternative_versions generation for ALL posting_types
 - 2025-01-18: Fixed Railway healthcheck - added /health endpoint alongside /api/health
 - 2025-01-18: Separated 6 intraday triggers into individual GET endpoints
 - 2025-01-18: Standardized all API endpoints with /api prefix
