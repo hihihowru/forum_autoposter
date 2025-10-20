@@ -1903,10 +1903,10 @@ async def manual_posting(request: Request):
 
 以上分析僅供參考，投資需謹慎評估自身風險承受能力。"""
 
-        # 個人化處理 - 生成多個隨機版本（僅在 posting_type === 'personalized' 時執行）
+        # 隨機版本生成 - ALL posting_types 都生成 5 個版本（避免模板化）
         alternative_versions = []
-        if posting_type == 'personalized' and enhanced_personalization_processor:
-            logger.info(f"🎯 開始個人化處理: KOL={kol_serial}, posting_type={posting_type}")
+        if enhanced_personalization_processor:
+            logger.info(f"🎯 開始生成 5 個隨機版本: KOL={kol_serial}, posting_type={posting_type}")
             try:
                 personalized_title, personalized_content, random_metadata = enhanced_personalization_processor.personalize_content(
                     standard_title=title,
@@ -1919,18 +1919,18 @@ async def manual_posting(request: Request):
                     posting_type=posting_type
                 )
 
-                # 更新為個人化後的內容
+                # 更新為選中的版本內容
                 title = personalized_title
                 content = personalized_content
 
-                # 提取其他版本
+                # 提取其他 4 個版本
                 if random_metadata:
                     alternative_versions = random_metadata.get('alternative_versions', [])
-                    logger.info(f"✅ 個人化完成，生成了 {len(alternative_versions)} 個替代版本")
+                    logger.info(f"✅ 版本生成完成: 選中版本 + {len(alternative_versions)} 個替代版本 = 共 {len(alternative_versions) + 1} 個版本")
             except Exception as e:
-                logger.error(f"⚠️  個人化處理失敗: {e}，使用原始內容")
+                logger.error(f"⚠️  版本生成失敗: {e}，使用原始內容")
         else:
-            logger.info(f"⏭️  跳過個人化處理: posting_type={posting_type}")
+            logger.warning(f"⚠️  個人化模組不可用: posting_type={posting_type}")
 
         # 生成 UUID 作為 post_id
         import uuid
