@@ -417,6 +417,80 @@ async def health_check():
         }
     }
 
+@app.get("/api/debug/import-status")
+async def debug_import_status():
+    """Debug endpoint to expose module import status and errors"""
+    import traceback
+
+    result = {
+        "timestamp": datetime.now().isoformat(),
+        "python_version": sys.version,
+        "sys_path": sys.path,
+        "posting_service_path": os.path.join(os.path.dirname(__file__), 'posting-service'),
+        "modules": {}
+    }
+
+    # Check if posting-service directory exists
+    posting_service_dir = os.path.join(os.path.dirname(__file__), 'posting-service')
+    result["posting_service_exists"] = os.path.exists(posting_service_dir)
+
+    if os.path.exists(posting_service_dir):
+        result["posting_service_files"] = os.listdir(posting_service_dir)
+
+    # Check GPT generator
+    result["modules"]["gpt_generator"] = {
+        "imported": gpt_generator is not None,
+        "instance": str(type(gpt_generator)) if gpt_generator else None
+    }
+
+    # Check personalization processor
+    result["modules"]["personalization_processor"] = {
+        "imported": enhanced_personalization_processor is not None,
+        "instance": str(type(enhanced_personalization_processor)) if enhanced_personalization_processor else None
+    }
+
+    # Try importing modules individually to see exact errors
+    errors = {}
+
+    # Test openai import
+    try:
+        import openai as test_openai
+        errors["openai"] = {"status": "success", "version": getattr(test_openai, '__version__', 'unknown')}
+    except Exception as e:
+        errors["openai"] = {"status": "failed", "error": str(e), "traceback": traceback.format_exc()}
+
+    # Test gpt_content_generator import
+    try:
+        from gpt_content_generator import GPTContentGenerator as TestGPT
+        errors["gpt_content_generator"] = {"status": "success"}
+    except Exception as e:
+        errors["gpt_content_generator"] = {"status": "failed", "error": str(e), "traceback": traceback.format_exc()}
+
+    # Test kol_database_service import
+    try:
+        from kol_database_service import KOLProfile, KOLDatabaseService
+        errors["kol_database_service"] = {"status": "success"}
+    except Exception as e:
+        errors["kol_database_service"] = {"status": "failed", "error": str(e), "traceback": traceback.format_exc()}
+
+    # Test random_content_generator import
+    try:
+        from random_content_generator import RandomContentGenerator
+        errors["random_content_generator"] = {"status": "success"}
+    except Exception as e:
+        errors["random_content_generator"] = {"status": "failed", "error": str(e), "traceback": traceback.format_exc()}
+
+    # Test personalization_module import
+    try:
+        from personalization_module import enhanced_personalization_processor as test_processor
+        errors["personalization_module"] = {"status": "success", "has_instance": test_processor is not None}
+    except Exception as e:
+        errors["personalization_module"] = {"status": "failed", "error": str(e), "traceback": traceback.format_exc()}
+
+    result["import_tests"] = errors
+
+    return result
+
 @app.get("/api/database/test")
 async def test_database():
     """測試數據庫連接並執行查詢"""
