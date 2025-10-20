@@ -2267,6 +2267,245 @@ async def manual_posting(request: Request):
         if conn:
             return_db_connection(conn)
 
+# ==================== Performance Testing Endpoint ====================
+
+@app.post("/api/debug/performance-test")
+async def performance_test(request: Request):
+    """性能測試 - 計時每個生成步驟的耗時"""
+    import time
+
+    timings = {}
+    total_start = time.time()
+
+    try:
+        # Step 1: Parse Request
+        step_start = time.time()
+        body = await request.json()
+        timings['1_parse_request'] = round((time.time() - step_start) * 1000, 2)  # ms
+
+        # Extract parameters
+        stock_code = body.get('stock_code', '2330')
+        stock_name = body.get('stock_name', '台積電')
+        kol_serial = int(body.get('kol_serial', 208))
+        kol_persona = body.get('kol_persona', 'technical')
+        session_id = body.get('session_id', int(time.time() * 1000))
+        trigger_type = body.get('trigger_type', 'performance_test')
+        posting_type = body.get('posting_type', 'interaction')
+        max_words = body.get('max_words', 150)
+        model_id_override = body.get('model_id_override')
+        use_kol_default_model = body.get('use_kol_default_model', True)
+
+        # Step 2: Model Selection (with DB query)
+        step_start = time.time()
+        chosen_model_id = None
+
+        if not use_kol_default_model and model_id_override:
+            chosen_model_id = model_id_override
+        else:
+            try:
+                conn = await asyncpg.connect(
+                    host=DB_CONFIG['host'],
+                    port=DB_CONFIG['port'],
+                    database=DB_CONFIG['database'],
+                    user=DB_CONFIG['user'],
+                    password=DB_CONFIG['password']
+                )
+                kol_model_id = await conn.fetchval(
+                    "SELECT model_id FROM kol_profiles WHERE serial = $1",
+                    str(kol_serial)
+                )
+                await conn.close()
+
+                chosen_model_id = kol_model_id if kol_model_id else "gpt-4o-mini"
+            except Exception as db_error:
+                chosen_model_id = "gpt-4o-mini"
+
+        timings['2_model_selection_db'] = round((time.time() - step_start) * 1000, 2)
+
+        # Step 3: GPT Content Generation
+        step_start = time.time()
+        title = ""
+        content = ""
+
+        if gpt_generator:
+            try:
+                gpt_result = gpt_generator.generate_stock_analysis(
+                    stock_id=stock_code,
+                    stock_name=stock_name,
+                    kol_persona=kol_persona,
+                    serper_analysis={},
+                    data_sources=[],
+                    content_length="medium",
+                    max_words=max_words,
+                    model=chosen_model_id
+                )
+                title = gpt_result.get('title', f"{stock_name}({stock_code}) 分析")
+                content = gpt_result.get('content', '')
+            except Exception as gpt_error:
+                title = f"{stock_name}({stock_code}) 測試標題"
+                content = f"測試內容 - GPT 失敗: {gpt_error}"
+
+        timings['3_gpt_generation'] = round((time.time() - step_start) * 1000, 2)
+
+        # Step 4: Alternative Versions Generation
+        step_start = time.time()
+        alternative_versions = []
+
+        if enhanced_personalization_processor:
+            try:
+                serper_analysis_with_stock = {
+                    'stock_name': stock_name,
+                    'stock_code': stock_code
+                }
+
+                personalized_title, personalized_content, random_metadata = enhanced_personalization_processor.personalize_content(
+                    standard_title=title,
+                    standard_content=content,
+                    kol_serial=kol_serial,
+                    batch_config={},
+                    serper_analysis=serper_analysis_with_stock,
+                    trigger_type=trigger_type,
+                    real_time_price_data={},
+                    posting_type=posting_type
+                )
+
+                title = personalized_title
+                content = personalized_content
+
+                if random_metadata:
+                    alternative_versions = random_metadata.get('alternative_versions', [])
+            except Exception as e:
+                pass
+
+        timings['4_alternative_versions'] = round((time.time() - step_start) * 1000, 2)
+
+        # Step 5: Database Write
+        step_start = time.time()
+
+        import uuid
+        post_id = str(uuid.uuid4())
+        now = datetime.now()
+
+        commodity_tags_data = [
+            {"type": "Market", "key": "TWA00", "bullOrBear": 0},
+            {"type": "Stock", "key": stock_code, "bullOrBear": 0}
+        ]
+
+        generation_params = {
+            "method": "performance_test",
+            "kol_persona": kol_persona,
+            "trigger_type": trigger_type,
+            "posting_type": posting_type,
+            "created_at": now.isoformat()
+        }
+
+        conn = get_db_connection()
+        conn.rollback()
+
+        with conn.cursor() as cursor:
+            insert_query = """
+                INSERT INTO post_records (
+                    post_id, created_at, updated_at, session_id,
+                    kol_serial, kol_nickname, kol_persona,
+                    stock_code, stock_name,
+                    title, content, content_md,
+                    status, commodity_tags, generation_params, alternative_versions, trigger_type
+                ) VALUES (
+                    %s, %s, %s, %s,
+                    %s, %s, %s,
+                    %s, %s,
+                    %s, %s, %s,
+                    %s, %s, %s, %s, %s
+                )
+            """
+
+            alternative_versions_json = json.dumps(alternative_versions, ensure_ascii=False) if alternative_versions else None
+
+            cursor.execute(insert_query, (
+                post_id, now, now, session_id,
+                kol_serial, f"KOL-{kol_serial}", kol_persona,
+                stock_code, stock_name,
+                title, content, content,
+                'draft',
+                json.dumps(commodity_tags_data, ensure_ascii=False),
+                json.dumps(generation_params, ensure_ascii=False),
+                alternative_versions_json,
+                trigger_type
+            ))
+
+            conn.commit()
+
+        return_db_connection(conn)
+
+        timings['5_database_write'] = round((time.time() - step_start) * 1000, 2)
+
+        # Calculate total
+        timings['total_time'] = round((time.time() - total_start) * 1000, 2)
+
+        # Calculate percentages
+        total_ms = timings['total_time']
+        percentages = {}
+        for key in timings:
+            if key != 'total_time':
+                percentages[key] = round((timings[key] / total_ms) * 100, 1) if total_ms > 0 else 0
+
+        return {
+            "success": True,
+            "post_id": post_id,
+            "model_used": chosen_model_id,
+            "timings_ms": timings,
+            "percentages": percentages,
+            "breakdown": {
+                "1_parse_request": {
+                    "time_ms": timings['1_parse_request'],
+                    "percentage": percentages.get('1_parse_request', 0),
+                    "description": "解析請求參數"
+                },
+                "2_model_selection_db": {
+                    "time_ms": timings['2_model_selection_db'],
+                    "percentage": percentages.get('2_model_selection_db', 0),
+                    "description": "模型選擇（含數據庫查詢）"
+                },
+                "3_gpt_generation": {
+                    "time_ms": timings['3_gpt_generation'],
+                    "percentage": percentages.get('3_gpt_generation', 0),
+                    "description": "GPT 內容生成（OpenAI API 調用）"
+                },
+                "4_alternative_versions": {
+                    "time_ms": timings['4_alternative_versions'],
+                    "percentage": percentages.get('4_alternative_versions', 0),
+                    "description": "生成 4 個替代版本"
+                },
+                "5_database_write": {
+                    "time_ms": timings['5_database_write'],
+                    "percentage": percentages.get('5_database_write', 0),
+                    "description": "寫入數據庫"
+                }
+            },
+            "summary": {
+                "total_time_ms": timings['total_time'],
+                "total_time_seconds": round(timings['total_time'] / 1000, 2),
+                "slowest_step": max([(k, v) for k, v in timings.items() if k != 'total_time'], key=lambda x: x[1])[0],
+                "slowest_time_ms": max([v for k, v in timings.items() if k != 'total_time'])
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"❌ 性能測試失敗: {e}")
+        import traceback
+        traceback.print_exc()
+
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "error": str(e),
+                "timings_ms": timings,
+                "timestamp": datetime.now().isoformat()
+            }
+        )
+
 # ==================== Dashboard API 功能 ====================
 
 @app.get("/api/dashboard/system-monitoring")
