@@ -1927,13 +1927,13 @@ async def manual_posting(request: Request):
                     kol_serial, kol_nickname, kol_persona,
                     stock_code, stock_name,
                     title, content, content_md,
-                    status, commodity_tags, generation_params, alternative_versions
+                    status, commodity_tags, generation_params, alternative_versions, trigger_type
                 ) VALUES (
                     %s, %s, %s, %s,
                     %s, %s, %s,
                     %s, %s,
                     %s, %s, %s,
-                    %s, %s, %s, %s
+                    %s, %s, %s, %s, %s
                 )
             """
 
@@ -1948,7 +1948,8 @@ async def manual_posting(request: Request):
                 'draft',  # 預設為草稿狀態
                 json.dumps(commodity_tags_data, ensure_ascii=False),
                 json.dumps(generation_params, ensure_ascii=False),
-                alternative_versions_json  # 添加替代版本
+                alternative_versions_json,  # 添加替代版本
+                trigger_type  # 添加 trigger_type
             ))
 
             conn.commit()
