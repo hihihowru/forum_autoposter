@@ -19,8 +19,9 @@ COPY . .
 RUN cp "docker-container/finlab python/stock_mapping.json" /app/stock_mapping.json || echo "stock_mapping.json not found, will use fallback"
 
 # 複製並安裝 unified-api 的依賴（使用 JSON array 語法處理空格路徑）
+# CACHE BUST 2025-10-20 17:54 - Force rebuild to install sqlalchemy
 COPY ["docker-container/finlab python/apps/unified-api/requirements.txt", "/tmp/requirements.txt"]
-RUN pip install --no-cache-dir -r /tmp/requirements.txt
+RUN pip install --no-cache-dir --force-reinstall -r /tmp/requirements.txt
 
 # 創建credentials目錄
 RUN mkdir -p credentials
