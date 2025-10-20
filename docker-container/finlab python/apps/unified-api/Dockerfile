@@ -16,20 +16,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 複製應用程式碼
 COPY main.py .
 
-# 創建 posting-service 目錄並添加 __init__.py (Python package 需要)
-RUN mkdir -p posting-service && touch posting-service/__init__.py
-
 # 複製 posting-service 模組 (GPT 和個人化模組需要)
-COPY ../posting-service/gpt_content_generator.py ./posting-service/
-COPY ../posting-service/personalization_module.py ./posting-service/
-COPY ../posting-service/kol_database_service.py ./posting-service/
-COPY ../posting-service/random_content_generator.py ./posting-service/
+# Note: posting-service directory should be in unified-api/ before Docker build
+COPY posting-service/ ./posting-service/
 
-# 複製股票映射表
-COPY ../../stock_mapping.json /app/stock_mapping.json
-
-# 複製 post_records 數據
-COPY ../../post_records_1788.json /app/post_records_1788.json
+# Note: stock_mapping.json and post_records are loaded from database or generated at runtime
+# Removed COPY commands for files outside build context
 
 # 暴露端口（Railway 會自動設置 PORT 環境變數）
 EXPOSE $PORT
