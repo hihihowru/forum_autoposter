@@ -759,11 +759,8 @@ class EnhancedPersonalizationProcessor:
             Tuple[str, str, Dict]: (個人化標題, 個人化內容, 隨機化元數據)
         """
         try:
-            self.logger.info(f"🎨 開始增強版個人化處理 KOL {kol_serial}")
-            self.logger.info(f"🔍 個人化模組 INPUT - 標題: {standard_title}")
-            self.logger.info(f"🔍 個人化模組 INPUT - 內容長度: {len(standard_content)} 字")
-            self.logger.info(f"🔍 個人化模組 INPUT - 觸發器類型: {trigger_type}")
-            self.logger.info(f"🔍 個人化模組 INPUT - 發文類型: {posting_type}")
+            # 🔇 SIMPLIFIED: Single line instead of 5 verbose input logs
+            self.logger.info(f"🎨 個人化 KOL{kol_serial} | {posting_type} | {trigger_type or 'manual'} | {len(standard_content)}字")
             
             # 🔥 新增：處理即時股價數據
             if real_time_price_data:
@@ -822,20 +819,14 @@ class EnhancedPersonalizationProcessor:
             personalized_title = selected_version['title']
             personalized_content = selected_version['content']
             
-            self.logger.info(f"🎯 隨機化生成完成 - 選中版本: {selected_version['version_number']}")
-            self.logger.info(f"🔍 個人化模組 OUTPUT - 標題: {personalized_title}")
-            self.logger.info(f"🔍 個人化模組 OUTPUT - 內容長度: {len(personalized_content)} 字")
-            self.logger.info(f"🔍 個人化模組 OUTPUT - 內容前100字: {personalized_content[:100]}...")
-            
             # 7. 整合新聞來源
             if serper_analysis:
                 personalized_content = self._integrate_news_sources(
                     personalized_content, serper_analysis, kol_profile
                 )
-                self.logger.info(f"📰 新聞來源已整合到個人化內容中")
-                self.logger.info(f"🔍 個人化模組 FINAL OUTPUT - 內容長度: {len(personalized_content)} 字")
-            
-            self.logger.info(f"✅ 增強版個人化處理完成 KOL {kol_serial}")
+
+            # 🔇 SIMPLIFIED: Single line summary instead of 6 verbose output logs
+            self.logger.info(f"✅ 完成: {personalized_title[:40]}... ({len(personalized_content)}字, {len(alternative_versions)}個替代版本)")
             
             # 返回隨機化元數據
             random_metadata = {

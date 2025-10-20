@@ -30,6 +30,11 @@ from psycopg2.extras import RealDictCursor
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# 🔇 Suppress verbose external library logging (saves ~10 lines per post)
+logging.getLogger("openai").setLevel(logging.WARNING)
+logging.getLogger("openai._base_client").setLevel(logging.WARNING)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
 # 創建 FastAPI 應用
 app = FastAPI(
     title="Forum Autoposter Unified API",

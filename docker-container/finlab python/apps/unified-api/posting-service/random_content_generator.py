@@ -117,11 +117,11 @@ class RandomContentGenerator:
         colloquial_terms = getattr(kol_profile, 'colloquial_terms', '')
         
         self.logger.info(f"🎯 KOL 特色 - 暱稱: {kol_nickname}, 人設: {kol_persona}, 風格: {tone_style}")
-        
+        self.logger.info(f"🔄 生成 5 個版本...")  # Single line instead of 5+5=10 lines
+
         for i in range(5):
             version_num = i + 1
-            self.logger.info(f"🔄 生成版本 {version_num}/5...")
-            
+
             if posting_type == 'interaction':
                 version = self._generate_interaction_version(
                     version_num, kol_nickname, kol_persona, tone_style,
@@ -134,9 +134,8 @@ class RandomContentGenerator:
                     common_terms, colloquial_terms, stock_name, stock_code,
                     original_content, trigger_type, serper_data
                 )
-            
+
             versions.append(version)
-            self.logger.info(f"✅ 版本 {version_num} 生成完成: {version['title'][:50]}...")
         
         return versions
     
@@ -369,26 +368,19 @@ class RandomContentGenerator:
         return title, content
     
     def _log_generation_results(
-        self, 
-        versions: List[Dict], 
-        selected_version: Dict, 
+        self,
+        versions: List[Dict],
+        selected_version: Dict,
         selected_index: int
     ):
-        """記錄生成結果"""
-        
-        self.logger.info("=" * 80)
-        self.logger.info("🎲 隨機化內容生成結果")
-        self.logger.info("=" * 80)
-        
-        for i, version in enumerate(versions):
-            status = "🎯 選中" if i == selected_index else "📝 備選"
-            self.logger.info(f"{status} 版本 {i+1}:")
-            self.logger.info(f"   標題: {version['title']}")
-            self.logger.info(f"   內容: {version['content']}")
-            self.logger.info(f"   類型: {version['version_type']}")
-            self.logger.info(f"   角度: {version['angle']}")
-            self.logger.info("-" * 40)
-        
-        self.logger.info(f"🎲 隨機選擇結果: 版本 {selected_index + 1}")
-        self.logger.info(f"📊 其他 {len(versions) - 1} 個版本已存儲到 alternative_versions")
-        self.logger.info("=" * 80)
+        """記錄生成結果 - SIMPLIFIED (saves ~40 lines per post)"""
+
+        # Only log selected version details
+        self.logger.info(f"🎯 選中版本 {selected_index + 1}: {selected_version['title']}")
+        self.logger.info(f"   角度: {selected_version['angle']} | 內容: {selected_version['content'][:50]}...")
+
+        # Log alternative titles only (not full content) - compact format
+        alternatives = [v for i, v in enumerate(versions) if i != selected_index]
+        alt_summary = " | ".join([f"V{i+1 if i < selected_index else i+2}: {v['title'][:25]}" for i, v in enumerate(alternatives)])
+        self.logger.info(f"📝 備選: {alt_summary}")
+        self.logger.info(f"📊 共生成 {len(versions)} 個版本，已存儲 {len(alternatives)} 個替代版本")
