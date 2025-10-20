@@ -193,8 +193,8 @@ const TrendingTopicsDisplay: React.FC<TrendingTopicsDisplayProps> = ({
   const fetchTrendingTopics = async () => {
     setLoading(true);
     try {
-      // 呼叫現有的 trending-api
-      const response = await fetch('/api/trending?limit=10');
+      // 呼叫現有的 trending-api (使用 Railway 後端)
+      const response = await fetch(`${API_BASE_URL}/api/trending?limit=10`);
       const data = await response.json();
       
       if (data.topics) {
