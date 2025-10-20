@@ -133,6 +133,12 @@ const KOLManagementPage: React.FC = () => {
   const [form] = Form.useForm();
   const [createForm] = Form.useForm();
 
+  // 測試狀態
+  const [testingLogin, setTestingLogin] = useState(false);
+  const [testLoginResult, setTestLoginResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [testingNickname, setTestingNickname] = useState(false);
+  const [testNicknameResult, setTestNicknameResult] = useState<{ success: boolean; message: string } | null>(null);
+
   // 載入KOL列表
   const loadKOLProfiles = async () => {
     setLoading(true);
@@ -193,7 +199,112 @@ const KOLManagementPage: React.FC = () => {
     createForm.resetFields();
     setAiGeneratedProfile(null);
     setCreateModalVisible(true);
+    setTestLoginResult(null);
+    setTestNicknameResult(null);
     console.log('📝 打開創建 KOL Modal');
+  };
+
+  // 測試 Bearer Token（登入驗證）
+  const handleTestLogin = async () => {
+    try {
+      const email = createForm.getFieldValue('email');
+      const password = createForm.getFieldValue('password');
+
+      if (!email || !password) {
+        message.warning('請先填寫郵箱和密碼');
+        return;
+      }
+
+      setTestingLogin(true);
+      setTestLoginResult(null);
+      console.log('🔐 測試登入:', { email, password: '***' });
+
+      const response = await axios.post(`${API_BASE_URL}/api/kol/test-login`, {
+        email,
+        password
+      });
+
+      console.log('🔐 測試登入響應:', response.data);
+
+      if (response.data.success) {
+        setTestLoginResult({
+          success: true,
+          message: `✅ 登入成功！Bearer Token: ${response.data.token.substring(0, 20)}...`
+        });
+        message.success('登入成功！Bearer Token 已獲取');
+      } else {
+        setTestLoginResult({
+          success: false,
+          message: `❌ 登入失敗: ${response.data.error}`
+        });
+        message.error(`登入失敗: ${response.data.error}`);
+      }
+    } catch (error: any) {
+      console.error('❌ 測試登入異常:', error);
+      const errorMsg = error.response?.data?.error || error.message || '未知錯誤';
+      setTestLoginResult({
+        success: false,
+        message: `❌ 測試失敗: ${errorMsg}`
+      });
+      message.error(`測試失敗: ${errorMsg}`);
+    } finally {
+      setTestingLogin(false);
+    }
+  };
+
+  // 測試暱稱是否可用
+  const handleTestNickname = async () => {
+    try {
+      const email = createForm.getFieldValue('email');
+      const password = createForm.getFieldValue('password');
+      const nickname = createForm.getFieldValue('nickname');
+
+      if (!email || !password) {
+        message.warning('請先填寫郵箱和密碼');
+        return;
+      }
+
+      if (!nickname) {
+        message.warning('請先填寫暱稱');
+        return;
+      }
+
+      setTestingNickname(true);
+      setTestNicknameResult(null);
+      console.log('📝 測試暱稱:', { email, password: '***', nickname });
+
+      const response = await axios.post(`${API_BASE_URL}/api/kol/test-nickname`, {
+        email,
+        password,
+        nickname
+      });
+
+      console.log('📝 測試暱稱響應:', response.data);
+
+      if (response.data.success) {
+        setTestNicknameResult({
+          success: true,
+          message: `✅ 暱稱可用！更新後的暱稱: ${response.data.new_nickname}`
+        });
+        message.success('暱稱可用！');
+      } else {
+        setTestNicknameResult({
+          success: false,
+          message: `❌ 暱稱不可用: ${response.data.error}`
+        });
+        message.error(`暱稱不可用: ${response.data.error}`);
+      }
+    } catch (error: any) {
+      console.error('❌ 測試暱稱異常:', error);
+      const errorMsg = error.response?.data?.error || error.message || '未知錯誤';
+      setTestNicknameResult({
+        success: false,
+        message: `❌ 測試失敗: ${errorMsg}`
+      });
+      message.error(`測試失敗: ${errorMsg}`);
+    } finally {
+      setTestingNickname(false);
+    }
   };
 
   // 提交創建 KOL
@@ -780,8 +891,28 @@ const KOLManagementPage: React.FC = () => {
                 label="CMoney 登入密碼"
                 rules={[{ required: true, message: '請輸入密碼' }]}
               >
-                <Input.Password placeholder="請輸入密碼" />
+                <Space.Compact style={{ width: '100%' }}>
+                  <Input.Password placeholder="請輸入密碼" style={{ width: 'calc(100% - 80px)' }} />
+                  <Button
+                    onClick={handleTestLogin}
+                    loading={testingLogin}
+                    type={testLoginResult?.success ? 'primary' : 'default'}
+                    danger={testLoginResult?.success === false}
+                    style={{ width: '80px' }}
+                  >
+                    {testLoginResult?.success === true ? '✅' : testLoginResult?.success === false ? '❌' : '測試'}
+                  </Button>
+                </Space.Compact>
               </Form.Item>
+              {testLoginResult && (
+                <Alert
+                  message={testLoginResult.message}
+                  type={testLoginResult.success ? 'success' : 'error'}
+                  showIcon
+                  closable
+                  style={{ marginTop: -16, marginBottom: 16, fontSize: '12px' }}
+                />
+              )}
             </Col>
           </Row>
 
@@ -793,8 +924,28 @@ const KOLManagementPage: React.FC = () => {
                 rules={[{ required: true, message: '請輸入暱稱' }]}
                 tooltip="系統將嘗試在 CMoney 更新此暱稱，如果暱稱已被使用將會失敗"
               >
-                <Input placeholder="例如：股市達人小明" />
+                <Space.Compact style={{ width: '100%' }}>
+                  <Input placeholder="例如：股市達人小明" style={{ width: 'calc(100% - 80px)' }} />
+                  <Button
+                    onClick={handleTestNickname}
+                    loading={testingNickname}
+                    type={testNicknameResult?.success ? 'primary' : 'default'}
+                    danger={testNicknameResult?.success === false}
+                    style={{ width: '80px' }}
+                  >
+                    {testNicknameResult?.success === true ? '✅' : testNicknameResult?.success === false ? '❌' : '測試'}
+                  </Button>
+                </Space.Compact>
               </Form.Item>
+              {testNicknameResult && (
+                <Alert
+                  message={testNicknameResult.message}
+                  type={testNicknameResult.success ? 'success' : 'error'}
+                  showIcon
+                  closable
+                  style={{ marginTop: -16, marginBottom: 16, fontSize: '12px' }}
+                />
+              )}
             </Col>
             <Col span={12}>
               <Form.Item

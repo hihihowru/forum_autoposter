@@ -3386,6 +3386,160 @@ async def get_kol_list():
             return_db_connection(conn)
 
 
+@app.post("/api/kol/test-login")
+async def test_kol_login(request: Request):
+    """
+    測試 CMoney 登入並獲取 Bearer Token
+
+    用於在創建 KOL 前驗證帳號密碼是否正確
+
+    Request body:
+    - email: CMoney 登入郵箱
+    - password: CMoney 登入密碼
+
+    Response:
+    - success: bool - 登入是否成功
+    - token: str - Bearer token（僅在成功時返回）
+    - error: str - 錯誤訊息（僅在失敗時返回）
+    """
+    try:
+        data = await request.json()
+        email = data.get("email")
+        password = data.get("password")
+
+        if not email or not password:
+            return {
+                "success": False,
+                "error": "缺少必填欄位: email, password",
+                "timestamp": datetime.now().isoformat()
+            }
+
+        # 將 src 路徑加入 Python path
+        src_path = '/app/src'
+        if src_path not in sys.path:
+            sys.path.insert(0, src_path)
+
+        from src.clients.cmoney.cmoney_client import CMoneyClient, LoginCredentials
+        cmoney_client = CMoneyClient()
+
+        # 嘗試登入
+        credentials = LoginCredentials(email=email, password=password)
+        try:
+            access_token = await cmoney_client.login(credentials)
+            logger.info(f"✅ 測試登入成功: {email}")
+
+            return {
+                "success": True,
+                "token": access_token.token,
+                "message": "登入成功，Bearer Token 已獲取",
+                "timestamp": datetime.now().isoformat()
+            }
+        except Exception as login_error:
+            logger.error(f"❌ 測試登入失敗: {login_error}")
+            return {
+                "success": False,
+                "error": f"登入失敗: {str(login_error)}",
+                "timestamp": datetime.now().isoformat()
+            }
+
+    except Exception as e:
+        logger.error(f"❌ test_kol_login 異常: {e}")
+        return {
+            "success": False,
+            "error": f"測試登入時發生異常: {str(e)}",
+            "timestamp": datetime.now().isoformat()
+        }
+
+
+@app.post("/api/kol/test-nickname")
+async def test_kol_nickname(request: Request):
+    """
+    測試 CMoney 暱稱更新
+
+    用於在創建 KOL 前驗證暱稱是否可用
+
+    Request body:
+    - email: CMoney 登入郵箱
+    - password: CMoney 登入密碼
+    - nickname: 期望的暱稱
+
+    Response:
+    - success: bool - 暱稱更新是否成功
+    - new_nickname: str - 實際更新後的暱稱（僅在成功時返回）
+    - error: str - 錯誤訊息（僅在失敗時返回）
+    """
+    try:
+        data = await request.json()
+        email = data.get("email")
+        password = data.get("password")
+        nickname = data.get("nickname")
+
+        if not email or not password or not nickname:
+            return {
+                "success": False,
+                "error": "缺少必填欄位: email, password, nickname",
+                "timestamp": datetime.now().isoformat()
+            }
+
+        # 將 src 路徑加入 Python path
+        src_path = '/app/src'
+        if src_path not in sys.path:
+            sys.path.insert(0, src_path)
+
+        from src.clients.cmoney.cmoney_client import CMoneyClient, LoginCredentials
+        cmoney_client = CMoneyClient()
+
+        # 先登入獲取 token
+        credentials = LoginCredentials(email=email, password=password)
+        try:
+            access_token = await cmoney_client.login(credentials)
+            logger.info(f"✅ 測試登入成功: {email}")
+        except Exception as login_error:
+            logger.error(f"❌ 測試登入失敗: {login_error}")
+            return {
+                "success": False,
+                "error": f"登入失敗: {str(login_error)}",
+                "timestamp": datetime.now().isoformat()
+            }
+
+        # 嘗試更新暱稱
+        try:
+            nickname_result = await cmoney_client.update_nickname(access_token.token, nickname)
+
+            if not nickname_result.success:
+                logger.warning(f"⚠️ 測試暱稱更新失敗: {nickname_result.error_message}")
+                return {
+                    "success": False,
+                    "error": f"暱稱更新失敗: {nickname_result.error_message}",
+                    "detail": "暱稱可能已被使用，請嘗試其他暱稱",
+                    "timestamp": datetime.now().isoformat()
+                }
+
+            logger.info(f"✅ 測試暱稱更新成功: {nickname}")
+            return {
+                "success": True,
+                "new_nickname": nickname_result.new_nickname or nickname,
+                "message": "暱稱更新成功",
+                "timestamp": datetime.now().isoformat()
+            }
+
+        except Exception as nickname_error:
+            logger.error(f"❌ 測試暱稱更新異常: {nickname_error}")
+            return {
+                "success": False,
+                "error": f"暱稱更新時發生異常: {str(nickname_error)}",
+                "timestamp": datetime.now().isoformat()
+            }
+
+    except Exception as e:
+        logger.error(f"❌ test_kol_nickname 異常: {e}")
+        return {
+            "success": False,
+            "error": f"測試暱稱時發生異常: {str(e)}",
+            "timestamp": datetime.now().isoformat()
+        }
+
+
 @app.post("/api/kol/create")
 async def create_kol(request: Request):
     """
@@ -3559,8 +3713,8 @@ async def create_kol(request: Request):
         # 準備寫入數據庫的資料
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-            # 獲取下一個 serial 號碼
-            cursor.execute("SELECT COALESCE(MAX(serial), 200) + 1 as next_serial FROM kol_profiles")
+            # 獲取下一個 serial 號碼 (注意: serial 是 TEXT 類型，需要先轉換為 integer)
+            cursor.execute("SELECT COALESCE(MAX(serial::integer), 200) + 1 as next_serial FROM kol_profiles")
             next_serial = cursor.fetchone()['next_serial']
 
             # 合併 AI 生成的值和預設值
