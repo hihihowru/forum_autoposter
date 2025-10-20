@@ -251,15 +251,65 @@ const BatchHistoryPage: React.FC = () => {
       key: 'trigger_type',
       width: 120,
       render: (triggerType: string) => {
-        // 觸發器類型中英文映射
+        // 觸發器類型中英文映射 - 完整版本（包含所有生產環境和測試觸發器）
         const triggerTypeMap: Record<string, { text: string; color: string }> = {
+          // ========== 盤後觸發器 (After Hours) ==========
           'limit_up_after_hours': { text: '盤後漲停', color: 'red' },
           'limit_down_after_hours': { text: '盤後跌停', color: 'green' },
-          'intraday_limit_up': { text: '盤中漲停', color: 'volcano' },
-          'intraday_limit_down': { text: '盤中跌停', color: 'cyan' },
+          'volume_amount_high': { text: '成交金額高', color: 'orange' },
+          'volume_amount_low': { text: '成交金額低', color: 'blue' },
+          'volume_change_rate_high': { text: '成交金額變化率高', color: 'volcano' },
+          'volume_change_rate_low': { text: '成交金額變化率低', color: 'cyan' },
+
+          // ========== 盤中觸發器 (Intraday) ==========
+          'intraday_limit_up': { text: '盤中漲停', color: 'red' },
+          'intraday_limit_down': { text: '盤中跌停', color: 'green' },
+          'intraday_gainers_by_amount': { text: '漲幅排序+成交額', color: 'volcano' },
+          'intraday_volume_leaders': { text: '成交量排序', color: 'orange' },
+          'intraday_amount_leaders': { text: '成交額排序', color: 'gold' },
+          'intraday_limit_down_by_amount': { text: '跌停篩選+成交額', color: 'cyan' },
           'volume_surge': { text: '成交量暴增', color: 'orange' },
+
+          // ========== 產業觸發器 (Sector) ==========
+          'sector_rotation': { text: '類股輪動', color: 'purple' },
+          'sector_momentum': { text: '產業動能', color: 'magenta' },
+          'sector_selection': { text: '產業選擇', color: 'purple' },
+          'sector_news': { text: '產業新聞', color: 'geekblue' },
+
+          // ========== 總經觸發器 (Macro) ==========
+          'fed_policy': { text: 'Fed政策', color: 'blue' },
+          'economic_data': { text: '經濟數據', color: 'cyan' },
+          'currency_movement': { text: '匯率變動', color: 'blue' },
+          'commodity_prices': { text: '商品價格', color: 'gold' },
+
+          // ========== 新聞觸發器 (News) ==========
           'news_hot': { text: '新聞熱股', color: 'magenta' },
+          'company_news': { text: '公司新聞', color: 'geekblue' },
+          'regulatory_news': { text: '監管新聞', color: 'purple' },
+          'market_news': { text: '市場新聞', color: 'blue' },
+          'international_news': { text: '國際新聞', color: 'cyan' },
+
+          // ========== 熱門話題 (Trending Topics) ==========
+          'trending_topics': { text: 'CMoney熱門話題', color: 'red' },
+
+          // ========== 自定義 (Custom) ==========
           'custom_stocks': { text: '自選股', color: 'purple' },
+          'manual': { text: '手動生成', color: 'default' },
+
+          // ========== 測試觸發器 (Test Triggers) ==========
+          'test_personalized_mode': { text: '測試:個性化模式', color: 'lime' },
+          'test_analysis_mode': { text: '測試:分析模式', color: 'lime' },
+          'test_interaction_mode': { text: '測試:互動模式', color: 'lime' },
+          'final_verification_test': { text: '測試:最終驗證', color: 'lime' },
+          'verify_pro_deployment': { text: '測試:Pro部署驗證', color: 'lime' },
+          'test_with_stock_name_fix': { text: '測試:股票名稱修復', color: 'lime' },
+          'test_final': { text: '測試:最終', color: 'lime' },
+          'test_api_key_fix': { text: '測試:API金鑰修復', color: 'lime' },
+          'test_log_cleanup_interaction': { text: '測試:日誌清理互動', color: 'lime' },
+          'test_log_cleanup_analysis': { text: '測試:日誌清理分析', color: 'lime' },
+          'test_log_cleanup_personalized': { text: '測試:日誌清理個性化', color: 'lime' },
+
+          // ========== 未知/備用 (Unknown/Fallback) ==========
           'unknown': { text: '未知觸發器', color: 'default' }
         };
         const mapped = triggerTypeMap[triggerType] || { text: triggerType, color: 'blue' };
@@ -480,14 +530,65 @@ const BatchHistoryPage: React.FC = () => {
                 <Statistic
                   title="觸發器"
                   value={(() => {
+                    // 觸發器類型中英文映射 - 完整版本（包含所有生產環境和測試觸發器）
                     const triggerTypeMap: Record<string, string> = {
+                      // 盤後觸發器 (After Hours)
                       'limit_up_after_hours': '盤後漲停',
                       'limit_down_after_hours': '盤後跌停',
+                      'volume_amount_high': '成交金額高',
+                      'volume_amount_low': '成交金額低',
+                      'volume_change_rate_high': '成交金額變化率高',
+                      'volume_change_rate_low': '成交金額變化率低',
+
+                      // 盤中觸發器 (Intraday)
                       'intraday_limit_up': '盤中漲停',
                       'intraday_limit_down': '盤中跌停',
+                      'intraday_gainers_by_amount': '漲幅排序+成交額',
+                      'intraday_volume_leaders': '成交量排序',
+                      'intraday_amount_leaders': '成交額排序',
+                      'intraday_limit_down_by_amount': '跌停篩選+成交額',
                       'volume_surge': '成交量暴增',
+
+                      // 產業觸發器 (Sector)
+                      'sector_rotation': '類股輪動',
+                      'sector_momentum': '產業動能',
+                      'sector_selection': '產業選擇',
+                      'sector_news': '產業新聞',
+
+                      // 總經觸發器 (Macro)
+                      'fed_policy': 'Fed政策',
+                      'economic_data': '經濟數據',
+                      'currency_movement': '匯率變動',
+                      'commodity_prices': '商品價格',
+
+                      // 新聞觸發器 (News)
                       'news_hot': '新聞熱股',
+                      'company_news': '公司新聞',
+                      'regulatory_news': '監管新聞',
+                      'market_news': '市場新聞',
+                      'international_news': '國際新聞',
+
+                      // 熱門話題 (Trending Topics)
+                      'trending_topics': 'CMoney熱門話題',
+
+                      // 自定義 (Custom)
                       'custom_stocks': '自選股',
+                      'manual': '手動生成',
+
+                      // 測試觸發器 (Test Triggers)
+                      'test_personalized_mode': '測試:個性化模式',
+                      'test_analysis_mode': '測試:分析模式',
+                      'test_interaction_mode': '測試:互動模式',
+                      'final_verification_test': '測試:最終驗證',
+                      'verify_pro_deployment': '測試:Pro部署驗證',
+                      'test_with_stock_name_fix': '測試:股票名稱修復',
+                      'test_final': '測試:最終',
+                      'test_api_key_fix': '測試:API金鑰修復',
+                      'test_log_cleanup_interaction': '測試:日誌清理互動',
+                      'test_log_cleanup_analysis': '測試:日誌清理分析',
+                      'test_log_cleanup_personalized': '測試:日誌清理個性化',
+
+                      // 未知/備用 (Unknown/Fallback)
                       'unknown': '未知觸發器'
                     };
                     return triggerTypeMap[selectedBatch.trigger_type] || selectedBatch.trigger_type;
