@@ -58,10 +58,29 @@ from psycopg2.extras import RealDictCursor
 # ==================== GPT 內容生成器初始化 ====================
 
 # 添加 posting-service 到 Python 路徑
-# Fixed: posting-service is now INSIDE unified-api directory (not parent directory)
-posting_service_path = os.path.join(os.path.dirname(__file__), 'posting-service')
-if posting_service_path not in sys.path:
-    sys.path.insert(0, posting_service_path)
+# 使用多種方式確保正確找到 posting-service 目錄
+def setup_posting_service_path():
+    """Setup posting-service path with multiple fallback strategies"""
+    # Strategy 1: Relative to current file (local development)
+    path1 = os.path.join(os.path.dirname(__file__), 'posting-service')
+
+    # Strategy 2: Relative to current working directory
+    path2 = os.path.join(os.getcwd(), 'posting-service')
+
+    # Strategy 3: Absolute path (Docker WORKDIR)
+    path3 = '/app/posting-service'
+
+    for path in [path1, path2, path3]:
+        if os.path.exists(path) and os.path.isdir(path):
+            if path not in sys.path:
+                sys.path.insert(0, path)
+            logger.info(f"📁 posting-service 路徑已設置: {path}")
+            return path
+
+    logger.error(f"❌ 找不到 posting-service 目錄! 嘗試的路徑: {[path1, path2, path3]}")
+    return None
+
+posting_service_path = setup_posting_service_path()
 
 # 導入 GPT 內容生成器
 try:
