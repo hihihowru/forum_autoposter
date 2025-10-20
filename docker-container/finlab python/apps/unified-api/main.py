@@ -3408,10 +3408,14 @@ async def create_kol(request: Request):
         email = data.get("email")
         password = data.get("password")
         nickname = data.get("nickname")
-        ai_description = data.get("ai_description", "")  # Phase 2: AI 描述（選填）
+        member_id_from_user = data.get("member_id", "")  # 用戶手動輸入的 member_id（選填）
+        ai_description = data.get("ai_description", "")  # AI 描述（選填）
+
+        logger.info(f"📝 收到創建 KOL 請求: email={email}, nickname={nickname}, member_id={member_id_from_user or '(未提供)'}")
 
         # 驗證必填欄位
         if not email or not password or not nickname:
+            logger.error("❌ 缺少必填欄位")
             return {
                 "success": False,
                 "error": "缺少必填欄位: email, password, nickname",
@@ -3478,17 +3482,21 @@ async def create_kol(request: Request):
             }
 
         # 獲取會員資訊（獲取 member_id）
-        logger.info("📝 獲取 CMoney 會員資訊...")
-        member_id = ""
-        try:
-            # 使用 CMoney API 獲取當前用戶的會員資訊
-            # 這裡我們需要一個 get_current_member_info 的方法，暫時使用 token 解析或設為空
-            # TODO: 實現 get_current_member_info 方法或從 token 解析 member_id
-            member_id = ""  # 暫時設為空，後續可以通過其他 API 獲取
-            logger.info(f"✅ 會員 ID: {member_id or '(暫時為空)'}")
-        except Exception as member_error:
-            logger.warning(f"⚠️ 獲取會員資訊失敗: {member_error}")
-            # 不阻斷流程，繼續創建
+        logger.info("📝 處理 CMoney 會員 ID...")
+        member_id = member_id_from_user  # 優先使用用戶提供的 member_id
+
+        if not member_id:
+            # 如果用戶沒有提供，嘗試從 CMoney API 獲取
+            try:
+                # 使用 CMoney API 獲取當前用戶的會員資訊
+                # TODO: 實現 get_current_member_info 方法或從 token 解析 member_id
+                member_id = ""  # 暫時設為空，後續可以通過其他 API 獲取
+                logger.info(f"✅ 從 API 獲取會員 ID: {member_id or '(無法獲取)'}")
+            except Exception as member_error:
+                logger.warning(f"⚠️ 從 API 獲取會員資訊失敗: {member_error}")
+                # 不阻斷流程，繼續創建
+        else:
+            logger.info(f"✅ 使用用戶提供的會員 ID: {member_id}")
 
         # Phase 2: AI 生成個性化資料（如果提供了 ai_description）
         ai_generated_profile = {}

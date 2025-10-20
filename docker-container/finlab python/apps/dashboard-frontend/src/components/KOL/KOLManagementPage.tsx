@@ -130,7 +130,6 @@ const KOLManagementPage: React.FC = () => {
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [reviewModalVisible, setReviewModalVisible] = useState(false);
   const [aiGeneratedProfile, setAiGeneratedProfile] = useState<any>(null);
-  const [currentPhase, setCurrentPhase] = useState<1 | 2>(1);
   const [form] = Form.useForm();
   const [createForm] = Form.useForm();
 
@@ -191,57 +190,62 @@ const KOLManagementPage: React.FC = () => {
 
   // 打開創建 KOL Modal
   const handleOpenCreateModal = () => {
-    setCurrentPhase(1);
     createForm.resetFields();
     setAiGeneratedProfile(null);
     setCreateModalVisible(true);
-  };
-
-  // Phase 1 → Phase 2
-  const handleNextPhase = async () => {
-    try {
-      // 驗證 Phase 1 必填欄位
-      await createForm.validateFields(['email', 'password', 'nickname']);
-      setCurrentPhase(2);
-    } catch (error) {
-      message.error('請填寫所有必填欄位');
-    }
-  };
-
-  // Phase 2 → Phase 1
-  const handlePreviousPhase = () => {
-    setCurrentPhase(1);
+    console.log('📝 打開創建 KOL Modal');
   };
 
   // 提交創建 KOL
   const handleCreateKOL = async () => {
     try {
       setSaving(true);
+      console.log('🚀 開始創建 KOL...');
+
       const values = await createForm.validateFields();
+      console.log('📝 表單驗證通過，收集到的值:', values);
 
       const payload = {
         email: values.email,
         password: values.password,
         nickname: values.nickname,
+        member_id: values.member_id || '',  // 新增 member_id 欄位
         ai_description: values.ai_description || ''
       };
 
+      console.log('📤 發送到後端的 payload:', {
+        ...payload,
+        password: '***'  // 隱藏密碼
+      });
+
       const response = await axios.post(`${API_BASE_URL}/api/kol/create`, payload);
+      console.log('📥 後端響應:', response.data);
 
       if (response.data.success) {
-        message.success('KOL 創建成功！');
+        console.log('✅ KOL 創建成功!', {
+          serial: response.data.data.serial,
+          nickname: response.data.data.nickname,
+          member_id: response.data.data.member_id,
+          email: response.data.data.email,
+          ai_generated: response.data.data.ai_generated
+        });
+
+        message.success(`KOL 創建成功！Serial: ${response.data.data.serial}`);
 
         // 如果有 AI 生成的資料，顯示審查 modal
         if (response.data.data.ai_generated && response.data.data.ai_profile) {
+          console.log('🤖 有 AI 生成的個性化資料，打開審查 Modal');
           setAiGeneratedProfile({
             ...response.data.data.ai_profile,
             serial: response.data.data.serial,
             nickname: response.data.data.nickname,
-            email: response.data.data.email
+            email: response.data.data.email,
+            member_id: response.data.data.member_id
           });
           setCreateModalVisible(false);
           setReviewModalVisible(true);
         } else {
+          console.log('📋 無 AI 生成資料，直接刷新列表');
           // 沒有 AI 生成，直接關閉並刷新列表
           setCreateModalVisible(false);
           await loadKOLProfiles();
@@ -250,6 +254,12 @@ const KOLManagementPage: React.FC = () => {
         // 處理錯誤
         const errorMsg = response.data.error || '創建失敗';
         const phase = response.data.phase;
+
+        console.error('❌ 創建失敗:', {
+          error: errorMsg,
+          phase: phase,
+          detail: response.data.detail
+        });
 
         if (phase === 'login') {
           message.error(`登入失敗: ${errorMsg}`);
@@ -260,11 +270,18 @@ const KOLManagementPage: React.FC = () => {
         }
       }
     } catch (error: any) {
-      console.error('創建 KOL 失敗:', error);
+      console.error('❌ 創建 KOL 異常:', error);
+      console.error('❌ 錯誤詳情:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
+
       const errorMsg = error.response?.data?.error || error.message || '創建 KOL 失敗';
       message.error(errorMsg);
     } finally {
       setSaving(false);
+      console.log('🔚 創建 KOL 流程結束');
     }
   };
 
@@ -714,44 +731,38 @@ const KOLManagementPage: React.FC = () => {
         title={
           <div>
             <UserOutlined style={{ marginRight: 8 }} />
-            創建KOL角色 - {currentPhase === 1 ? 'Phase 1: 基本資訊' : 'Phase 2: AI 個性化'}
+            創建KOL角色
           </div>
         }
         open={createModalVisible}
         onCancel={() => setCreateModalVisible(false)}
-        width={700}
-        footer={
-          currentPhase === 1 ? [
-            <Button key="cancel" onClick={() => setCreateModalVisible(false)}>
-              取消
-            </Button>,
-            <Button key="skip" onClick={handleCreateKOL} loading={saving}>
-              跳過 AI 生成
-            </Button>,
-            <Button key="next" type="primary" onClick={handleNextPhase}>
-              下一步 (AI 生成)
-            </Button>,
-          ] : [
-            <Button key="back" onClick={handlePreviousPhase}>
-              上一步
-            </Button>,
-            <Button key="create" type="primary" onClick={handleCreateKOL} loading={saving}>
-              創建 KOL
-            </Button>,
-          ]
-        }
+        width={800}
+        footer={[
+          <Button key="cancel" onClick={() => setCreateModalVisible(false)}>
+            取消
+          </Button>,
+          <Button
+            key="create"
+            type="primary"
+            onClick={handleCreateKOL}
+            loading={saving}
+            icon={<SaveOutlined />}
+          >
+            創建 KOL
+          </Button>,
+        ]}
       >
         <Form form={createForm} layout="vertical">
-          {currentPhase === 1 && (
-            <>
-              <Alert
-                message="請提供 CMoney 同學會的登入資訊和期望的暱稱"
-                description="系統將使用這些資訊登入 CMoney 並嘗試更新暱稱。如果暱稱已被使用，創建將失敗。"
-                type="info"
-                showIcon
-                style={{ marginBottom: 24 }}
-              />
+          <Alert
+            message="創建新的 KOL 角色"
+            description="請填寫 CMoney 登入資訊、KOL 基本資料，並選擇性提供 AI 個性化描述"
+            type="info"
+            showIcon
+            style={{ marginBottom: 24 }}
+          />
 
+          <Row gutter={16}>
+            <Col span={12}>
               <Form.Item
                 name="email"
                 label="CMoney 登入郵箱"
@@ -762,7 +773,8 @@ const KOLManagementPage: React.FC = () => {
               >
                 <Input placeholder="example@email.com" />
               </Form.Item>
-
+            </Col>
+            <Col span={12}>
               <Form.Item
                 name="password"
                 label="CMoney 登入密碼"
@@ -770,54 +782,52 @@ const KOLManagementPage: React.FC = () => {
               >
                 <Input.Password placeholder="請輸入密碼" />
               </Form.Item>
+            </Col>
+          </Row>
 
+          <Row gutter={16}>
+            <Col span={12}>
               <Form.Item
                 name="nickname"
                 label="期望的 KOL 暱稱"
                 rules={[{ required: true, message: '請輸入暱稱' }]}
+                tooltip="系統將嘗試在 CMoney 更新此暱稱，如果暱稱已被使用將會失敗"
               >
                 <Input placeholder="例如：股市達人小明" />
               </Form.Item>
-
-              <Alert
-                message="提示"
-                description="您可以選擇直接創建（使用預設值），或繼續到下一步使用 AI 生成個性化資料。"
-                type="warning"
-                showIcon
-              />
-            </>
-          )}
-
-          {currentPhase === 2 && (
-            <>
-              <Alert
-                message="AI 個性化生成"
-                description="提供這個 KOL 的描述（最多 1000 字），AI 將根據描述生成完整的個性化設定。"
-                type="info"
-                showIcon
-                style={{ marginBottom: 24 }}
-              />
-
+            </Col>
+            <Col span={12}>
               <Form.Item
-                name="ai_description"
-                label="KOL 描述 (選填，最多 1000 字)"
+                name="member_id"
+                label="CMoney 會員 ID (選填)"
+                tooltip="如果知道會員 ID 可填寫，留空系統會嘗試自動獲取"
               >
-                <TextArea
-                  rows={10}
-                  maxLength={1000}
-                  showCount
-                  placeholder="例如：&#10;這是一位專注於價值投資的 KOL，擅長基本面分析...&#10;個性：友善、專業、喜歡用數據說話&#10;專業領域：財務報表分析、產業趨勢研究&#10;風格：正式但不失幽默，常用圖表輔助說明"
-                />
+                <Input placeholder="例如：9505546" />
               </Form.Item>
+            </Col>
+          </Row>
 
-              <Alert
-                message="提示"
-                description="AI 將根據您的描述生成人設類型、語氣風格、專業領域等完整資料。生成後您可以在審查頁面進行調整。"
-                type="success"
-                showIcon
-              />
-            </>
-          )}
+          <Divider>AI 個性化生成 (選填)</Divider>
+
+          <Form.Item
+            name="ai_description"
+            label="KOL 描述"
+            tooltip="提供 KOL 的個性、專業領域、風格等描述，AI 將自動生成完整的個性化設定"
+          >
+            <TextArea
+              rows={8}
+              maxLength={1000}
+              showCount
+              placeholder="例如：&#10;這是一位專注於價值投資的 KOL，擅長基本面分析...&#10;個性：友善、專業、喜歡用數據說話&#10;專業領域：財務報表分析、產業趨勢研究&#10;風格：正式但不失幽默，常用圖表輔助說明"
+            />
+          </Form.Item>
+
+          <Alert
+            message="提示"
+            description="填寫 AI 描述後，系統將自動生成人設類型、語氣風格、專業領域等完整資料。若留空，則使用預設值。創建後可在列表中編輯調整。"
+            type="success"
+            showIcon
+          />
         </Form>
       </Modal>
 

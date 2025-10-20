@@ -44,7 +44,7 @@ const Header: React.FC<HeaderProps> = ({
         top: 0,
         right: 0,
         left: collapsed ? '80px' : '280px',
-        zIndex: 9,
+        zIndex: 11,
         transition: 'left 0.2s',
       }}
     >
