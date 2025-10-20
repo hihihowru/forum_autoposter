@@ -2008,6 +2008,11 @@ async def manual_posting(request: Request):
         posting_type = body.get('posting_type', 'analysis')
         max_words = body.get('max_words', 200)
 
+        # 🔥 HOTFIX: Cap max_words for personalized type to prevent 502 timeouts
+        if posting_type == 'personalized' and max_words > 200:
+            logger.warning(f"⚠️  Personalized type max_words capped: {max_words} → 200 (prevent timeout)")
+            max_words = 200
+
         # 🔥 新增：模型 ID 選擇邏輯
         model_id_override = body.get('model_id_override')  # 批量覆蓋模型
         use_kol_default_model = body.get('use_kol_default_model', True)  # 預設使用 KOL 模型
