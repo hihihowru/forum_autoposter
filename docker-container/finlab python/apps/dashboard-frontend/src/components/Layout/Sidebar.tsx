@@ -251,13 +251,21 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onRefresh }) => {
         background: '#fff',
         borderRight: '1px solid #f0f0f0',
         boxShadow: '2px 0 8px rgba(0,0,0,0.1)',
+        overflow: 'hidden',
+        position: 'fixed',
+        left: 0,
+        top: 0,
+        bottom: 0,
+        zIndex: 10,
       }}
     >
+      {/* Header */}
       <div
         style={{
           padding: collapsed ? '16px 8px' : '24px 16px',
           borderBottom: '1px solid #f0f0f0',
           textAlign: collapsed ? 'center' : 'left',
+          flexShrink: 0,
         }}
       >
         {!collapsed && (
@@ -276,8 +284,17 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onRefresh }) => {
           </div>
         )}
       </div>
-      
-      <div style={{ padding: '8px' }}>
+
+      {/* Scrollable Menu */}
+      <div
+        style={{
+          padding: '8px',
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          height: 'calc(100vh - 180px)',
+          scrollBehavior: 'smooth',
+        }}
+      >
         <Menu
           mode="inline"
           selectedKeys={getSelectedKeys()}
@@ -290,14 +307,18 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onRefresh }) => {
           }}
         />
       </div>
-      
+
+      {/* Fixed Bottom Refresh Button */}
       {!collapsed && (
         <div
           style={{
             position: 'absolute',
-            bottom: '16px',
-            left: '16px',
-            right: '16px',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            padding: '16px',
+            background: '#fff',
+            borderTop: '1px solid #f0f0f0',
           }}
         >
           <div
@@ -311,8 +332,17 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onRefresh }) => {
               gap: '8px',
               fontSize: '14px',
               color: '#666',
+              transition: 'all 0.3s',
             }}
             onClick={onRefresh}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = '#e6f7ff';
+              e.currentTarget.style.color = '#1890ff';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = '#f5f5f5';
+              e.currentTarget.style.color = '#666';
+            }}
           >
             <ReloadOutlined />
             刷新數據

@@ -31,18 +31,24 @@ const Header: React.FC<HeaderProps> = ({
   return (
     <AntHeader
       style={{
-        padding: '0 16px',
+        padding: '0 24px',
         background: '#fff',
         borderBottom: '1px solid #f0f0f0',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-        minHeight: '64px',
-        flexWrap: 'nowrap',
+        height: '64px',
+        lineHeight: '64px',
+        position: 'fixed',
+        top: 0,
+        right: 0,
+        left: collapsed ? '80px' : '280px',
+        zIndex: 9,
+        transition: 'left 0.2s',
       }}
     >
-      <Space>
+      <Space align="center" style={{ height: '100%' }}>
         <Button
           type="text"
           icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
@@ -53,34 +59,34 @@ const Header: React.FC<HeaderProps> = ({
             height: 40,
           }}
         />
-        
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <Text strong style={{ fontSize: '18px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+
+        <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 0 }}>
+          <Text strong style={{ fontSize: '18px', lineHeight: '1.2' }}>
             KOL 系統儀表板
           </Text>
           {lastUpdated && (
-            <div style={{ fontSize: '12px', color: '#666', marginTop: '2px', whiteSpace: 'nowrap' }}>
+            <Text type="secondary" style={{ fontSize: '12px', lineHeight: '1.2' }}>
               更新: {dayjs(lastUpdated).format('MM-DD HH:mm')}
-            </div>
+            </Text>
           )}
         </div>
       </Space>
 
-      <Space size="small" style={{ flexShrink: 0 }}>
+      <Space size="small" style={{ flexShrink: 0, height: '100%', alignItems: 'center' }}>
         <Tooltip title="刷新數據">
           <Button
             type="text"
-            icon={<ReloadOutlined />}
+            icon={<ReloadOutlined spin={loading} />}
             onClick={onRefresh}
             loading={loading}
             style={{
               fontSize: '16px',
-              width: 36,
-              height: 36,
+              width: 40,
+              height: 40,
             }}
           />
         </Tooltip>
-        
+
         <Tooltip title="通知">
           <Badge count={0} size="small">
             <Button
@@ -88,33 +94,33 @@ const Header: React.FC<HeaderProps> = ({
               icon={<BellOutlined />}
               style={{
                 fontSize: '16px',
-                width: 36,
-                height: 36,
+                width: 40,
+                height: 40,
               }}
             />
           </Badge>
         </Tooltip>
-        
+
         <Tooltip title="設置">
           <Button
             type="text"
             icon={<SettingOutlined />}
             style={{
               fontSize: '16px',
-              width: 36,
-              height: 36,
+              width: 40,
+              height: 40,
             }}
           />
         </Tooltip>
-        
+
         <Tooltip title="用戶">
           <Button
             type="text"
             icon={<UserOutlined />}
             style={{
               fontSize: '16px',
-              width: 36,
-              height: 36,
+              width: 40,
+              height: 40,
             }}
           />
         </Tooltip>

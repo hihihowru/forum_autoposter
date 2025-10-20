@@ -109,10 +109,13 @@ const App: React.FC = () => {
             />
             <Content
               style={{
-                margin: 0,
-                padding: 0,
+                marginLeft: collapsed ? '80px' : '280px',
+                marginTop: '64px',
+                padding: '24px',
                 background: '#f5f5f5',
+                minHeight: 'calc(100vh - 64px)',
                 overflow: 'auto',
+                transition: 'margin-left 0.2s',
               }}
             >
               <Routes>

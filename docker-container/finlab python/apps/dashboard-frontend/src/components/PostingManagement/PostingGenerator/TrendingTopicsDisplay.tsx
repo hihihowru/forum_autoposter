@@ -194,7 +194,7 @@ const TrendingTopicsDisplay: React.FC<TrendingTopicsDisplayProps> = ({
     setLoading(true);
     try {
       // 呼叫現有的 trending-api
-      const response = await fetch('/trending?limit=10');
+      const response = await fetch('/api/trending?limit=10');
       const data = await response.json();
       
       if (data.topics) {
