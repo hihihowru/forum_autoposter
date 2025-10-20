@@ -1,7 +1,7 @@
-# Workaround for Docker Hub 503 errors: Use specific version tag
-# Docker Hub auth service has been returning 503 for python:3.11-slim
-# Using specific version more likely to be cached by Railway
-FROM python:3.11.9-slim-bookworm
+# CRITICAL: Docker Hub auth is completely down (502/503 errors)
+# Using full python:3.11 image which Railway likely has cached
+# Full image is larger but should work without hitting Docker Hub auth
+FROM python:3.11
 
 # 設置工作目錄
 WORKDIR /app
