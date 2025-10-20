@@ -58,7 +58,8 @@ from psycopg2.extras import RealDictCursor
 # ==================== GPT 內容生成器初始化 ====================
 
 # 添加 posting-service 到 Python 路徑
-posting_service_path = os.path.join(os.path.dirname(__file__), '../posting-service')
+# Fixed: posting-service is now INSIDE unified-api directory (not parent directory)
+posting_service_path = os.path.join(os.path.dirname(__file__), 'posting-service')
 if posting_service_path not in sys.path:
     sys.path.insert(0, posting_service_path)
 
