@@ -1,5 +1,7 @@
-# 使用Python 3.11官方鏡像
-FROM python:3.11-slim
+# Workaround for Docker Hub 503 errors: Use specific version tag
+# Docker Hub auth service has been returning 503 for python:3.11-slim
+# Using specific version more likely to be cached by Railway
+FROM python:3.11.9-slim-bookworm
 
 # 設置工作目錄
 WORKDIR /app
