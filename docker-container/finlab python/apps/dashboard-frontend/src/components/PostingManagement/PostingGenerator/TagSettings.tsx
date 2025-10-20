@@ -64,7 +64,7 @@ const TagSettings: React.FC<TagSettingsProps> = ({ value, onChange, triggerData,
   const fetchTrendingTopics = async () => {
     setLoadingTrendingTopics(true);
     try {
-      const response = await fetch('/trending?limit=10');
+      const response = await fetch('/api/trending?limit=10');
       const data = await response.json();
       
       if (data.topics) {

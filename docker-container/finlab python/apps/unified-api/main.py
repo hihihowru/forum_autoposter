@@ -2558,22 +2558,60 @@ async def refresh_all_interactions():
 # ==================== Trending API 功能 ====================
 
 @app.get("/api/trending")
-async def get_trending_topics():
+async def get_trending_topics(limit: int = Query(10, description="返回結果數量")):
     """獲取熱門話題"""
-    logger.info("收到 trending 請求")
+    logger.info(f"收到 trending 請求: limit={limit}")
+
+    # Mock trending topics data matching TrendingTopic interface
+    topics = [
+        {
+            "id": "trend_001",
+            "title": "AI人工智慧概念股",
+            "content": "AI技術快速發展，相關概念股受到市場關注",
+            "stock_ids": ["2330", "2454", "3711"],
+            "category": "科技創新",
+            "engagement_score": 95.5
+        },
+        {
+            "id": "trend_002",
+            "title": "電動車產業鏈",
+            "content": "電動車需求強勁，供應鏈廠商業績看俏",
+            "stock_ids": ["2308", "2327", "1513"],
+            "category": "綠色能源",
+            "engagement_score": 88.2
+        },
+        {
+            "id": "trend_003",
+            "title": "半導體晶片短缺",
+            "content": "全球晶片供應緊張，台灣半導體廠商受益",
+            "stock_ids": ["2330", "2303", "3034"],
+            "category": "科技創新",
+            "engagement_score": 82.1
+        },
+        {
+            "id": "trend_004",
+            "title": "綠能與ESG",
+            "content": "ESG投資興起，綠能產業成為投資焦點",
+            "stock_ids": ["6505", "3481", "3714"],
+            "category": "綠色能源",
+            "engagement_score": 76.8
+        },
+        {
+            "id": "trend_005",
+            "title": "5G基建與應用",
+            "content": "5G網路建設持續，相關設備與應用廠商獲利",
+            "stock_ids": ["3008", "2412", "2474"],
+            "category": "通訊技術",
+            "engagement_score": 72.3
+        }
+    ]
 
     result = {
-        "success": True,
-        "data": [
-            {"topic": "AI人工智慧", "trend_score": 95.5, "posts_count": 1250},
-            {"topic": "電動車", "trend_score": 88.2, "posts_count": 980},
-            {"topic": "半導體", "trend_score": 82.1, "posts_count": 750},
-            {"topic": "新能源", "trend_score": 76.8, "posts_count": 650}
-        ],
+        "topics": topics[:limit],
         "timestamp": datetime.now().isoformat()
     }
 
-    logger.info("返回熱門話題數據")
+    logger.info(f"返回 {len(result['topics'])} 個熱門話題")
     return result
 
 @app.get("/api/extract-keywords")

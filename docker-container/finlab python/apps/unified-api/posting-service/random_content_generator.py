@@ -241,26 +241,27 @@ class RandomContentGenerator:
         
         angle = interaction_angles[version_num - 1]
         
-        # 構建 Prompt
+        # 構建 Prompt - 🔥 SHORT interaction questions (50-80 chars max)
         prompt = f"""
 你是 {kol_nickname}，人設是 {kol_persona}，寫作風格是 {tone_style}。
 
-請針對 {stock_name}({stock_code}) 生成一個互動提問內容，重點是 {angle}。
+請針對 {stock_name}({stock_code}) 生成一個**簡短的互動提問**，重點是 {angle}。
 
 要求：
-1. 標題要引發討論，體現你的個人特色
-2. 內容要以問題形式，鼓勵讀者互動
-3. 避免模板化，要有個人觀點
-4. 長度控制在 100-150 字
+1. 標題要引發討論，體現你的個人特色（10-20字）
+2. 內容要以**單一問題**形式，鼓勵讀者互動
+3. **內容長度限制 50-80 字**（不要超過！）
+4. 避免模板化，要有個人觀點
 5. 使用你的常用術語：{common_terms}
 6. 可以適當使用口語化表達：{colloquial_terms}
+7. 不要寫長篇分析，只問一個核心問題
 
 原始內容參考：
 {original_content[:200]}...
 
 請生成標題和內容，格式：
 標題：[你的標題]
-內容：[你的互動提問內容]
+內容：[你的互動提問內容（50-80字內）]
 """
         
         # 這裡應該調用 LLM API，暫時使用模擬數據
@@ -352,7 +353,7 @@ class RandomContentGenerator:
             return self._generate_mock_content(version_id, stock_name, stock_code)
 
     def _generate_mock_content(self, version_id: str, stock_name: str = '', stock_code: str = '') -> tuple[str, str]:
-        """生成模擬內容（備用方案）- 🔥 FIX: Now includes stock name and code"""
+        """生成模擬內容（備用方案）- 🔥 FIX: Now includes stock name and SHORT interaction questions"""
         self.logger.warning(f"⚠️ 使用備用模板生成內容: {stock_name}({stock_code})")
 
         # 🔥 FIX: Include stock name and code in fallback templates
@@ -362,8 +363,16 @@ class RandomContentGenerator:
             title = f"{stock_display} - {random.choice(['深度解析', '專業觀點', '市場觀察', '技術分析', '投資建議'])}"
             content = f"【{stock_display} 分析】\n\n作為專業分析師，我對{stock_name if stock_name else '這檔個股'}有以下觀察：\n\n1. 技術面顯示值得關注的訊號\n2. 基本面需持續追蹤\n3. 市場情緒反映投資人態度\n\n建議投資人密切關注後續發展，適時調整策略。\n\n#{stock_name if stock_name else '投資分析'} #市場觀察"
         else:
-            title = f"{stock_display} - {random.choice(['大家怎麼看', '想聽聽意見', '討論一下', '分享觀點', '交流想法'])}"
-            content = f"【{stock_display} 討論】\n\n最近{stock_name if stock_name else '這檔個股'}的走勢，想和大家討論一下：\n\n• 你覺得現在的時機如何？\n• 有什麼操作策略可以分享？\n• 風險控制方面有什麼建議？\n\n歡迎留言分享你的看法！\n\n#{stock_name if stock_name else '投資討論'} #策略分享"
+            # 🔥 SHORT interaction questions (50-80 chars)
+            questions = [
+                f"{stock_name if stock_name else '這檔'}現在進場會太晚嗎？大家怎麼看？",
+                f"{stock_name if stock_name else '這檔'}的技術面，各位覺得支撐在哪？",
+                f"想問一下，{stock_name if stock_name else '這檔'}現在風險高嗎？",
+                f"{stock_name if stock_name else '這檔'}破新高了，還能追嗎？",
+                f"大家對{stock_name if stock_name else '這檔'}的操作策略是什麼？"
+            ]
+            title = f"{stock_display} - {random.choice(['大家怎麼看', '想問問', '討論一下', '請益'])}"
+            content = random.choice(questions)
 
         return title, content
     

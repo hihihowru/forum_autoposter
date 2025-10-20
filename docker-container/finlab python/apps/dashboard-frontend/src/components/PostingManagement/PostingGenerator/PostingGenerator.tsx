@@ -537,27 +537,6 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
       
       console.log('準備生成的貼文:', postsToGenerate);
       
-      // 立即跳轉到審核頁面（不等待所有貼文生成完成）
-      if (batchMode.batch_type === 'test_mode' || batchMode.batch_type === 'review_mode') {
-        console.log('🚀 立即跳轉到審核頁面，貼文將異步生成');
-        setCurrentSessionId(session.id);
-        setShowReviewPage(true);
-        message.info('正在生成貼文，請稍候...');
-      }
-      
-      // 異步批量生成貼文（不阻塞UI）
-      // 添加調試信息
-      console.log('🔍 前端調試 - 批量生成貼文參數:');
-      console.log('  - session_id:', session.id);
-      console.log('  - posts:', postsToGenerate);
-      console.log('  - batch_config:', batchMode);
-      console.log('  - tags_config:', generationConfig.tags);
-      console.log('  - topic_tags:', generationConfig.tags?.topic_tags);
-      console.log('  - mixed_mode:', generationConfig.tags?.topic_tags?.mixed_mode);
-      console.log('  - trigger_type:', generationConfig.triggers?.triggerConfig?.triggerType);
-      console.log('  - trigger_key:', generationConfig.triggers?.triggerConfig?.triggerKey);
-      console.log('  - full_triggers_config:', generationConfig.triggers);
-      
       // 根據觸發器類型設置 topic_id 和 posting_type
       const batchConfigWithTopic = {
         ...batchMode,
@@ -565,9 +544,9 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
         topic_id: generationConfig.triggers?.triggerConfig?.triggerKey === 'trending_topics' ? 'auto_fetch' : null,
         topic_title: generationConfig.triggers?.triggerConfig?.triggerKey === 'trending_topics' ? '自動獲取熱門話題' : null
       };
-      
-      console.log('🔍 批量生成配置（包含 topic_id）:', batchConfigWithTopic);
-      
+
+      // 🔥 NON-BLOCKING BATCH POSTING - Fire and forget
+      // Start batch generation in background without waiting
       PostingManagementAPI.generateBatchPosts({
         session_id: session.id,
         posts: postsToGenerate,
@@ -575,62 +554,48 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
         data_sources: generationConfig.dataSources,
         explainability_config: generationConfig.explainability,
         news_config: generationConfig.news,
-        tags_config: generationConfig.tags,  // 新增：傳送標籤配置
-        
-        // 新增：所有步驟的配置
-        // 步驟一：股票篩選配置
+        tags_config: generationConfig.tags,
         stock_count_limit: generationConfig.triggers?.stockCountLimit,
         stock_filter_criteria: generationConfig.triggers?.stockFilterCriteria,
-        
-        // 步驟二：數據源配置
         data_source_config: generationConfig.dataSources,
-        
-        // 步驟四：新聞連結配置（使用 enable_news_links 和 max_links）
-        enable_links: generationConfig.news?.enable_news_links !== false, // 使用新聞連結開關
-        link_count: generationConfig.news?.enable_news_links !== false ? (generationConfig.news?.max_links || 5) : 0, // 只有啟用時才設定數量
-        
-        // 步驟五：KOL 選擇和派發策略
+        enable_links: generationConfig.news?.enable_news_links !== false,
+        link_count: generationConfig.news?.enable_news_links !== false ? (generationConfig.news?.max_links || 5) : 0,
         kol_selection_method: generationConfig.kol?.assignment_mode || 'fixed',
         kol_assignment_strategy: generationConfig.kol?.kol_assignment_strategy || 'one_to_one',
-        
-        // 步驟七：生成設定
-        post_mode: generationConfig.settings?.post_mode || 'one_to_one',  // 新增：貼文模式
-        max_stocks_per_post: generationConfig.settings?.max_stocks_per_post || 1,  // 新增：每篇貼文最大股票數
-        max_words: generationConfig.settings?.max_words || 1000,  // 新增：最大字數
+        post_mode: generationConfig.settings?.post_mode || 'one_to_one',
+        max_stocks_per_post: generationConfig.settings?.max_stocks_per_post || 1,
+        max_words: generationConfig.settings?.max_words || 1000,
         content_length: generationConfig.settings?.content_length || 'medium',
         custom_word_count: generationConfig.settings?.custom_word_count,
         content_style: generationConfig.settings?.content_style || 'technical',
         analysis_depth: generationConfig.settings?.include_analysis_depth || 'basic',
         include_chart_description: generationConfig.settings?.include_charts || false,
         include_risk_warning: generationConfig.settings?.include_risk_warning || true,
-        
-        // 步驟九：生成模式
         generation_mode: generationConfig.batchMode?.generation_mode || 'simple',
-        
-        // 標籤模式
         has_stock_tags: generationConfig.tags?.tag_mode === 'stock_tags' || generationConfig.tags?.tag_mode === 'both',
         has_topic_tags: generationConfig.tags?.tag_mode === 'topic_tags' || generationConfig.tags?.tag_mode === 'both',
-        
-        // 觸發器相關
         trigger_type: generationConfig.triggers?.triggerConfig?.triggerKey,
         trigger_data: generationConfig.triggers?.triggerConfig,
         generation_config: generationConfig.settings
       }).then(result => {
-        message.destroy();
-        
+        // Silent completion toast (non-blocking)
         if (result.success) {
-          message.success(`批量生成完成！成功生成 ${result.generated_count} 篇貼文`);
-          
+          message.success(`批量生成完成！成功生成 ${result.generated_count} 篇貼文`, 3);
           if (result.errors && result.errors.length > 0) {
-            message.warning(`有 ${result.failed_count || 0} 篇貼文生成失敗`);
+            message.warning(`有 ${result.failed_count || 0} 篇貼文生成失敗`, 3);
           }
         } else {
-          message.error('批量生成失敗');
+          message.error('批量生成失敗', 3);
         }
       }).catch(error => {
-        message.destroy();
-        message.error(`批量生成失敗: ${error.message}`);
+        message.error(`批量生成失敗: ${error.message}`, 3);
       });
+
+      // 🔥 IMMEDIATELY navigate to review page (don't wait for generation)
+      console.log('🚀 立即跳轉到審核頁面，貼文將在背景生成');
+      setCurrentSessionId(session.id);
+      setShowReviewPage(true);
+      message.info(`開始生成 ${postsToGenerate.length} 篇貼文，頁面將自動更新`, 5);
       
       return; // 提前返回，不執行後續的同步邏輯
       
