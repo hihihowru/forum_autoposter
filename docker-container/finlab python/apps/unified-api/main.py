@@ -3176,6 +3176,254 @@ async def get_kol_list():
         if conn:
             return_db_connection(conn)
 
+
+@app.post("/api/kol/create")
+async def create_kol(request: Request):
+    """
+    創建新的 KOL 角色
+
+    Phase 1: 基本資訊（必填）
+    - email: CMoney 登入郵箱
+    - password: CMoney 登入密碼
+    - nickname: 期望的 KOL 暱稱
+
+    Phase 2: AI 生成個性化資料（選填）
+    - ai_description: 1000字以內的 KOL 描述，用於 AI 生成個性化欄位
+    """
+    logger.info("收到 create_kol 請求")
+
+    conn = None
+    try:
+        # 解析請求數據
+        data = await request.json()
+        email = data.get("email")
+        password = data.get("password")
+        nickname = data.get("nickname")
+        ai_description = data.get("ai_description", "")  # Phase 2: AI 描述（選填）
+
+        # 驗證必填欄位
+        if not email or not password or not nickname:
+            return {
+                "success": False,
+                "error": "缺少必填欄位: email, password, nickname",
+                "timestamp": datetime.now().isoformat()
+            }
+
+        # 檢查數據庫連接
+        if not db_pool:
+            return {
+                "success": False,
+                "error": "數據庫連接不可用",
+                "timestamp": datetime.now().isoformat()
+            }
+
+        # Phase 1: 使用 CMoney API 登入並更新暱稱
+        logger.info(f"📝 Phase 1: 嘗試使用 {email} 登入 CMoney 並更新暱稱為 {nickname}")
+
+        from src.clients.cmoney.cmoney_client import CMoneyClient, LoginCredentials
+        cmoney_client = CMoneyClient()
+
+        # 登入 CMoney
+        credentials = LoginCredentials(email=email, password=password)
+        try:
+            access_token = await cmoney_client.login(credentials)
+            logger.info(f"✅ CMoney 登入成功: {email}")
+        except Exception as login_error:
+            logger.error(f"❌ CMoney 登入失敗: {login_error}")
+            return {
+                "success": False,
+                "error": f"CMoney 登入失敗: {str(login_error)}",
+                "phase": "login",
+                "timestamp": datetime.now().isoformat()
+            }
+
+        # 嘗試更新暱稱
+        try:
+            nickname_result = await cmoney_client.update_nickname(access_token.token, nickname)
+
+            if not nickname_result.success:
+                logger.warning(f"⚠️ 暱稱更新失敗: {nickname_result.error_message}")
+                return {
+                    "success": False,
+                    "error": f"暱稱更新失敗: {nickname_result.error_message}",
+                    "phase": "nickname_update",
+                    "detail": "可能是暱稱已被使用，請嘗試其他暱稱",
+                    "timestamp": datetime.now().isoformat()
+                }
+
+            logger.info(f"✅ 暱稱更新成功: {nickname}")
+            actual_nickname = nickname_result.new_nickname or nickname
+
+        except Exception as nickname_error:
+            logger.error(f"❌ 暱稱更新異常: {nickname_error}")
+            return {
+                "success": False,
+                "error": f"暱稱更新異常: {str(nickname_error)}",
+                "phase": "nickname_update",
+                "timestamp": datetime.now().isoformat()
+            }
+
+        # 獲取會員資訊（獲取 member_id）
+        logger.info("📝 獲取 CMoney 會員資訊...")
+        member_id = ""
+        try:
+            # 使用 CMoney API 獲取當前用戶的會員資訊
+            # 這裡我們需要一個 get_current_member_info 的方法，暫時使用 token 解析或設為空
+            # TODO: 實現 get_current_member_info 方法或從 token 解析 member_id
+            member_id = ""  # 暫時設為空，後續可以通過其他 API 獲取
+            logger.info(f"✅ 會員 ID: {member_id or '(暫時為空)'}")
+        except Exception as member_error:
+            logger.warning(f"⚠️ 獲取會員資訊失敗: {member_error}")
+            # 不阻斷流程，繼續創建
+
+        # Phase 2: AI 生成個性化資料（如果提供了 ai_description）
+        ai_generated_profile = {}
+        if ai_description and gpt_generator:
+            logger.info(f"🤖 Phase 2: 使用 AI 生成個性化資料...")
+            try:
+                # 準備 AI prompt
+                ai_prompt = f"""
+                根據以下描述，為這個 KOL 生成完整的個性化設定。請以 JSON 格式返回，包含以下欄位：
+
+                KOL 描述：
+                {ai_description}
+
+                請生成以下欄位的值：
+                - persona: 人設類型（fundamental/technical/news/casual 之一）
+                - target_audience: 目標受眾
+                - expertise: 專業領域
+                - backstory: 背景故事（50-100字）
+                - tone_style: 語氣風格描述
+                - typing_habit: 打字習慣描述
+                - common_terms: 常用術語（逗號分隔）
+                - colloquial_terms: 口語用詞（逗號分隔）
+                - signature: 個人簽名
+                - emoji_pack: 常用表情符號（逗號分隔）
+                - tone_formal: 正式程度（1-10）
+                - tone_emotion: 情感程度（1-10）
+                - tone_confidence: 自信程度（1-10）
+                - tone_urgency: 緊急程度（1-10）
+                - tone_interaction: 互動程度（1-10）
+                - question_ratio: 問題比例（0.0-1.0）
+                - content_length: 內容長度偏好（short/medium/long）
+
+                請確保返回的是有效的 JSON 格式。
+                """
+
+                # 調用 GPT 生成
+                import openai
+                openai.api_key = os.getenv("OPENAI_API_KEY")
+
+                response = openai.ChatCompletion.create(
+                    model="gpt-4",
+                    messages=[
+                        {"role": "system", "content": "你是一個專業的 KOL 人設設計師，擅長根據描述生成完整的 KOL 個性化設定。"},
+                        {"role": "user", "content": ai_prompt}
+                    ],
+                    temperature=0.7,
+                    max_tokens=1500
+                )
+
+                # 解析 AI 回應
+                ai_response = response.choices[0].message.content
+                import json
+                ai_generated_profile = json.loads(ai_response)
+                logger.info(f"✅ AI 個性化資料生成成功")
+
+            except Exception as ai_error:
+                logger.warning(f"⚠️ AI 生成失敗: {ai_error}，使用預設值")
+                # AI 生成失敗不阻斷流程，使用預設值
+
+        # 準備寫入數據庫的資料
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            # 獲取下一個 serial 號碼
+            cursor.execute("SELECT COALESCE(MAX(serial), 200) + 1 as next_serial FROM kol_profiles")
+            next_serial = cursor.fetchone()['next_serial']
+
+            # 合併 AI 生成的值和預設值
+            persona = ai_generated_profile.get("persona", "casual")
+            target_audience = ai_generated_profile.get("target_audience", "一般投資者")
+            expertise = ai_generated_profile.get("expertise", "")
+            backstory = ai_generated_profile.get("backstory", "")
+            tone_style = ai_generated_profile.get("tone_style", "友善、親切")
+            typing_habit = ai_generated_profile.get("typing_habit", "正常")
+            common_terms = ai_generated_profile.get("common_terms", "")
+            colloquial_terms = ai_generated_profile.get("colloquial_terms", "")
+            signature = ai_generated_profile.get("signature", "")
+            emoji_pack = ai_generated_profile.get("emoji_pack", "😊,👍,💪")
+            tone_formal = ai_generated_profile.get("tone_formal", 5)
+            tone_emotion = ai_generated_profile.get("tone_emotion", 5)
+            tone_confidence = ai_generated_profile.get("tone_confidence", 7)
+            tone_urgency = ai_generated_profile.get("tone_urgency", 5)
+            tone_interaction = ai_generated_profile.get("tone_interaction", 7)
+            question_ratio = ai_generated_profile.get("question_ratio", 0.3)
+            content_length = ai_generated_profile.get("content_length", "medium")
+
+            # 插入新的 KOL 到數據庫
+            insert_sql = """
+                INSERT INTO kol_profiles (
+                    serial, nickname, member_id, persona, status, owner, email, password,
+                    whitelist, notes, post_times, target_audience, interaction_threshold,
+                    common_terms, colloquial_terms, tone_style, typing_habit, backstory,
+                    expertise, signature, emoji_pack, tone_formal, tone_emotion,
+                    tone_confidence, tone_urgency, tone_interaction, question_ratio,
+                    content_length, created_time, last_updated
+                ) VALUES (
+                    %s, %s, %s, %s, 'active', 'system', %s, %s,
+                    true, '通過 API 創建', '09:00,12:00,15:00', %s, 0,
+                    %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s,
+                    %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                )
+                RETURNING serial, nickname, member_id, persona, email
+            """
+
+            cursor.execute(insert_sql, (
+                next_serial, actual_nickname, member_id, persona, email, password,
+                target_audience, common_terms, colloquial_terms, tone_style, typing_habit, backstory,
+                expertise, signature, emoji_pack, tone_formal, tone_emotion,
+                tone_confidence, tone_urgency, tone_interaction, question_ratio,
+                content_length
+            ))
+
+            new_kol = cursor.fetchone()
+            conn.commit()
+
+            logger.info(f"✅ KOL 創建成功: Serial={new_kol['serial']}, Nickname={new_kol['nickname']}")
+
+            return {
+                "success": True,
+                "message": "KOL 創建成功",
+                "data": {
+                    "serial": new_kol['serial'],
+                    "nickname": new_kol['nickname'],
+                    "member_id": new_kol['member_id'],
+                    "persona": new_kol['persona'],
+                    "email": new_kol['email'],
+                    "ai_generated": bool(ai_description and gpt_generator),
+                    "ai_profile": ai_generated_profile if ai_generated_profile else None
+                },
+                "timestamp": datetime.now().isoformat()
+            }
+
+    except Exception as e:
+        logger.error(f"❌ 創建 KOL 失敗: {e}")
+        import traceback
+        logger.error(f"❌ 完整錯誤堆疊: {traceback.format_exc()}")
+        if conn:
+            conn.rollback()
+        return {
+            "success": False,
+            "error": f"創建 KOL 失敗: {str(e)}",
+            "timestamp": datetime.now().isoformat()
+        }
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+
 # ==================== Schedule API 功能 ====================
 
 @app.get("/api/schedule/tasks")

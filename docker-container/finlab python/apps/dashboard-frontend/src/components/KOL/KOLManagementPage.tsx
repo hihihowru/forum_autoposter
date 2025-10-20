@@ -127,7 +127,12 @@ const KOLManagementPage: React.FC = () => {
   const [kolProfiles, setKolProfiles] = useState<KOLProfile[]>([]);
   const [selectedKOL, setSelectedKOL] = useState<KOLProfile | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [reviewModalVisible, setReviewModalVisible] = useState(false);
+  const [aiGeneratedProfile, setAiGeneratedProfile] = useState<any>(null);
+  const [currentPhase, setCurrentPhase] = useState<1 | 2>(1);
   const [form] = Form.useForm();
+  const [createForm] = Form.useForm();
 
   // 載入KOL列表
   const loadKOLProfiles = async () => {
@@ -166,13 +171,13 @@ const KOLManagementPage: React.FC = () => {
     try {
       const values = await form.validateFields();
       setSaving(true);
-      
+
       await axios.put(`${API_BASE_URL}/api/kol/${selectedKOL?.serial}/personalization`, {
         content_style_probabilities: values.content_style_probabilities,
         analysis_depth_probabilities: values.analysis_depth_probabilities,
         content_length_probabilities: values.content_length_probabilities
       });
-      
+
       message.success('KOL設定已保存');
       setModalVisible(false);
       await loadKOLProfiles();
@@ -181,6 +186,96 @@ const KOLManagementPage: React.FC = () => {
       message.error('保存設定失敗');
     } finally {
       setSaving(false);
+    }
+  };
+
+  // 打開創建 KOL Modal
+  const handleOpenCreateModal = () => {
+    setCurrentPhase(1);
+    createForm.resetFields();
+    setAiGeneratedProfile(null);
+    setCreateModalVisible(true);
+  };
+
+  // Phase 1 → Phase 2
+  const handleNextPhase = async () => {
+    try {
+      // 驗證 Phase 1 必填欄位
+      await createForm.validateFields(['email', 'password', 'nickname']);
+      setCurrentPhase(2);
+    } catch (error) {
+      message.error('請填寫所有必填欄位');
+    }
+  };
+
+  // Phase 2 → Phase 1
+  const handlePreviousPhase = () => {
+    setCurrentPhase(1);
+  };
+
+  // 提交創建 KOL
+  const handleCreateKOL = async () => {
+    try {
+      setSaving(true);
+      const values = await createForm.validateFields();
+
+      const payload = {
+        email: values.email,
+        password: values.password,
+        nickname: values.nickname,
+        ai_description: values.ai_description || ''
+      };
+
+      const response = await axios.post(`${API_BASE_URL}/api/kol/create`, payload);
+
+      if (response.data.success) {
+        message.success('KOL 創建成功！');
+
+        // 如果有 AI 生成的資料，顯示審查 modal
+        if (response.data.data.ai_generated && response.data.data.ai_profile) {
+          setAiGeneratedProfile({
+            ...response.data.data.ai_profile,
+            serial: response.data.data.serial,
+            nickname: response.data.data.nickname,
+            email: response.data.data.email
+          });
+          setCreateModalVisible(false);
+          setReviewModalVisible(true);
+        } else {
+          // 沒有 AI 生成，直接關閉並刷新列表
+          setCreateModalVisible(false);
+          await loadKOLProfiles();
+        }
+      } else {
+        // 處理錯誤
+        const errorMsg = response.data.error || '創建失敗';
+        const phase = response.data.phase;
+
+        if (phase === 'login') {
+          message.error(`登入失敗: ${errorMsg}`);
+        } else if (phase === 'nickname_update') {
+          message.error(`暱稱更新失敗: ${errorMsg}。${response.data.detail || ''}`);
+        } else {
+          message.error(errorMsg);
+        }
+      }
+    } catch (error: any) {
+      console.error('創建 KOL 失敗:', error);
+      const errorMsg = error.response?.data?.error || error.message || '創建 KOL 失敗';
+      message.error(errorMsg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // 確認 AI 生成的資料
+  const handleConfirmAIProfile = async () => {
+    try {
+      message.success('AI 生成的資料已確認');
+      setReviewModalVisible(false);
+      await loadKOLProfiles();
+    } catch (error) {
+      message.error('確認失敗');
     }
   };
 
@@ -301,13 +396,22 @@ const KOLManagementPage: React.FC = () => {
             </Title>
             <Text type="secondary">管理所有KOL的設定和個人化參數</Text>
           </div>
-          <Button 
-            icon={<ReloadOutlined />}
-            onClick={loadKOLProfiles}
-            loading={loading}
-          >
-            刷新
-          </Button>
+          <Space>
+            <Button
+              type="primary"
+              icon={<UserOutlined />}
+              onClick={handleOpenCreateModal}
+            >
+              創建KOL角色
+            </Button>
+            <Button
+              icon={<ReloadOutlined />}
+              onClick={loadKOLProfiles}
+              loading={loading}
+            >
+              刷新
+            </Button>
+          </Space>
         </div>
 
         <Table
@@ -603,6 +707,239 @@ const KOLManagementPage: React.FC = () => {
             </TabPane>
           </Tabs>
         </Form>
+      </Modal>
+
+      {/* 創建 KOL Modal */}
+      <Modal
+        title={
+          <div>
+            <UserOutlined style={{ marginRight: 8 }} />
+            創建KOL角色 - {currentPhase === 1 ? 'Phase 1: 基本資訊' : 'Phase 2: AI 個性化'}
+          </div>
+        }
+        open={createModalVisible}
+        onCancel={() => setCreateModalVisible(false)}
+        width={700}
+        footer={
+          currentPhase === 1 ? [
+            <Button key="cancel" onClick={() => setCreateModalVisible(false)}>
+              取消
+            </Button>,
+            <Button key="skip" onClick={handleCreateKOL} loading={saving}>
+              跳過 AI 生成
+            </Button>,
+            <Button key="next" type="primary" onClick={handleNextPhase}>
+              下一步 (AI 生成)
+            </Button>,
+          ] : [
+            <Button key="back" onClick={handlePreviousPhase}>
+              上一步
+            </Button>,
+            <Button key="create" type="primary" onClick={handleCreateKOL} loading={saving}>
+              創建 KOL
+            </Button>,
+          ]
+        }
+      >
+        <Form form={createForm} layout="vertical">
+          {currentPhase === 1 && (
+            <>
+              <Alert
+                message="請提供 CMoney 同學會的登入資訊和期望的暱稱"
+                description="系統將使用這些資訊登入 CMoney 並嘗試更新暱稱。如果暱稱已被使用，創建將失敗。"
+                type="info"
+                showIcon
+                style={{ marginBottom: 24 }}
+              />
+
+              <Form.Item
+                name="email"
+                label="CMoney 登入郵箱"
+                rules={[
+                  { required: true, message: '請輸入郵箱' },
+                  { type: 'email', message: '請輸入有效的郵箱' }
+                ]}
+              >
+                <Input placeholder="example@email.com" />
+              </Form.Item>
+
+              <Form.Item
+                name="password"
+                label="CMoney 登入密碼"
+                rules={[{ required: true, message: '請輸入密碼' }]}
+              >
+                <Input.Password placeholder="請輸入密碼" />
+              </Form.Item>
+
+              <Form.Item
+                name="nickname"
+                label="期望的 KOL 暱稱"
+                rules={[{ required: true, message: '請輸入暱稱' }]}
+              >
+                <Input placeholder="例如：股市達人小明" />
+              </Form.Item>
+
+              <Alert
+                message="提示"
+                description="您可以選擇直接創建（使用預設值），或繼續到下一步使用 AI 生成個性化資料。"
+                type="warning"
+                showIcon
+              />
+            </>
+          )}
+
+          {currentPhase === 2 && (
+            <>
+              <Alert
+                message="AI 個性化生成"
+                description="提供這個 KOL 的描述（最多 1000 字），AI 將根據描述生成完整的個性化設定。"
+                type="info"
+                showIcon
+                style={{ marginBottom: 24 }}
+              />
+
+              <Form.Item
+                name="ai_description"
+                label="KOL 描述 (選填，最多 1000 字)"
+              >
+                <TextArea
+                  rows={10}
+                  maxLength={1000}
+                  showCount
+                  placeholder="例如：&#10;這是一位專注於價值投資的 KOL，擅長基本面分析...&#10;個性：友善、專業、喜歡用數據說話&#10;專業領域：財務報表分析、產業趨勢研究&#10;風格：正式但不失幽默，常用圖表輔助說明"
+                />
+              </Form.Item>
+
+              <Alert
+                message="提示"
+                description="AI 將根據您的描述生成人設類型、語氣風格、專業領域等完整資料。生成後您可以在審查頁面進行調整。"
+                type="success"
+                showIcon
+              />
+            </>
+          )}
+        </Form>
+      </Modal>
+
+      {/* AI 生成資料審查 Modal */}
+      <Modal
+        title={
+          <div>
+            <BarChartOutlined style={{ marginRight: 8 }} />
+            AI 生成的 KOL 資料審查
+          </div>
+        }
+        open={reviewModalVisible}
+        onCancel={() => setReviewModalVisible(false)}
+        width={900}
+        footer={[
+          <Button key="cancel" onClick={() => setReviewModalVisible(false)}>
+            取消
+          </Button>,
+          <Button key="confirm" type="primary" onClick={handleConfirmAIProfile}>
+            確認並完成
+          </Button>,
+        ]}
+      >
+        {aiGeneratedProfile && (
+          <>
+            <Alert
+              message="KOL 創建成功！"
+              description={`Serial: ${aiGeneratedProfile.serial} | 暱稱: ${aiGeneratedProfile.nickname} | Email: ${aiGeneratedProfile.email}`}
+              type="success"
+              showIcon
+              style={{ marginBottom: 24 }}
+            />
+
+            <Divider>AI 生成的個性化資料</Divider>
+
+            <Descriptions column={2} bordered size="small">
+              <Descriptions.Item label="人設類型">{aiGeneratedProfile.persona || 'N/A'}</Descriptions.Item>
+              <Descriptions.Item label="目標受眾">{aiGeneratedProfile.target_audience || 'N/A'}</Descriptions.Item>
+              <Descriptions.Item label="專業領域" span={2}>{aiGeneratedProfile.expertise || 'N/A'}</Descriptions.Item>
+              <Descriptions.Item label="背景故事" span={2}>{aiGeneratedProfile.backstory || 'N/A'}</Descriptions.Item>
+              <Descriptions.Item label="語氣風格" span={2}>{aiGeneratedProfile.tone_style || 'N/A'}</Descriptions.Item>
+              <Descriptions.Item label="打字習慣">{aiGeneratedProfile.typing_habit || 'N/A'}</Descriptions.Item>
+              <Descriptions.Item label="內容長度偏好">{aiGeneratedProfile.content_length || 'N/A'}</Descriptions.Item>
+              <Descriptions.Item label="常用術語" span={2}>{aiGeneratedProfile.common_terms || 'N/A'}</Descriptions.Item>
+              <Descriptions.Item label="口語用詞" span={2}>{aiGeneratedProfile.colloquial_terms || 'N/A'}</Descriptions.Item>
+              <Descriptions.Item label="個人簽名" span={2}>{aiGeneratedProfile.signature || 'N/A'}</Descriptions.Item>
+              <Descriptions.Item label="常用表情符號" span={2}>{aiGeneratedProfile.emoji_pack || 'N/A'}</Descriptions.Item>
+            </Descriptions>
+
+            <Divider>語氣參數</Divider>
+
+            <Row gutter={16}>
+              <Col span={8}>
+                <Progress
+                  type="circle"
+                  percent={(aiGeneratedProfile.tone_formal || 5) * 10}
+                  format={() => `${aiGeneratedProfile.tone_formal || 5}/10`}
+                  strokeColor="#1890ff"
+                />
+                <div style={{ textAlign: 'center', marginTop: 8 }}>正式程度</div>
+              </Col>
+              <Col span={8}>
+                <Progress
+                  type="circle"
+                  percent={(aiGeneratedProfile.tone_emotion || 5) * 10}
+                  format={() => `${aiGeneratedProfile.tone_emotion || 5}/10`}
+                  strokeColor="#52c41a"
+                />
+                <div style={{ textAlign: 'center', marginTop: 8 }}>情感程度</div>
+              </Col>
+              <Col span={8}>
+                <Progress
+                  type="circle"
+                  percent={(aiGeneratedProfile.tone_confidence || 7) * 10}
+                  format={() => `${aiGeneratedProfile.tone_confidence || 7}/10`}
+                  strokeColor="#faad14"
+                />
+                <div style={{ textAlign: 'center', marginTop: 8 }}>自信程度</div>
+              </Col>
+            </Row>
+
+            <Divider />
+
+            <Row gutter={16}>
+              <Col span={8}>
+                <Progress
+                  type="circle"
+                  percent={(aiGeneratedProfile.tone_urgency || 5) * 10}
+                  format={() => `${aiGeneratedProfile.tone_urgency || 5}/10`}
+                  strokeColor="#eb2f96"
+                />
+                <div style={{ textAlign: 'center', marginTop: 8 }}>緊急程度</div>
+              </Col>
+              <Col span={8}>
+                <Progress
+                  type="circle"
+                  percent={(aiGeneratedProfile.tone_interaction || 7) * 10}
+                  format={() => `${aiGeneratedProfile.tone_interaction || 7}/10`}
+                  strokeColor="#722ed1"
+                />
+                <div style={{ textAlign: 'center', marginTop: 8 }}>互動程度</div>
+              </Col>
+              <Col span={8}>
+                <Progress
+                  type="circle"
+                  percent={(aiGeneratedProfile.question_ratio || 0.3) * 100}
+                  format={() => `${((aiGeneratedProfile.question_ratio || 0.3) * 100).toFixed(0)}%`}
+                  strokeColor="#13c2c2"
+                />
+                <div style={{ textAlign: 'center', marginTop: 8 }}>問題比例</div>
+              </Col>
+            </Row>
+
+            <Alert
+              message="注意"
+              description="如果需要調整這些參數，請點擊確認後，在 KOL 列表中編輯該 KOL。"
+              type="info"
+              showIcon
+              style={{ marginTop: 24 }}
+            />
+          </>
+        )}
       </Modal>
     </div>
   );
