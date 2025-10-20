@@ -2059,12 +2059,19 @@ async def manual_posting(request: Request):
         if enhanced_personalization_processor:
             logger.info(f"🎯 開始生成 5 個隨機版本: KOL={kol_serial}, posting_type={posting_type}")
             try:
+                # 🔥 FIX: Pass stock info to personalization processor so it can include stock names in fallback
+                serper_analysis_with_stock = {
+                    'stock_name': stock_name,
+                    'stock_code': stock_code
+                }
+                logger.info(f"📊 傳遞股票信息到個人化模組: {stock_name}({stock_code})")
+
                 personalized_title, personalized_content, random_metadata = enhanced_personalization_processor.personalize_content(
                     standard_title=title,
                     standard_content=content,
                     kol_serial=kol_serial,
                     batch_config={},
-                    serper_analysis={},
+                    serper_analysis=serper_analysis_with_stock,
                     trigger_type=trigger_type,
                     real_time_price_data={},
                     posting_type=posting_type

@@ -203,8 +203,8 @@ class RandomContentGenerator:
 """
         
         # 這裡應該調用 LLM API，暫時使用模擬數據
-        title, content = self._call_llm_api(prompt, f"analysis_v{version_num}")
-        
+        title, content = self._call_llm_api(prompt, f"analysis_v{version_num}", stock_name, stock_code)
+
         return {
             'title': title,
             'content': content,
@@ -262,8 +262,8 @@ class RandomContentGenerator:
 """
         
         # 這裡應該調用 LLM API，暫時使用模擬數據
-        title, content = self._call_llm_api(prompt, f"interaction_v{version_num}")
-        
+        title, content = self._call_llm_api(prompt, f"interaction_v{version_num}", stock_name, stock_code)
+
         return {
             'title': title,
             'content': content,
@@ -271,15 +271,15 @@ class RandomContentGenerator:
             'angle': angle,
             'version_number': version_num
         }
-    
-    def _call_llm_api(self, prompt: str, version_id: str) -> tuple[str, str]:
+
+    def _call_llm_api(self, prompt: str, version_id: str, stock_name: str = '', stock_code: str = '') -> tuple[str, str]:
         """調用 LLM API 生成內容"""
-        
+
         self.logger.info(f"🤖 調用 LLM API 生成 {version_id}...")
-        
+
         if not self.api_key:
             self.logger.warning("⚠️ 無 API Key，使用模擬數據")
-            return self._generate_mock_content(version_id)
+            return self._generate_mock_content(version_id, stock_name, stock_code)
         
         try:
             headers = {
@@ -347,17 +347,22 @@ class RandomContentGenerator:
             
         except Exception as e:
             self.logger.error(f"❌ LLM API 調用失敗: {e}")
-            return self._generate_mock_content(version_id)
-    
-    def _generate_mock_content(self, version_id: str) -> tuple[str, str]:
-        """生成模擬內容（備用方案）"""
+            return self._generate_mock_content(version_id, stock_name, stock_code)
+
+    def _generate_mock_content(self, version_id: str, stock_name: str = '', stock_code: str = '') -> tuple[str, str]:
+        """生成模擬內容（備用方案）- 🔥 FIX: Now includes stock name and code"""
+        self.logger.warning(f"⚠️ 使用備用模板生成內容: {stock_name}({stock_code})")
+
+        # 🔥 FIX: Include stock name and code in fallback templates
+        stock_display = f"{stock_name}({stock_code})" if stock_name and stock_code else "目標標的"
+
         if "analysis" in version_id:
-            title = f"{random.choice(['深度解析', '專業觀點', '市場觀察', '技術分析', '投資建議'])} - 值得關注的投資機會"
-            content = f"作為專業分析師，我對當前市場走勢有以下觀察：\n\n1. 技術面顯示強勢突破\n2. 基本面支撐穩健\n3. 市場情緒積極\n\n建議投資人密切關注後續發展，適時調整策略。\n\n#投資分析 #市場觀察"
+            title = f"{stock_display} - {random.choice(['深度解析', '專業觀點', '市場觀察', '技術分析', '投資建議'])}"
+            content = f"【{stock_display} 分析】\n\n作為專業分析師，我對{stock_name if stock_name else '這檔個股'}有以下觀察：\n\n1. 技術面顯示值得關注的訊號\n2. 基本面需持續追蹤\n3. 市場情緒反映投資人態度\n\n建議投資人密切關注後續發展，適時調整策略。\n\n#{stock_name if stock_name else '投資分析'} #市場觀察"
         else:
-            title = f"{random.choice(['大家怎麼看', '想聽聽意見', '討論一下', '分享觀點', '交流想法'])} - 投資策略討論"
-            content = f"最近市場波動較大，想和大家討論一下：\n\n• 你覺得現在的時機如何？\n• 有什麼操作策略可以分享？\n• 風險控制方面有什麼建議？\n\n歡迎留言分享你的看法！\n\n#投資討論 #策略分享"
-        
+            title = f"{stock_display} - {random.choice(['大家怎麼看', '想聽聽意見', '討論一下', '分享觀點', '交流想法'])}"
+            content = f"【{stock_display} 討論】\n\n最近{stock_name if stock_name else '這檔個股'}的走勢，想和大家討論一下：\n\n• 你覺得現在的時機如何？\n• 有什麼操作策略可以分享？\n• 風險控制方面有什麼建議？\n\n歡迎留言分享你的看法！\n\n#{stock_name if stock_name else '投資討論'} #策略分享"
+
         return title, content
     
     def _log_generation_results(
