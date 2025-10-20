@@ -16,6 +16,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 複製應用程式碼
 COPY main.py .
 
+# 創建 posting-service 目錄並添加 __init__.py (Python package 需要)
+RUN mkdir -p posting-service && touch posting-service/__init__.py
+
 # 複製 posting-service 模組 (GPT 和個人化模組需要)
 COPY ../posting-service/gpt_content_generator.py ./posting-service/
 COPY ../posting-service/personalization_module.py ./posting-service/
