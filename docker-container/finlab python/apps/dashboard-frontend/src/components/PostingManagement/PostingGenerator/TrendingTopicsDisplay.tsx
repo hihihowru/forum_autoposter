@@ -256,13 +256,32 @@ const TrendingTopicsDisplay: React.FC<TrendingTopicsDisplayProps> = ({
                   </Button>
                 )}
               </Space>
-              <Button 
-                size="small" 
-                onClick={() => setSelectedTopics([])}
-                disabled={selectedTopics.length === 0}
-              >
-                清空選擇
-              </Button>
+              <Space>
+                <Button
+                  size="small"
+                  type="primary"
+                  onClick={() => {
+                    const allTopicIds = topics.map(t => t.id);
+                    setSelectedTopics(allTopicIds);
+                    const selectedTopicObjects = topics;
+                    onSelectedTopicsChange(selectedTopicObjects);
+                    message.success(`已全選 ${topics.length} 個話題`);
+                  }}
+                  disabled={selectedTopics.length === topics.length}
+                >
+                  全選
+                </Button>
+                <Button
+                  size="small"
+                  onClick={() => {
+                    setSelectedTopics([]);
+                    onSelectedTopicsChange([]);
+                  }}
+                  disabled={selectedTopics.length === 0}
+                >
+                  清空選擇
+                </Button>
+              </Space>
             </Space>
           </Card>
 
@@ -295,15 +314,8 @@ const TrendingTopicsDisplay: React.FC<TrendingTopicsDisplayProps> = ({
                     <Space direction="vertical" style={{ width: '100%' }}>
                       <div>
                         <Text strong>{topic.title}</Text>
-                        <Tag color="red" style={{ marginLeft: 8 }}>
-                          熱度: {(topic.engagement_score * 100).toFixed(0)}%
-                        </Tag>
-                        <Tag color="blue">{topic.category}</Tag>
                         {!hasStocks && <Tag color="orange">純話題</Tag>}
                         {isSelected && <Tag color="green">✅ 已選擇</Tag>}
-                        <Tag color="purple" style={{ marginLeft: 8 }}>
-                          📝 點擊選擇
-                        </Tag>
                         {isSelected && (
                           <Tag color="cyan" style={{ marginLeft: 8 }}>
                             📊 生成 {hasStocks ? 1 + topic.stock_ids.length : 1} 篇貼文
