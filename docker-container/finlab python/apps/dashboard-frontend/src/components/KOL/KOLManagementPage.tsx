@@ -1040,12 +1040,17 @@ const KOLManagementPage: React.FC = () => {
               <Form.Item
                 name="email"
                 label="CMoney 登入郵箱"
+                tooltip="郵箱格式必須為 forum_XXX@cmoney.com.tw，其中 XXX 是數字（例如：forum_200@cmoney.com.tw），這個數字將成為 KOL 序號"
                 rules={[
                   { required: true, message: '請輸入郵箱' },
-                  { type: 'email', message: '請輸入有效的郵箱' }
+                  { type: 'email', message: '請輸入有效的郵箱' },
+                  {
+                    pattern: /^forum_\d+@cmoney\.com\.tw$/,
+                    message: '郵箱格式必須為 forum_XXX@cmoney.com.tw（例如：forum_200@cmoney.com.tw）'
+                  }
                 ]}
               >
-                <Input placeholder="example@email.com" />
+                <Input placeholder="forum_200@cmoney.com.tw" />
               </Form.Item>
             </Col>
             <Col span={12}>

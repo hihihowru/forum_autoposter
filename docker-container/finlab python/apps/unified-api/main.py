@@ -4016,9 +4016,34 @@ async def create_kol(request: Request):
         # 準備寫入數據庫的資料
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-            # 獲取下一個 serial 號碼 (注意: serial 是 TEXT 類型，需要先轉換為 integer)
-            cursor.execute("SELECT COALESCE(MAX(serial::integer), 200) + 1 as next_serial FROM kol_profiles")
-            next_serial = cursor.fetchone()['next_serial']
+            # 🔥 FIX: Extract serial from email (format: forum_XXX@cmoney.com.tw)
+            import re
+            email_pattern = r'forum_(\d+)@cmoney\.com\.tw'
+            match = re.match(email_pattern, email)
+
+            if not match:
+                logger.error(f"❌ 郵箱格式錯誤: {email}，應為 forum_XXX@cmoney.com.tw")
+                return {
+                    "success": False,
+                    "error": f"郵箱格式錯誤，應為 forum_XXX@cmoney.com.tw 格式（例如：forum_200@cmoney.com.tw）",
+                    "phase": "validation",
+                    "timestamp": datetime.now().isoformat()
+                }
+
+            next_serial = int(match.group(1))  # Extract serial from email
+            logger.info(f"✅ 從郵箱提取 KOL serial: {next_serial} (email: {email})")
+
+            # Check if serial already exists
+            cursor.execute("SELECT serial FROM kol_profiles WHERE serial = %s", (str(next_serial),))
+            existing = cursor.fetchone()
+            if existing:
+                logger.error(f"❌ KOL serial {next_serial} 已存在")
+                return {
+                    "success": False,
+                    "error": f"KOL serial {next_serial} 已存在，請使用不同的郵箱",
+                    "phase": "validation",
+                    "timestamp": datetime.now().isoformat()
+                }
 
             # 合併 AI 生成的值和預設值
             persona = ai_generated_profile.get("persona", "casual")
