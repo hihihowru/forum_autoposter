@@ -3,7 +3,14 @@
 Railway 部署時使用此服務作為唯一的 API 入口
 整合所有微服務功能到一個 API
 
+🔥 FORCE REBUILD: 2025-10-20-19:50 - Railway cache bust to deploy latest fixes
+
 Recent Updates:
+- 2025-10-20 19:50: FORCE REBUILD - Railway stuck on old cache (abd60928)
+  * Log cleanup (2dff92db) - 65% verbosity reduction
+  * API key strip (d1fa8165) - Fix trailing newline causing "Invalid header"
+  * Stock info passing (3e22a469) - Fix generic fallback content
+  * Fallback fix (f016e43d) - Stock names in templates
 - 2025-10-20: Fixed posting-service imports with robust multi-strategy path resolution
 - 2025-10-20: Enabled alternative_versions generation for ALL posting_types
 - 2025-01-18: Fixed Railway healthcheck - added /health endpoint alongside /api/health
