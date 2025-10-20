@@ -16,6 +16,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 複製應用程式碼
 COPY main.py .
 
+# 複製 posting-service 模組 (GPT 和個人化模組需要)
+COPY ../posting-service/gpt_content_generator.py ./posting-service/
+COPY ../posting-service/personalization_module.py ./posting-service/
+COPY ../posting-service/kol_database_service.py ./posting-service/
+COPY ../posting-service/random_content_generator.py ./posting-service/
+
 # 複製股票映射表
 COPY ../../stock_mapping.json /app/stock_mapping.json
 
