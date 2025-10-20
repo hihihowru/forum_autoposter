@@ -3220,6 +3220,11 @@ async def create_kol(request: Request):
         # Phase 1: 使用 CMoney API 登入並更新暱稱
         logger.info(f"📝 Phase 1: 嘗試使用 {email} 登入 CMoney 並更新暱稱為 {nickname}")
 
+        # 將 src 路徑加入 Python path
+        src_path = '/app/src'
+        if src_path not in sys.path:
+            sys.path.insert(0, src_path)
+
         from src.clients.cmoney.cmoney_client import CMoneyClient, LoginCredentials
         cmoney_client = CMoneyClient()
 
