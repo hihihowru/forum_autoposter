@@ -789,17 +789,87 @@ const KOLManagementPage: React.FC = () => {
 
             {/* Prompt設定 */}
             <TabPane tab="Prompt設定" key="prompt">
-              <Form.Item name="prompt_persona" label="Prompt人設">
-                <TextArea rows={4} />
+              <Form.Item
+                name="prompt_persona"
+                label="Prompt人設"
+                tooltip="定義 KOL 的角色人設，例如：專業分析師、技術派達人、鄉民代表等"
+              >
+                <Select
+                  mode="tags"
+                  placeholder="選擇範本或自訂輸入"
+                  maxTagCount={1}
+                  style={{ width: '100%' }}
+                  dropdownRender={(menu) => (
+                    <>
+                      {menu}
+                      <Divider style={{ margin: '8px 0' }} />
+                      <div style={{ padding: '0 8px 4px', fontSize: '12px', color: '#999' }}>
+                        💡 可選擇範本後編輯，或直接輸入自訂內容
+                      </div>
+                    </>
+                  )}
+                >
+                  <Option value="技術分析師：專精於技術指標、K線、均線、KD、MACD等分析，善於從圖表找出買賣時機點">技術分析師 (技術派)</Option>
+                  <Option value="總經分析師：關注宏觀經濟、GDP、利率、匯率、國際局勢，從大環境判斷市場走向">總經分析師 (總經派)</Option>
+                  <Option value="籌碼分析師：專精於分析主力動向、法人買賣、融資融券、股東結構，找出主力布局的股票">籌碼分析師 (籌碼派)</Option>
+                  <Option value="價值投資者：著重基本面分析、EPS、ROE、本益比，尋找被低估的優質公司長期持有">價值投資者 (基本面派)</Option>
+                  <Option value="新聞解讀者：專門追蹤產業新聞、公司公告、政策變化，從新聞事件挖掘投資機會">新聞解讀者 (新聞派)</Option>
+                  <Option value="鄉民風格：輕鬆幽默的論壇用語，常用PTT/Dcard風格，親切接地氣，樂於分享投資經驗">鄉民風格 (論壇派)</Option>
+                </Select>
               </Form.Item>
-              <Form.Item name="prompt_style" label="Prompt風格">
-                <TextArea rows={4} />
+              <Form.Item
+                name="prompt_style"
+                label="Prompt風格"
+                tooltip="定義分析風格和寫作方式"
+              >
+                <Select
+                  mode="tags"
+                  placeholder="選擇範本或自訂輸入"
+                  maxTagCount={1}
+                  style={{ width: '100%' }}
+                >
+                  <Option value="數據導向：所有論述基於數據和指標，提供量化分析，用圖表輔助說明">數據導向 (量化風格)</Option>
+                  <Option value="邏輯清晰：論述結構嚴謹，層次分明，因果關係明確，結論有理有據">邏輯清晰 (理性風格)</Option>
+                  <Option value="專業術語：使用專業術語和技術名詞，適合有一定投資經驗的讀者">專業術語 (學術風格)</Option>
+                  <Option value="白話易懂：避免艱深術語，用生活化的比喻，讓新手也能看懂">白話易懂 (親民風格)</Option>
+                  <Option value="簡潔扼要：重點式說明，不冗贅，快速傳遞核心觀點">簡潔扼要 (精簡風格)</Option>
+                  <Option value="詳細分析：深入剖析，提供完整背景資訊，多角度探討">詳細分析 (深度風格)</Option>
+                </Select>
               </Form.Item>
-              <Form.Item name="prompt_guardrails" label="Prompt守則">
-                <TextArea rows={3} />
+              <Form.Item
+                name="prompt_guardrails"
+                label="Prompt守則"
+                tooltip="設定限制和規範，確保內容合規"
+              >
+                <Select
+                  mode="tags"
+                  placeholder="選擇範本或自訂輸入"
+                  maxTagCount={1}
+                  style={{ width: '100%' }}
+                >
+                  <Option value="不提供具體買賣建議，不明示買進賣出價位，不保證獲利，僅供參考">標準守則 (合規)</Option>
+                  <Option value="強調風險管理，提醒投資有風險，建議分散投資，不建議重押單一標的">風險警示 (保守)</Option>
+                  <Option value="基於數據分析，不依賴主觀判斷，避免情緒化用詞，理性客觀">理性客觀 (中性)</Option>
+                  <Option value="尊重不同觀點，不批評其他分析方法，鼓勵多元思考">開放態度 (包容)</Option>
+                </Select>
               </Form.Item>
-              <Form.Item name="prompt_skeleton" label="Prompt骨架">
-                <TextArea rows={4} />
+              <Form.Item
+                name="prompt_skeleton"
+                label="Prompt骨架"
+                tooltip="定義文章結構模板"
+              >
+                <Select
+                  mode="tags"
+                  placeholder="選擇範本或自訂輸入"
+                  maxTagCount={1}
+                  style={{ width: '100%' }}
+                >
+                  <Option value="【標題】\n1. 當前狀況\n2. 技術分析\n3. 買賣策略\n4. 風險提醒">技術分析骨架</Option>
+                  <Option value="【標題】\n1. 總經背景\n2. 產業現況\n3. 個股分析\n4. 投資建議">總經分析骨架</Option>
+                  <Option value="【標題】\n1. 主力動向\n2. 法人買賣\n3. 籌碼解讀\n4. 操作策略">籌碼分析骨架</Option>
+                  <Option value="【標題】\n1. 新聞事件\n2. 影響分析\n3. 相關個股\n4. 短期看法">新聞解讀骨架</Option>
+                  <Option value="【標題】\n觀點分享...\n大家覺得呢？">鄉民互動骨架</Option>
+                </Select>
               </Form.Item>
             </TabPane>
 
@@ -807,8 +877,48 @@ const KOLManagementPage: React.FC = () => {
             <TabPane tab="模型設定" key="model">
               <Row gutter={24}>
                 <Col span={12}>
-                  <Form.Item name="model_id" label="模型ID">
-                    <Input />
+                  <Form.Item
+                    name="model_id"
+                    label="模型ID"
+                    tooltip="選擇此 KOL 預設使用的 AI 模型，生成貼文時可選擇是否覆蓋"
+                  >
+                    <Select placeholder="選擇模型 (預設: gpt-4o-mini)" allowClear>
+                      <Option value="gpt-4o-mini">
+                        <Space>
+                          <span>gpt-4o-mini</span>
+                          <Tag color="green">推薦</Tag>
+                          <Text type="secondary" style={{ fontSize: '11px' }}>快速、經濟</Text>
+                        </Space>
+                      </Option>
+                      <Option value="gpt-4o">
+                        <Space>
+                          <span>gpt-4o</span>
+                          <Tag color="blue">高品質</Tag>
+                          <Text type="secondary" style={{ fontSize: '11px' }}>最新模型</Text>
+                        </Space>
+                      </Option>
+                      <Option value="gpt-4-turbo">
+                        <Space>
+                          <span>gpt-4-turbo</span>
+                          <Tag color="purple">進階</Tag>
+                          <Text type="secondary" style={{ fontSize: '11px' }}>較貴、強大</Text>
+                        </Space>
+                      </Option>
+                      <Option value="gpt-4">
+                        <Space>
+                          <span>gpt-4</span>
+                          <Tag color="orange">穩定</Tag>
+                          <Text type="secondary" style={{ fontSize: '11px' }}>經典版本</Text>
+                        </Space>
+                      </Option>
+                      <Option value="gpt-3.5-turbo">
+                        <Space>
+                          <span>gpt-3.5-turbo</span>
+                          <Tag color="default">基礎</Tag>
+                          <Text type="secondary" style={{ fontSize: '11px' }}>低成本</Text>
+                        </Space>
+                      </Option>
+                    </Select>
                   </Form.Item>
                   <Form.Item name="model_temp" label="溫度">
                     <InputNumber min={0} max={2} step={0.1} />

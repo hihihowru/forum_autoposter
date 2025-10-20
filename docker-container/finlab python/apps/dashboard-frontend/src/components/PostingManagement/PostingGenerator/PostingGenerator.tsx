@@ -130,7 +130,10 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
       posting_type: 'analysis',
       include_questions: false,
       include_emoji: false,
-      include_hashtag: true
+      include_hashtag: true,
+      // 新增：模型 ID 覆蓋選項
+      model_id_override: null,
+      use_kol_default_model: true  // 預設使用 KOL 預設模型
     },
     tags: {
       tag_mode: 'stock_tags',

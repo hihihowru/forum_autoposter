@@ -22,6 +22,9 @@ interface GenerationSettings {
   include_questions: boolean;
   include_emoji: boolean;
   include_hashtag: boolean;
+  // 新增：模型 ID 覆蓋選項
+  model_id_override?: string | null; // null = 使用 KOL 預設, string = 批量覆蓋
+  use_kol_default_model: boolean; // true = 使用 KOL 預設, false = 使用批量覆蓋
 }
 
 interface GenerationSettingsProps {
@@ -152,6 +155,22 @@ const GenerationSettings: React.FC<GenerationSettingsProps> = ({ value, onChange
     onChange({
       ...value,
       include_hashtag: includeHashtag
+    });
+  };
+
+  const handleUseKOLDefaultModelChange = (useKOLDefault: boolean) => {
+    onChange({
+      ...value,
+      use_kol_default_model: useKOLDefault,
+      model_id_override: useKOLDefault ? null : value.model_id_override
+    });
+  };
+
+  const handleModelIdOverrideChange = (modelId: string | null) => {
+    onChange({
+      ...value,
+      model_id_override: modelId,
+      use_kol_default_model: !modelId
     });
   };
 
@@ -568,6 +587,102 @@ const GenerationSettings: React.FC<GenerationSettingsProps> = ({ value, onChange
           </Space>
         </div>
 
+        <Divider />
+
+        {/* 模型選擇設定 */}
+        <div>
+          <Title level={5}>AI 模型選擇</Title>
+          <Space direction="vertical" style={{ width: '100%' }} size="middle">
+            <div>
+              <Space>
+                <input
+                  type="radio"
+                  checked={value.use_kol_default_model !== false}
+                  onChange={() => handleUseKOLDefaultModelChange(true)}
+                />
+                <Text strong>使用 KOL 預設模型</Text>
+                <Tag color="green">推薦</Tag>
+              </Space>
+              <Text type="secondary" style={{ fontSize: '12px', display: 'block', marginTop: '4px', marginLeft: '24px' }}>
+                每個 KOL 使用其個人檔案中設定的預設 model_id（在 KOL 管理頁面設定）
+              </Text>
+            </div>
+
+            <div>
+              <Space>
+                <input
+                  type="radio"
+                  checked={value.use_kol_default_model === false}
+                  onChange={() => handleUseKOLDefaultModelChange(false)}
+                />
+                <Text strong>批量覆蓋模型</Text>
+                <Tag color="orange">統一設定</Tag>
+              </Space>
+              <Text type="secondary" style={{ fontSize: '12px', display: 'block', marginTop: '4px', marginLeft: '24px' }}>
+                本批次所有貼文統一使用指定的模型（忽略 KOL 預設值）
+              </Text>
+
+              {value.use_kol_default_model === false && (
+                <div style={{ marginLeft: '24px', marginTop: '12px' }}>
+                  <Select
+                    value={value.model_id_override || undefined}
+                    onChange={handleModelIdOverrideChange}
+                    placeholder="選擇批量模型"
+                    style={{ width: '300px' }}
+                    allowClear
+                  >
+                    <Option value="gpt-4o-mini">
+                      <Space>
+                        <span>gpt-4o-mini</span>
+                        <Tag color="green" style={{ marginLeft: 8 }}>推薦</Tag>
+                        <Text type="secondary" style={{ fontSize: '11px' }}>快速、經濟</Text>
+                      </Space>
+                    </Option>
+                    <Option value="gpt-4o">
+                      <Space>
+                        <span>gpt-4o</span>
+                        <Tag color="blue" style={{ marginLeft: 8 }}>高品質</Tag>
+                        <Text type="secondary" style={{ fontSize: '11px' }}>最新模型</Text>
+                      </Space>
+                    </Option>
+                    <Option value="gpt-4-turbo">
+                      <Space>
+                        <span>gpt-4-turbo</span>
+                        <Tag color="purple" style={{ marginLeft: 8 }}>進階</Tag>
+                        <Text type="secondary" style={{ fontSize: '11px' }}>較貴、強大</Text>
+                      </Space>
+                    </Option>
+                    <Option value="gpt-4">
+                      <Space>
+                        <span>gpt-4</span>
+                        <Tag color="orange" style={{ marginLeft: 8 }}>穩定</Tag>
+                        <Text type="secondary" style={{ fontSize: '11px' }}>經典版本</Text>
+                      </Space>
+                    </Option>
+                    <Option value="gpt-3.5-turbo">
+                      <Space>
+                        <span>gpt-3.5-turbo</span>
+                        <Tag color="default" style={{ marginLeft: 8 }}>基礎</Tag>
+                        <Text type="secondary" style={{ fontSize: '11px' }}>低成本</Text>
+                      </Space>
+                    </Option>
+                  </Select>
+                  {value.model_id_override && (
+                    <div style={{ marginTop: '8px' }}>
+                      <Tag color="blue">
+                        已選擇: {value.model_id_override}
+                      </Tag>
+                      <Text type="secondary" style={{ fontSize: '11px' }}>
+                        此批次所有貼文將使用此模型
+                      </Text>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </Space>
+        </div>
+
         {/* 設定摘要 */}
         <Card size="small" style={{ backgroundColor: '#f6ffed', border: '1px solid #b7eb8f' }}>
           <Title level={5} style={{ color: '#52c41a', margin: 0 }}>設定摘要</Title>
@@ -587,6 +702,9 @@ const GenerationSettings: React.FC<GenerationSettingsProps> = ({ value, onChange
             </Text>
             <Text type="secondary">
               • 額外功能：{value.include_charts ? '圖表說明' : ''} {value.include_risk_warning ? '風險警告' : ''}
+            </Text>
+            <Text type="secondary">
+              • AI 模型：{value.use_kol_default_model !== false ? 'KOL 預設模型' : `批量覆蓋 (${value.model_id_override || '未指定'})`}
             </Text>
           </Space>
         </Card>
