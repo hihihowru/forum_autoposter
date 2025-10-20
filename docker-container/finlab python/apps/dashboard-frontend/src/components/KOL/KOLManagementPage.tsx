@@ -23,13 +23,14 @@ import {
   Tabs,
   Descriptions
 } from 'antd';
-import { 
-  UserOutlined, 
-  EditOutlined, 
-  SaveOutlined, 
+import {
+  UserOutlined,
+  EditOutlined,
+  SaveOutlined,
   ReloadOutlined,
   SettingOutlined,
-  BarChartOutlined
+  BarChartOutlined,
+  DeleteOutlined
 } from '@ant-design/icons';
 import axios from 'axios';
 import { getApiBaseUrl } from '../../config/api';
@@ -132,6 +133,8 @@ const KOLManagementPage: React.FC = () => {
   const [aiGeneratedProfile, setAiGeneratedProfile] = useState<any>(null);
   const [form] = Form.useForm();
   const [createForm] = Form.useForm();
+  const [confirmForm] = Form.useForm();
+  const [confirmModalVisible, setConfirmModalVisible] = useState(false);
 
   // 測試狀態
   const [testingLogin, setTestingLogin] = useState(false);
@@ -169,6 +172,33 @@ const KOLManagementPage: React.FC = () => {
     setSelectedKOL(kol);
     form.setFieldsValue(kol);
     setModalVisible(true);
+  };
+
+  // 刪除KOL
+  const handleDeleteKOL = (kol: KOLProfile) => {
+    Modal.confirm({
+      title: '確認刪除',
+      content: `確定要刪除 KOL "${kol.nickname}" (Serial: ${kol.serial}) 嗎？此操作不可逆！`,
+      okText: '確定刪除',
+      okType: 'danger',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          const response = await axios.delete(`${API_BASE_URL}/api/kol/${kol.serial}`);
+
+          if (response.data.success) {
+            message.success(response.data.message || 'KOL 刪除成功');
+            await loadKOLProfiles(); // Reload the list
+          } else {
+            message.error(response.data.error || 'KOL 刪除失敗');
+          }
+        } catch (error: any) {
+          console.error('刪除 KOL 失敗:', error);
+          const errorMsg = error.response?.data?.error || '刪除 KOL 失敗';
+          message.error(errorMsg);
+        }
+      },
+    });
   };
 
   // 保存KOL設定
@@ -313,47 +343,45 @@ const KOLManagementPage: React.FC = () => {
       const values = await createForm.validateFields();
       console.log('📝 表單驗證通過，準備顯示確認對話框');
 
-      // 檢查是否已通過測試
-      const hasTestedLogin = testLoginResult?.success === true;
-      const hasTestedNickname = testNicknameResult?.success === true;
+      // Populate confirmation form with all values including defaults for prompt fields
+      confirmForm.setFieldsValue({
+        // Basic fields from create form
+        email: values.email,
+        password: values.password,
+        nickname: values.nickname,
+        member_id: values.member_id || '',
+        model_id: values.model_id || 'gpt-4o-mini',
+        ai_description: values.ai_description || '',
 
-      // 構建確認訊息
-      let confirmMessage = '確定要創建此 KOL 嗎？\n\n';
-      confirmMessage += `郵箱: ${values.email}\n`;
-      confirmMessage += `暱稱: ${values.nickname}\n`;
-      confirmMessage += `會員ID: ${values.member_id || '(自動獲取)'}\n\n`;
-
-      if (hasTestedLogin && hasTestedNickname) {
-        confirmMessage += '✅ 登入測試: 通過\n';
-        confirmMessage += '✅ 暱稱測試: 通過\n\n';
-        confirmMessage += '所有驗證已通過，可以安全創建。';
-      } else {
-        confirmMessage += '⚠️ 建議:\n';
-        if (!hasTestedLogin) {
-          confirmMessage += '• 尚未測試登入，建議先點擊密碼旁的「測試」按鈕\n';
-        }
-        if (!hasTestedNickname) {
-          confirmMessage += '• 尚未測試暱稱，建議先點擊暱稱旁的「測試」按鈕\n';
-        }
-        confirmMessage += '\n確定要繼續創建嗎？（未測試可能導致創建失敗）';
-      }
-
-      // 顯示確認對話框
-      Modal.confirm({
-        title: '確認創建 KOL',
-        content: confirmMessage,
-        okText: '確認創建',
-        cancelText: '取消',
-        onOk: async () => {
-          await proceedWithCreation(values);
-        },
-        okButtonProps: {
-          danger: !hasTestedLogin || !hasTestedNickname
-        }
+        // Prompt fields with defaults
+        prompt_persona: values.prompt_persona || ["技術分析師：專精於技術指標、K線、均線、KD、MACD等分析，善於從圖表找出買賣時機點"],
+        prompt_style: values.prompt_style || ["邏輯清晰：論述結構嚴謹，層次分明，因果關係明確，結論有理有據"],
+        prompt_guardrails: values.prompt_guardrails || ["不提供具體買賣建議，不明示買進賣出價位，不保證獲利，僅供參考"],
+        prompt_skeleton: values.prompt_skeleton || ["【標題】\n1. 當前狀況\n2. 技術分析\n3. 買賣策略\n4. 風險提醒"]
       });
+
+      // Open comprehensive confirmation modal
+      setConfirmModalVisible(true);
 
     } catch (error) {
       console.error('❌ 表單驗證失敗:', error);
+      message.error('請填寫所有必填欄位');
+    }
+  };
+
+  // 處理確認Modal的最終提交
+  const handleConfirmSubmit = async () => {
+    try {
+      const values = await confirmForm.validateFields();
+      console.log('✅ 確認表單驗證通過，開始創建 KOL:', values);
+
+      // Close confirmation modal
+      setConfirmModalVisible(false);
+
+      // Proceed with creation using confirmed values
+      await proceedWithCreation(values);
+    } catch (error) {
+      console.error('❌ 確認表單驗證失敗:', error);
       message.error('請填寫所有必填欄位');
     }
   };
@@ -542,16 +570,24 @@ const KOLManagementPage: React.FC = () => {
     {
       title: '操作',
       key: 'action',
-      width: 120,
+      width: 180,
       render: (_, record: KOLProfile) => (
         <Space>
-          <Button 
-            type="primary" 
-            size="small" 
+          <Button
+            type="primary"
+            size="small"
             icon={<EditOutlined />}
             onClick={() => handleSelectKOL(record)}
           >
             編輯
+          </Button>
+          <Button
+            danger
+            size="small"
+            icon={<DeleteOutlined />}
+            onClick={() => handleDeleteKOL(record)}
+          >
+            刪除
           </Button>
         </Space>
       ),

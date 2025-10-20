@@ -4128,6 +4128,76 @@ async def create_kol(request: Request):
             return_db_connection(conn)
 
 
+@app.delete("/api/kol/{serial}")
+async def delete_kol(serial: str):
+    """
+    刪除 KOL 角色
+
+    Parameters:
+    - serial: KOL 序號
+
+    Response:
+    - success: bool - 是否刪除成功
+    - message: str - 成功訊息
+    - error: str - 錯誤訊息（僅在失敗時返回）
+    """
+    logger.info(f"收到刪除 KOL 請求: serial={serial}")
+
+    conn = None
+    try:
+        # 檢查數據庫連接
+        if not db_pool:
+            logger.warning("數據庫連接不可用")
+            return {
+                "success": False,
+                "error": "數據庫連接不可用",
+                "timestamp": datetime.now().isoformat()
+            }
+
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            # 檢查 KOL 是否存在
+            cursor.execute("SELECT serial, nickname FROM kol_profiles WHERE serial = %s", (serial,))
+            existing_kol = cursor.fetchone()
+
+            if not existing_kol:
+                logger.warning(f"⚠️ KOL serial {serial} 不存在")
+                return {
+                    "success": False,
+                    "error": f"KOL serial {serial} 不存在",
+                    "timestamp": datetime.now().isoformat()
+                }
+
+            # 執行刪除
+            cursor.execute("DELETE FROM kol_profiles WHERE serial = %s", (serial,))
+            conn.commit()
+
+            logger.info(f"✅ KOL 刪除成功: Serial={serial}, Nickname={existing_kol['nickname']}")
+
+            return {
+                "success": True,
+                "message": f"KOL 刪除成功 (Serial: {serial}, Nickname: {existing_kol['nickname']})",
+                "deleted_kol": {
+                    "serial": existing_kol['serial'],
+                    "nickname": existing_kol['nickname']
+                },
+                "timestamp": datetime.now().isoformat()
+            }
+
+    except Exception as e:
+        logger.error(f"❌ 刪除 KOL 失敗: {e}")
+        if conn:
+            conn.rollback()
+        return {
+            "success": False,
+            "error": f"刪除 KOL 失敗: {str(e)}",
+            "timestamp": datetime.now().isoformat()
+        }
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+
 # ==================== Schedule API 功能 ====================
 
 @app.get("/api/schedule/tasks")
