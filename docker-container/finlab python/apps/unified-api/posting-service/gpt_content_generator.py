@@ -21,9 +21,12 @@ class GPTContentGenerator:
     def __init__(self, api_key: Optional[str] = None, model: str = "gpt-4o-mini"):
         # 重新載入環境變數以確保API Key正確載入
         load_dotenv('../../../../.env')
+        # 🔥 FIX: Strip whitespace and newlines from API key (Railway env var issue)
         self.api_key = api_key or os.getenv('OPENAI_API_KEY')
+        if self.api_key:
+            self.api_key = self.api_key.strip()
         self.model = model
-        
+
         if self.api_key:
             openai.api_key = self.api_key
             logger.info(f"GPT內容生成器初始化完成，使用模型: {self.model}")

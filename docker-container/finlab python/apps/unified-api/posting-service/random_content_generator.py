@@ -19,9 +19,12 @@ class RandomContentGenerator:
     
     def __init__(self):
         self.logger = logger
+        # 🔥 FIX: Strip whitespace and newlines from API key (Railway env var issue)
         self.api_key = os.getenv('OPENAI_API_KEY')
+        if self.api_key:
+            self.api_key = self.api_key.strip()
         self.model = os.getenv('OPENAI_MODEL', 'gpt-4o-mini')
-        
+
         if self.api_key:
             openai.api_key = self.api_key
             self.logger.info(f"🎯 RandomContentGenerator 初始化完成，使用模型: {self.model}")
