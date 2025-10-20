@@ -307,14 +307,63 @@ const KOLManagementPage: React.FC = () => {
     }
   };
 
-  // 提交創建 KOL
+  // 確認創建 KOL（顯示確認對話框）
   const handleCreateKOL = async () => {
+    try {
+      const values = await createForm.validateFields();
+      console.log('📝 表單驗證通過，準備顯示確認對話框');
+
+      // 檢查是否已通過測試
+      const hasTestedLogin = testLoginResult?.success === true;
+      const hasTestedNickname = testNicknameResult?.success === true;
+
+      // 構建確認訊息
+      let confirmMessage = '確定要創建此 KOL 嗎？\n\n';
+      confirmMessage += `郵箱: ${values.email}\n`;
+      confirmMessage += `暱稱: ${values.nickname}\n`;
+      confirmMessage += `會員ID: ${values.member_id || '(自動獲取)'}\n\n`;
+
+      if (hasTestedLogin && hasTestedNickname) {
+        confirmMessage += '✅ 登入測試: 通過\n';
+        confirmMessage += '✅ 暱稱測試: 通過\n\n';
+        confirmMessage += '所有驗證已通過，可以安全創建。';
+      } else {
+        confirmMessage += '⚠️ 建議:\n';
+        if (!hasTestedLogin) {
+          confirmMessage += '• 尚未測試登入，建議先點擊密碼旁的「測試」按鈕\n';
+        }
+        if (!hasTestedNickname) {
+          confirmMessage += '• 尚未測試暱稱，建議先點擊暱稱旁的「測試」按鈕\n';
+        }
+        confirmMessage += '\n確定要繼續創建嗎？（未測試可能導致創建失敗）';
+      }
+
+      // 顯示確認對話框
+      Modal.confirm({
+        title: '確認創建 KOL',
+        content: confirmMessage,
+        okText: '確認創建',
+        cancelText: '取消',
+        onOk: async () => {
+          await proceedWithCreation(values);
+        },
+        okButtonProps: {
+          danger: !hasTestedLogin || !hasTestedNickname
+        }
+      });
+
+    } catch (error) {
+      console.error('❌ 表單驗證失敗:', error);
+      message.error('請填寫所有必填欄位');
+    }
+  };
+
+  // 實際執行創建（確認後）
+  const proceedWithCreation = async (values: any) => {
     try {
       setSaving(true);
       console.log('🚀 開始創建 KOL...');
-
-      const values = await createForm.validateFields();
-      console.log('📝 表單驗證通過，收集到的值:', values);
+      console.log('📝 收集到的值:', values);
 
       const payload = {
         email: values.email,
