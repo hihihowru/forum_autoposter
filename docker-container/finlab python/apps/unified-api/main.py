@@ -512,6 +512,61 @@ async def debug_import_status():
 
     return result
 
+@app.get("/api/debug/openai-config")
+async def debug_openai_config():
+    """Debug endpoint to check OpenAI API configuration"""
+    import traceback
+
+    result = {
+        "timestamp": datetime.now().isoformat(),
+        "environment": {
+            "OPENAI_API_KEY_exists": os.getenv("OPENAI_API_KEY") is not None,
+            "OPENAI_API_KEY_length": len(os.getenv("OPENAI_API_KEY", "")) if os.getenv("OPENAI_API_KEY") else 0,
+            "OPENAI_API_KEY_prefix": os.getenv("OPENAI_API_KEY", "")[:10] + "..." if os.getenv("OPENAI_API_KEY") else None,
+            "OPENAI_MODEL": os.getenv("OPENAI_MODEL", "not set")
+        },
+        "gpt_generator": {
+            "initialized": gpt_generator is not None,
+            "has_api_key": gpt_generator.api_key is not None if gpt_generator else False,
+            "api_key_length": len(gpt_generator.api_key) if gpt_generator and gpt_generator.api_key else 0,
+            "model": gpt_generator.model if gpt_generator else None
+        }
+    }
+
+    # Test OpenAI API connection
+    if gpt_generator and gpt_generator.api_key:
+        try:
+            # Try a simple API call
+            import openai
+            openai.api_key = gpt_generator.api_key
+
+            # Test with a minimal completion
+            response = openai.chat.completions.create(
+                model=gpt_generator.model,
+                messages=[{"role": "user", "content": "Say 'OK' if you can read this."}],
+                max_tokens=10
+            )
+
+            result["api_test"] = {
+                "status": "success",
+                "response": response.choices[0].message.content,
+                "model_used": response.model
+            }
+        except Exception as e:
+            result["api_test"] = {
+                "status": "failed",
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "traceback": traceback.format_exc()[:500]
+            }
+    else:
+        result["api_test"] = {
+            "status": "skipped",
+            "reason": "No API key or GPT generator not initialized"
+        }
+
+    return result
+
 @app.get("/api/database/test")
 async def test_database():
     """測試數據庫連接並執行查詢"""

@@ -246,13 +246,75 @@ class GPTContentGenerator:
     
     def _fallback_generation(self, stock_id: str, stock_name: str, kol_persona: str) -> Dict[str, Any]:
         """回退到模板生成"""
-        from improved_content_generator import generate_improved_kol_content
-        
-        return generate_improved_kol_content(
-            stock_id, stock_name, kol_persona, 
-            "chart_analysis", "active_traders", 
-            {}, []
-        )
+        logger.warning(f"使用備用模板生成內容: {stock_name}({stock_id})")
+
+        # 根據 KOL 角色選擇不同的分析風格
+        if kol_persona == "technical":
+            title = f"{stock_name}({stock_id}) 技術面分析與操作策略"
+            content = f"""【{stock_name}({stock_id}) 技術面深度分析】
+
+一、技術指標分析
+從技術面來看，{stock_name}目前呈現值得關注的訊號。RSI指標顯示股價動能變化，MACD指標則反映短中期趨勢走向。成交量方面，近期量能有所放大，顯示市場關注度提升。
+
+二、關鍵價位觀察
+建議關注支撐與壓力區間，若能站穩關鍵價位，後續可能有進一步表現空間。操作上建議設定合理的停損停利點。
+
+三、操作建議
+• 短線：觀察突破後的量價配合
+• 中線：留意趨勢是否延續
+• 風控：嚴格執行停損紀律
+
+⚠️ 以上分析僅供參考，投資需謹慎評估風險。
+
+#技術分析 #操作策略 #{stock_name}"""
+
+        elif kol_persona == "fundamental":
+            title = f"{stock_name}({stock_id}) 基本面分析與投資展望"
+            content = f"""【{stock_name}({stock_id}) 基本面觀察】
+
+一、產業地位
+{stock_name}在產業中具有重要地位，營運狀況值得持續追蹤。投資人應關注公司財報數據、營收表現，以及產業整體景氣變化。
+
+二、財務表現
+建議關注公司的獲利能力、成長性，以及現金流狀況。同時留意產業競爭態勢與公司護城河。
+
+三、投資建議
+• 長期投資者：評估基本面是否支撐股價
+• 價值投資：關注本益比與殖利率
+• 風險控管：分散投資降低單一持股風險
+
+⚠️ 投資前請詳閱公司財報，審慎評估。
+
+#基本面分析 #投資展望 #{stock_name}"""
+
+        else:  # 其他角色使用通用模板
+            title = f"{stock_name}({stock_id}) 市場觀察與交易想法"
+            content = f"""【{stock_name}({stock_id}) 市場觀察】
+
+一、近期走勢
+{stock_name}近期走勢值得關注，市場波動提供不同的交易機會。投資人可根據自身風險偏好，選擇適合的操作策略。
+
+二、交易想法
+• 趨勢跟隨：順勢而為，不逆勢操作
+• 風險管理：控制倉位，設定停損
+• 情緒管理：避免追高殺低
+
+三、注意事項
+請留意整體市場系統性風險，以及個股基本面變化。建議設定合理的停損停利點，嚴格控制持股比重。
+
+⚠️ 投資有風險，請謹慎評估。
+
+#市場觀察 #交易策略 #{stock_name}"""
+
+        return {
+            "title": title,
+            "content": content,
+            "content_md": content,
+            "commodity_tags": [{"type": "Stock", "key": stock_id, "bullOrBear": 0}],
+            "community_topic": None,
+            "generation_method": "template_fallback",
+            "model_used": "template"
+        }
 
 # 全域實例
 gpt_generator = GPTContentGenerator()
