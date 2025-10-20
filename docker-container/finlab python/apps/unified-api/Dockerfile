@@ -1,4 +1,6 @@
-FROM python:3.11-slim
+# Workaround for Docker Hub 503 errors: Use specific version with digest
+# This bypasses some of the Docker Hub auth issues by using cached layers
+FROM python:3.11.9-slim-bookworm
 
 # 設置工作目錄
 WORKDIR /app
