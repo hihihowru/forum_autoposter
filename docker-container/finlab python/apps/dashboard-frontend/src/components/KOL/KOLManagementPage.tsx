@@ -793,6 +793,7 @@ const KOLManagementPage: React.FC = () => {
                 name="prompt_persona"
                 label="Prompt人設"
                 tooltip="定義 KOL 的角色人設，例如：專業分析師、技術派達人、鄉民代表等"
+                initialValue={["技術分析師：專精於技術指標、K線、均線、KD、MACD等分析，善於從圖表找出買賣時機點"]}
               >
                 <Select
                   mode="tags"
@@ -821,6 +822,7 @@ const KOLManagementPage: React.FC = () => {
                 name="prompt_style"
                 label="Prompt風格"
                 tooltip="定義分析風格和寫作方式"
+                initialValue={["邏輯清晰：論述結構嚴謹，層次分明，因果關係明確，結論有理有據"]}
               >
                 <Select
                   mode="tags"
@@ -840,6 +842,7 @@ const KOLManagementPage: React.FC = () => {
                 name="prompt_guardrails"
                 label="Prompt守則"
                 tooltip="設定限制和規範，確保內容合規"
+                initialValue={["不提供具體買賣建議，不明示買進賣出價位，不保證獲利，僅供參考"]}
               >
                 <Select
                   mode="tags"
@@ -857,6 +860,7 @@ const KOLManagementPage: React.FC = () => {
                 name="prompt_skeleton"
                 label="Prompt骨架"
                 tooltip="定義文章結構模板"
+                initialValue={["【標題】\n1. 當前狀況\n2. 技術分析\n3. 買賣策略\n4. 風險提醒"]}
               >
                 <Select
                   mode="tags"
@@ -1116,6 +1120,53 @@ const KOLManagementPage: React.FC = () => {
               </Form.Item>
             </Col>
           </Row>
+
+          <Divider>AI 模型設定 (選填)</Divider>
+
+          <Form.Item
+            name="model_id"
+            label="預設AI模型"
+            tooltip="選擇此 KOL 預設使用的 AI 模型，生成貼文時可選擇是否覆蓋"
+            initialValue="gpt-4o-mini"
+          >
+            <Select placeholder="選擇模型 (預設: gpt-4o-mini)">
+              <Option value="gpt-4o-mini">
+                <Space>
+                  <span>gpt-4o-mini</span>
+                  <Tag color="green">推薦</Tag>
+                  <Text type="secondary" style={{ fontSize: '11px' }}>快速、經濟</Text>
+                </Space>
+              </Option>
+              <Option value="gpt-4o">
+                <Space>
+                  <span>gpt-4o</span>
+                  <Tag color="blue">高品質</Tag>
+                  <Text type="secondary" style={{ fontSize: '11px' }}>最新模型</Text>
+                </Space>
+              </Option>
+              <Option value="gpt-4-turbo">
+                <Space>
+                  <span>gpt-4-turbo</span>
+                  <Tag color="purple">進階</Tag>
+                  <Text type="secondary" style={{ fontSize: '11px' }}>較貴、強大</Text>
+                </Space>
+              </Option>
+              <Option value="gpt-4">
+                <Space>
+                  <span>gpt-4</span>
+                  <Tag color="orange">穩定</Tag>
+                  <Text type="secondary" style={{ fontSize: '11px' }}>經典版本</Text>
+                </Space>
+              </Option>
+              <Option value="gpt-3.5-turbo">
+                <Space>
+                  <span>gpt-3.5-turbo</span>
+                  <Tag color="default">基礎</Tag>
+                  <Text type="secondary" style={{ fontSize: '11px' }}>低成本</Text>
+                </Space>
+              </Option>
+            </Select>
+          </Form.Item>
 
           <Divider>AI 個性化生成 (選填)</Divider>
 

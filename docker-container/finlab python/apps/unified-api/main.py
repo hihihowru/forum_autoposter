@@ -2131,7 +2131,8 @@ async def manual_posting(request: Request):
                     serper_analysis=serper_analysis_with_stock,
                     trigger_type=trigger_type,
                     real_time_price_data={},
-                    posting_type=posting_type
+                    posting_type=posting_type,
+                    max_words=max_words
                 )
 
                 # 更新為選中的版本內容
@@ -2371,7 +2372,8 @@ async def performance_test(request: Request):
                     serper_analysis=serper_analysis_with_stock,
                     trigger_type=trigger_type,
                     real_time_price_data={},
-                    posting_type=posting_type
+                    posting_type=posting_type,
+                    max_words=max_words
                 )
 
                 title = personalized_title
@@ -2843,60 +2845,78 @@ async def refresh_all_interactions():
 
 @app.get("/api/trending")
 async def get_trending_topics(limit: int = Query(10, description="返回結果數量")):
-    """獲取熱門話題"""
+    """獲取熱門話題（from real CMoney API）"""
     logger.info(f"收到 trending 請求: limit={limit}")
 
-    # Mock trending topics data matching TrendingTopic interface
-    topics = [
-        {
-            "id": "trend_001",
-            "title": "AI人工智慧概念股",
-            "content": "AI技術快速發展，相關概念股受到市場關注",
-            "stock_ids": ["2330", "2454", "3711"],
-            "category": "科技創新",
-            "engagement_score": 95.5
-        },
-        {
-            "id": "trend_002",
-            "title": "電動車產業鏈",
-            "content": "電動車需求強勁，供應鏈廠商業績看俏",
-            "stock_ids": ["2308", "2327", "1513"],
-            "category": "綠色能源",
-            "engagement_score": 88.2
-        },
-        {
-            "id": "trend_003",
-            "title": "半導體晶片短缺",
-            "content": "全球晶片供應緊張，台灣半導體廠商受益",
-            "stock_ids": ["2330", "2303", "3034"],
-            "category": "科技創新",
-            "engagement_score": 82.1
-        },
-        {
-            "id": "trend_004",
-            "title": "綠能與ESG",
-            "content": "ESG投資興起，綠能產業成為投資焦點",
-            "stock_ids": ["6505", "3481", "3714"],
-            "category": "綠色能源",
-            "engagement_score": 76.8
-        },
-        {
-            "id": "trend_005",
-            "title": "5G基建與應用",
-            "content": "5G網路建設持續，相關設備與應用廠商獲利",
-            "stock_ids": ["3008", "2412", "2474"],
-            "category": "通訊技術",
-            "engagement_score": 72.3
+    try:
+        # 🔥 FIX: Replace mock data with real CMoney API call
+        from src.clients.cmoney.cmoney_client import CMoneyClient, LoginCredentials
+
+        # Initialize CMoney client
+        cmoney_client = CMoneyClient()
+        forum_credentials = get_forum_200_credentials()
+        credentials = LoginCredentials(
+            email=forum_credentials["email"],
+            password=forum_credentials["password"]
+        )
+
+        # Login to get access token
+        logger.info("🔐 Logging in to CMoney API...")
+        login_result = await cmoney_client.login(credentials)
+
+        if not login_result or not login_result.token:
+            raise Exception("CMoney 登入失敗")
+
+        access_token = login_result.token
+        logger.info(f"✅ CMoney 登入成功，token 有效期至: {login_result.expires_at}")
+
+        # Get trending topics from CMoney API
+        logger.info("📊 獲取 CMoney 熱門話題...")
+        cmoney_topics = await cmoney_client.get_trending_topics(access_token)
+
+        # Transform CMoney Topic objects to TrendingTopic interface
+        topics = []
+        for topic in cmoney_topics[:limit]:
+            # Extract stock_ids from raw_data if available
+            stock_ids = []
+            if hasattr(topic, 'raw_data') and topic.raw_data:
+                related_stocks = topic.raw_data.get('relatedStockSymbols', [])
+                if isinstance(related_stocks, list):
+                    stock_ids = [str(stock) for stock in related_stocks]
+
+            # Calculate engagement score (mock for now, can be enhanced later)
+            engagement_score = 100.0 - (len(topics) * 5.0)  # Decreasing scores
+
+            topics.append({
+                "id": str(topic.id) if hasattr(topic, 'id') else f"topic_{len(topics)+1}",
+                "title": topic.title if hasattr(topic, 'title') else topic.name,
+                "content": f"熱門討論話題：{topic.title if hasattr(topic, 'title') else topic.name}",
+                "stock_ids": stock_ids,
+                "category": "市場熱議",
+                "engagement_score": engagement_score
+            })
+
+        result = {
+            "topics": topics,
+            "timestamp": datetime.now().isoformat()
         }
-    ]
 
-    result = {
-        "topics": topics[:limit],
-        "timestamp": datetime.now().isoformat()
-    }
+        logger.info(f"✅ 返回 {len(result['topics'])} 個 CMoney 熱門話題")
+        return result
 
-    logger.info(f"返回 {len(result['topics'])} 個熱門話題")
-    return result
+    except Exception as e:
+        logger.error(f"❌ 獲取 CMoney 熱門話題失敗: {e}")
+        logger.error(f"錯誤詳情: {type(e).__name__}: {str(e)}")
+
+        # Fallback: Return empty list if CMoney API fails
+        result = {
+            "topics": [],
+            "timestamp": datetime.now().isoformat(),
+            "error": f"CMoney API 錯誤: {str(e)}"
+        }
+
+        logger.warning(f"⚠️  返回空列表（CMoney API 失敗）")
+        return result
 
 @app.get("/api/extract-keywords")
 async def extract_keywords(text: str = Query(..., description="要提取關鍵字的文本")):

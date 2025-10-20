@@ -40,11 +40,12 @@ class RandomContentGenerator:
         stock_name: str = '',
         stock_code: str = '',
         trigger_type: str = None,
-        serper_data: Dict = None
+        serper_data: Dict = None,
+        max_words: int = None
     ) -> Dict[str, Any]:
         """
         生成隨機化內容
-        
+
         Args:
             original_title: 原始標題
             original_content: 原始內容
@@ -53,19 +54,20 @@ class RandomContentGenerator:
             stock_name: 股票名稱
             stock_code: 股票代碼
             serper_data: 新聞數據
-            
+            max_words: 最大字數限制
+
         Returns:
             包含選中版本和其他版本的字典
         """
-        
-        self.logger.info(f"🎲 開始隨機化內容生成 - 類型: {posting_type}")
+
+        self.logger.info(f"🎲 開始隨機化內容生成 - 類型: {posting_type}, 字數限制: {max_words or '預設'}")
         self.logger.info(f"📊 KOL: {getattr(kol_profile, 'nickname', 'Unknown')} ({getattr(kol_profile, 'serial', 'Unknown')})")
         self.logger.info(f"📈 股票: {stock_name}({stock_code})")
-        
+
         # 生成5個版本
         versions = self._generate_five_versions(
-            original_title, original_content, kol_profile, 
-            posting_type, stock_name, stock_code, trigger_type, serper_data
+            original_title, original_content, kol_profile,
+            posting_type, stock_name, stock_code, trigger_type, serper_data, max_words
         )
         
         # 隨機選擇一個版本 - 使用更好的隨機性
@@ -103,19 +105,20 @@ class RandomContentGenerator:
         stock_name: str,
         stock_code: str,
         trigger_type: str = None,
-        serper_data: Dict = None
+        serper_data: Dict = None,
+        max_words: int = None
     ) -> List[Dict[str, str]]:
         """生成5個不同版本的內容"""
-        
+
         versions = []
-        
+
         # 獲取 KOL 特色
         kol_nickname = getattr(kol_profile, 'nickname', '分析師')
         kol_persona = getattr(kol_profile, 'persona', '專業')
         tone_style = getattr(kol_profile, 'tone_style', '專業分析')
         common_terms = getattr(kol_profile, 'common_terms', '')
         colloquial_terms = getattr(kol_profile, 'colloquial_terms', '')
-        
+
         self.logger.info(f"🎯 KOL 特色 - 暱稱: {kol_nickname}, 人設: {kol_persona}, 風格: {tone_style}")
         self.logger.info(f"🔄 生成 5 個版本...")  # Single line instead of 5+5=10 lines
 
@@ -126,17 +129,17 @@ class RandomContentGenerator:
                 version = self._generate_interaction_version(
                     version_num, kol_nickname, kol_persona, tone_style,
                     common_terms, colloquial_terms, stock_name, stock_code,
-                    original_content, serper_data
+                    original_content, serper_data, max_words
                 )
             else:
                 version = self._generate_analysis_version(
                     version_num, kol_nickname, kol_persona, tone_style,
                     common_terms, colloquial_terms, stock_name, stock_code,
-                    original_content, trigger_type, serper_data
+                    original_content, trigger_type, serper_data, max_words
                 )
 
             versions.append(version)
-        
+
         return versions
     
     def _generate_analysis_version(
@@ -151,21 +154,25 @@ class RandomContentGenerator:
         stock_code: str,
         original_content: str,
         trigger_type: str = None,
-        serper_data: Dict = None
+        serper_data: Dict = None,
+        max_words: int = None
     ) -> Dict[str, str]:
         """生成分析發表版本"""
-        
+
         # 不同的分析角度
         analysis_angles = [
             "技術面分析",
-            "基本面觀察", 
+            "基本面觀察",
             "市場情緒解讀",
             "操作策略建議",
             "風險評估提醒"
         ]
-        
+
         angle = analysis_angles[version_num - 1]
-        
+
+        # 🔥 FIX: Use dynamic max_words instead of hardcoded 150-200
+        word_limit = max_words if max_words else 150
+
         # 根據觸發器類型調整提示
         trigger_context = ""
         if trigger_type and trigger_type != "manual":
@@ -178,7 +185,7 @@ class RandomContentGenerator:
             elif trigger_type == "manual":
                 # 手動發文時，使用通用分析提示
                 trigger_context = f"注意：這是手動發文，請根據{stock_name}的當前市場情況進行客觀分析。"
-        
+
         # 構建 Prompt
         prompt = f"""
 你是 {kol_nickname}，人設是 {kol_persona}，寫作風格是 {tone_style}。
@@ -191,7 +198,7 @@ class RandomContentGenerator:
 1. 標題要吸引人，體現你的個人特色
 2. 內容要專業但易懂，符合你的風格
 3. 避免模板化，要有個人觀點
-4. 長度控制在 150-200 字
+4. 長度控制在 {word_limit} 字以內（嚴格遵守！）
 5. 使用你的常用術語：{common_terms}
 6. 可以適當使用口語化表達：{colloquial_terms}
 7. 根據股票實際情況調整語調和建議
@@ -226,10 +233,11 @@ class RandomContentGenerator:
         stock_name: str,
         stock_code: str,
         original_content: str,
-        serper_data: Dict = None
+        serper_data: Dict = None,
+        max_words: int = None
     ) -> Dict[str, str]:
         """生成互動提問版本"""
-        
+
         # 不同的互動角度
         interaction_angles = [
             "技術指標討論",
@@ -238,10 +246,13 @@ class RandomContentGenerator:
             "市場看法交流",
             "投資策略分享"
         ]
-        
+
         angle = interaction_angles[version_num - 1]
-        
-        # 構建 Prompt - 🔥 SHORT interaction questions (50-80 chars max)
+
+        # 🔥 FIX: Use dynamic max_words instead of hardcoded 50-80
+        word_limit = max_words if max_words else 80
+
+        # 構建 Prompt - Dynamic word limit based on user's max_words parameter
         prompt = f"""
 你是 {kol_nickname}，人設是 {kol_persona}，寫作風格是 {tone_style}。
 
@@ -250,7 +261,7 @@ class RandomContentGenerator:
 要求：
 1. 標題要引發討論，體現你的個人特色（10-20字）
 2. 內容要以**單一問題**形式，鼓勵讀者互動
-3. **內容長度限制 50-80 字**（不要超過！）
+3. **內容長度限制 {word_limit} 字以內**（嚴格遵守！不要超過！）
 4. 避免模板化，要有個人觀點
 5. 使用你的常用術語：{common_terms}
 6. 可以適當使用口語化表達：{colloquial_terms}
@@ -261,7 +272,7 @@ class RandomContentGenerator:
 
 請生成標題和內容，格式：
 標題：[你的標題]
-內容：[你的互動提問內容（50-80字內）]
+內容：[你的互動提問內容（{word_limit}字內）]
 """
         
         # 這裡應該調用 LLM API，暫時使用模擬數據

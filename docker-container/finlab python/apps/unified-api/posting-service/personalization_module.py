@@ -742,9 +742,9 @@ class EnhancedPersonalizationProcessor:
             self.logger.error(f"❌ 整合即時股價數據失敗: {e}")
             return content
     
-    def personalize_content(self, standard_title: str, standard_content: str, kol_serial: str, batch_config: Dict = None, serper_analysis: Dict = None, trigger_type: str = None, real_time_price_data: Dict = None, posting_type: str = 'analysis') -> Tuple[str, str, Dict]:
+    def personalize_content(self, standard_title: str, standard_content: str, kol_serial: str, batch_config: Dict = None, serper_analysis: Dict = None, trigger_type: str = None, real_time_price_data: Dict = None, posting_type: str = 'analysis', max_words: int = None) -> Tuple[str, str, Dict]:
         """增強版個人化處理函數 - 整合隨機化生成
-        
+
         Args:
             standard_title: 標準化標題
             standard_content: 標準化內容
@@ -754,7 +754,8 @@ class EnhancedPersonalizationProcessor:
             trigger_type: 觸發器類型 (可選)
             real_time_price_data: 即時股價數據 (可選)
             posting_type: 發文類型 ('analysis' 或 'interaction')
-            
+            max_words: 最大字數限制 (可選)
+
         Returns:
             Tuple[str, str, Dict]: (個人化標題, 個人化內容, 隨機化元數據)
         """
@@ -803,7 +804,8 @@ class EnhancedPersonalizationProcessor:
                     stock_name=stock_name,
                     stock_code=stock_code,
                     trigger_type=trigger_type,
-                    serper_data=serper_analysis
+                    serper_data=serper_analysis,
+                    max_words=max_words
                 )
                 self.logger.info(f"🎲 隨機化生成器調用成功，結果: {type(random_result)}")
             except Exception as e:
