@@ -283,15 +283,12 @@ const ScheduleManagementPage: React.FC = () => {
 
   // 轉換 API 數據結構到前端期望的格式
   const transformApiTask = (apiTask: any): ScheduleTask => {
-    // 從 generation_config 解析出觸發器配置
-    const generationConfig = apiTask.generation_config ?
-      (typeof apiTask.generation_config === 'string' ? JSON.parse(apiTask.generation_config) : apiTask.generation_config)
-      : null;
-
+    //  Backend already provides schedule_config and trigger_config
+    // Just use them directly instead of extracting from generation_config
     return {
-      task_id: apiTask.schedule_id,
-      name: apiTask.schedule_name || '未命名排程',
-      description: apiTask.schedule_description || '',
+      task_id: apiTask.schedule_id || apiTask.task_id,
+      name: apiTask.schedule_name || apiTask.name || '未命名排程',
+      description: apiTask.schedule_description || apiTask.description || '',
       status: apiTask.status || 'active',
       created_at: apiTask.created_at,
       last_run: apiTask.last_run,
@@ -299,28 +296,24 @@ const ScheduleManagementPage: React.FC = () => {
       run_count: apiTask.run_count || 0,
       success_count: apiTask.success_count || 0,
       failure_count: apiTask.failure_count || 0,
-      success_rate: apiTask.run_count > 0
+      success_rate: apiTask.success_rate || (apiTask.run_count > 0
         ? ((apiTask.success_count || 0) / apiTask.run_count) * 100
-        : 0,
+        : 0),
       interval_seconds: apiTask.interval_seconds || 300,
       schedule_type: apiTask.schedule_type || 'weekday_daily',
       auto_posting: apiTask.auto_posting || false,
-      schedule_config: {
+      schedule_config: apiTask.schedule_config || {
         enabled: apiTask.status === 'active',
         posting_time_slots: apiTask.daily_execution_time ? [apiTask.daily_execution_time] : [],
         timezone: apiTask.timezone || 'Asia/Taipei',
         daily_execution_time: apiTask.daily_execution_time
       },
-      trigger_config: {
-        trigger_type: generationConfig?.trigger_type || generationConfig?.triggers?.triggerConfig?.triggerKey || 'custom_stocks',
-        stock_codes: generationConfig?.stock_codes || generationConfig?.triggers?.stock_codes || [],
-        kol_assignment: generationConfig?.kol_assignment || generationConfig?.kol?.assignment_mode || 'random',
-        max_stocks: generationConfig?.max_stocks || generationConfig?.triggers?.stockCountLimit || 10,
-        stock_sorting: generationConfig?.stock_sorting || {
-          primary_sort: generationConfig?.triggers?.stockFilterCriteria?.primary_sort,
-          secondary_sort: generationConfig?.triggers?.stockFilterCriteria?.secondary_sort,
-          tertiary_sort: generationConfig?.triggers?.stockFilterCriteria?.tertiary_sort
-        }
+      trigger_config: apiTask.trigger_config || {
+        trigger_type: 'custom_stocks',
+        stock_codes: [],
+        kol_assignment: 'random',
+        max_stocks: 10,
+        stock_sorting: {}
       },
       batch_info: apiTask.batch_info ?
         (typeof apiTask.batch_info === 'string' ? JSON.parse(apiTask.batch_info) : apiTask.batch_info)
@@ -453,8 +446,14 @@ const ScheduleManagementPage: React.FC = () => {
       const result = await response.json();
       if (result.success) {
         message.success(`自動發文已${autoPosting ? '開啟' : '關閉'}`);
-        // 重新載入排程列表
-        await loadSchedules();
+        // 直接更新本地狀態，不需要重新載入整個列表
+        setSchedules(prevSchedules =>
+          prevSchedules.map(s =>
+            s.task_id === record.task_id
+              ? { ...s, auto_posting: autoPosting }
+              : s
+          )
+        );
       } else {
         message.error(result.message || '更新自動發文設定失敗');
       }
