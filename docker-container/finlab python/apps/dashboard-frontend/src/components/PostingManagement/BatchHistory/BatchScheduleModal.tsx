@@ -75,7 +75,6 @@ const BatchScheduleModal: React.FC<BatchScheduleModalProps> = ({
       'limit_down_after_hours': '盤後跌',
       'intraday_limit_up': '盤中漲',
       'intraday_limit_down': '盤中跌',
-      'custom_stocks': '自選股',
       'news_hot': '熱門新聞'
     };
     

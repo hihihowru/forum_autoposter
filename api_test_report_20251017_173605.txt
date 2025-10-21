@@ -1,0 +1,67 @@
+🔍 API TEST REPORT
+================================================================================
+Base URL: https://forumautoposter-production.up.railway.app
+Test Time: 2025-10-17 17:36:05
+Total Tests: 31
+
+📊 SUMMARY
+----------------------------------------
+✅ Passed: 23
+⚠️  Passed with Warning: 7
+❌ Failed: 1
+🔍 Not Found: 0
+⏱️  Average Response Time: 0.589s
+
+🚨 AFTER HOURS TRIGGERS ANALYSIS
+----------------------------------------
+Total After Hours Triggers: 2
+Working Triggers: 2
+Broken Triggers: 0
+
+✅ /after_hours_limit_up: PASS
+✅ /after_hours_limit_down: PASS
+
+❌ FAILED ENDPOINTS
+----------------------------------------
+❌ POST /intraday-trigger/execute
+   Status Code: 500
+
+🐌 SLOW ENDPOINTS (>2s)
+----------------------------------------
+🐌 GET /get_ohlc: 11.703s
+
+📋 DETAILED RESULTS
+--------------------------------------------------------------------------------
+Status       Method Endpoint                                 Time     Code  
+--------------------------------------------------------------------------------
+✅ PASS       GET    /                                        0.636    200   
+✅ PASS       GET    /after_hours_limit_down                  1.270    200   
+✅ PASS       GET    /after_hours_limit_up                    1.690    200   
+✅ PASS       GET    /analyze-topic                           0.087    200   
+✅ PASS       GET    /api/kol/list                            0.089    200   
+✅ PASS       POST   /api/manual-posting                      0.095    200   
+✅ PASS       POST   /api/posting                             0.098    200   
+✅ PASS       GET    /api/schedule/daily-stats                0.095    200   
+✅ PASS       GET    /api/schedule/scheduler/status           0.102    200   
+✅ PASS       GET    /api/schedule/tasks                      0.109    200   
+✅ PASS       GET    /dashboard/content-management            0.105    200   
+✅ PASS       GET    /dashboard/interaction-analysis          0.110    200   
+✅ PASS       GET    /dashboard/system-monitoring             0.086    200   
+✅ PASS       GET    /extract-keywords                        0.107    200   
+✅ PASS       GET    /generate-content                        0.101    200   
+✅ PASS       GET    /get_ohlc                                11.703   200   
+✅ PASS       GET    /health                                  0.086    200   
+✅ PASS       GET    /industries                              0.102    200   
+✅ PASS       GET    /posts                                   0.095    200   
+✅ PASS       GET    /search-stocks-by-keywords               0.099    200   
+✅ PASS       GET    /stock_mapping.json                      0.393    200   
+✅ PASS       GET    /stocks_by_industry                      0.097    200   
+✅ PASS       GET    /trending                                0.097    200   
+⚠️ PASS_WARNING POST   /admin/create-post-records-table         0.095    200   
+⚠️ PASS_WARNING POST   /admin/drop-and-recreate-post-records-table 0.099    200   
+⚠️ PASS_WARNING POST   /admin/fix-database                      0.109    200   
+⚠️ PASS_WARNING POST   /admin/import-1788-posts                 0.091    200   
+⚠️ PASS_WARNING POST   /admin/import-post-records               0.102    200   
+⚠️ PASS_WARNING POST   /admin/reset-database                    0.102    200   
+⚠️ PASS_WARNING POST   /test/insert-sample-data                 0.106    200   
+🔥 SERVER_ERROR POST   /intraday-trigger/execute                0.094    500   
