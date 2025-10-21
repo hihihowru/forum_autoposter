@@ -1,3 +1,4 @@
+# 🔥 CACHE BUST: 2025-10-21-13:30 - Force Railway to rebuild pip install layer for APScheduler
 # FastAPI and server
 fastapi==0.104.1
 uvicorn[standard]==0.24.0

@@ -33,6 +33,7 @@ import numpy as np
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import pytz
+import traceback
 
 # Timezone utility - Always use Taipei time (GMT+8)
 def get_current_time():
