@@ -5541,6 +5541,12 @@ async def create_schedule(request: Request):
             # Extract daily_execution_time first (needed for next_run calculation later)
             daily_execution_time = data.get('daily_execution_time')
 
+            # 🔥 DEBUG: Log what frontend sent
+            logger.info(f"🔍 Frontend sent trigger_config type: {type(data.get('trigger_config'))}")
+            logger.info(f"🔍 Frontend sent trigger_config: {data.get('trigger_config')}")
+            logger.info(f"🔍 Frontend sent schedule_config type: {type(data.get('schedule_config'))}")
+            logger.info(f"🔍 Frontend sent schedule_config: {str(data.get('schedule_config'))[:500]}")
+
             # 🔥 FIX: Use trigger_config from frontend if provided, otherwise build from generation_config
             trigger_config = data.get('trigger_config')
             if not trigger_config:
