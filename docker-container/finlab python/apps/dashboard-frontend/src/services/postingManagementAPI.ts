@@ -1614,8 +1614,8 @@ export class PostingManagementAPI {
           };
         });
 
-        // 按 session_id 排序（最新的在前）
-        batchHistory.sort((a, b) => parseInt(b.session_id) - parseInt(a.session_id));
+        // 按 created_at 排序（最新的在前）
+        batchHistory.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
         return {
           success: true,
