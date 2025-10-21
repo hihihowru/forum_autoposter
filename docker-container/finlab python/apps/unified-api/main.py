@@ -697,6 +697,87 @@ async def debug_openai_config():
 
     return result
 
+@app.post("/api/database/migrate/add-schedule-columns")
+async def migrate_add_schedule_columns():
+    """
+    Migration: Add trigger_config and schedule_config columns to schedule_tasks table
+    This is a one-time migration endpoint
+    """
+    logger.info("收到數據庫遷移請求: add-schedule-columns")
+
+    conn = None
+    try:
+        if not db_pool:
+            return {
+                "success": False,
+                "error": "Database connection not available"
+            }
+
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            # Check if columns already exist
+            cursor.execute("""
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = 'schedule_tasks'
+                  AND column_name IN ('trigger_config', 'schedule_config')
+            """)
+            existing_columns = [row['column_name'] for row in cursor.fetchall()]
+
+            if 'trigger_config' in existing_columns and 'schedule_config' in existing_columns:
+                logger.info("✅ Columns already exist, no migration needed")
+                return {
+                    "success": True,
+                    "message": "Columns already exist, no migration needed",
+                    "existing_columns": existing_columns
+                }
+
+            logger.info(f"📝 Existing columns: {existing_columns}")
+            logger.info("🔄 Adding missing columns...")
+
+            # Add columns
+            cursor.execute("""
+                ALTER TABLE schedule_tasks
+                ADD COLUMN IF NOT EXISTS trigger_config JSONB DEFAULT '{}',
+                ADD COLUMN IF NOT EXISTS schedule_config JSONB DEFAULT '{}'
+            """)
+
+            conn.commit()
+            logger.info("✅ Columns added successfully")
+
+            # Verify columns were added
+            cursor.execute("""
+                SELECT column_name, data_type
+                FROM information_schema.columns
+                WHERE table_name = 'schedule_tasks'
+                  AND column_name IN ('trigger_config', 'schedule_config')
+            """)
+
+            result = cursor.fetchall()
+            logger.info(f"📊 Verification: {result}")
+
+            return {
+                "success": True,
+                "message": "Migration completed successfully",
+                "columns_added": [dict(row) for row in result]
+            }
+
+    except Exception as e:
+        logger.error(f"❌ Migration failed: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        if conn:
+            conn.rollback()
+        return {
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+
 @app.get("/api/database/test")
 async def test_database():
     """測試數據庫連接並執行查詢"""
@@ -5545,6 +5626,204 @@ async def toggle_auto_posting(task_id: str, request: Request):
     finally:
         if conn:
             return_db_connection(conn)
+
+
+@app.post("/api/schedule/execute/{task_id}")
+async def execute_schedule_now(task_id: str):
+    """
+    立即執行排程 (手動觸發)
+    Execute a schedule immediately without waiting for scheduled time
+    """
+    logger.info(f"收到立即執行排程請求 - Task ID: {task_id}")
+
+    conn = None
+    try:
+        if not db_pool:
+            return {
+                "success": False,
+                "error": "數據庫連接不可用"
+            }
+
+        # Get schedule details from database
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute("""
+                SELECT *
+                FROM schedule_tasks
+                WHERE schedule_id = %s
+            """, (task_id,))
+
+            schedule = cursor.fetchone()
+
+            if not schedule:
+                return {
+                    "success": False,
+                    "error": f"找不到排程: {task_id}"
+                }
+
+        # Import posting service to execute the schedule
+        src_path = '/app/src'
+        if src_path not in sys.path:
+            sys.path.insert(0, src_path)
+
+        from src.services.posting_service import execute_posting_task
+
+        # Execute the posting task
+        logger.info(f"🚀 開始執行排程: {schedule['schedule_name']}")
+
+        result = await execute_posting_task(
+            trigger_type=schedule['generation_config'].get('trigger_type'),
+            generation_config=schedule['generation_config'],
+            schedule_id=task_id,
+            manual=True  # Mark as manual execution
+        )
+
+        if result.get('success'):
+            logger.info(f"✅ 排程執行成功: {schedule['schedule_name']}")
+            return {
+                "success": True,
+                "message": "排程執行成功",
+                "task_id": task_id,
+                "result": result
+            }
+        else:
+            logger.error(f"❌ 排程執行失敗: {result.get('error')}")
+            return {
+                "success": False,
+                "error": result.get('error', '未知錯誤'),
+                "task_id": task_id
+            }
+
+    except Exception as e:
+        logger.error(f"❌ 立即執行排程失敗: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {
+            "success": False,
+            "error": str(e),
+            "task_id": task_id
+        }
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+
+@app.put("/api/schedule/tasks/{task_id}")
+async def update_schedule(task_id: str, request: Request):
+    """
+    編輯排程設定
+    Update schedule configuration
+    """
+    logger.info(f"收到編輯排程請求 - Task ID: {task_id}")
+
+    conn = None
+    try:
+        data = await request.json()
+        logger.info(f"接收到的數據: {data}")
+
+        if not db_pool:
+            return {
+                "success": False,
+                "error": "數據庫連接不可用"
+            }
+
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            # Check if schedule exists
+            cursor.execute("""
+                SELECT schedule_id
+                FROM schedule_tasks
+                WHERE schedule_id = %s
+            """, (task_id,))
+
+            existing = cursor.fetchone()
+            if not existing:
+                return {
+                    "success": False,
+                    "error": f"找不到排程: {task_id}"
+                }
+
+            # Build UPDATE query dynamically based on provided fields
+            update_fields = []
+            update_values = []
+
+            # Handle basic fields
+            if 'schedule_name' in data:
+                update_fields.append("schedule_name = %s")
+                update_values.append(data['schedule_name'])
+
+            if 'schedule_description' in data:
+                update_fields.append("schedule_description = %s")
+                update_values.append(data['schedule_description'])
+
+            if 'auto_posting' in data:
+                update_fields.append("auto_posting = %s")
+                update_values.append(data['auto_posting'])
+
+            if 'weekdays_only' in data:
+                update_fields.append("weekdays_only = %s")
+                update_values.append(data['weekdays_only'])
+
+            # Handle JSON fields
+            if 'generation_config' in data:
+                update_fields.append("generation_config = %s")
+                update_values.append(json.dumps(data['generation_config']))
+
+            if 'trigger_config' in data:
+                update_fields.append("trigger_config = %s")
+                update_values.append(json.dumps(data['trigger_config']))
+
+            if 'schedule_config' in data:
+                update_fields.append("schedule_config = %s")
+                update_values.append(json.dumps(data['schedule_config']))
+
+            # Always update timestamp
+            update_fields.append("updated_at = NOW()")
+
+            if not update_fields:
+                return {
+                    "success": False,
+                    "error": "沒有提供要更新的欄位"
+                }
+
+            # Execute UPDATE
+            query = f"""
+                UPDATE schedule_tasks
+                SET {', '.join(update_fields)}
+                WHERE schedule_id = %s
+                RETURNING *
+            """
+            update_values.append(task_id)
+
+            cursor.execute(query, update_values)
+            updated_schedule = cursor.fetchone()
+
+            conn.commit()
+
+            logger.info(f"✅ 排程更新成功: {task_id}")
+
+            return {
+                "success": True,
+                "message": "排程更新成功",
+                "task_id": task_id,
+                "schedule": dict(updated_schedule) if updated_schedule else None
+            }
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"❌ 編輯排程失敗: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {
+            "success": False,
+            "error": str(e),
+            "task_id": task_id
+        }
+    finally:
+        if conn:
+            return_db_connection(conn)
+
 
 if __name__ == "__main__":
     import uvicorn
