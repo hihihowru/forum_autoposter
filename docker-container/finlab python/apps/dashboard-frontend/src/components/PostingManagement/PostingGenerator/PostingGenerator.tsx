@@ -549,6 +549,7 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
       };
 
       // 🔥 Build fullTriggersConfig with ALL trigger settings for schedule recreation
+      console.log('🔍 DEBUG: generationConfig.triggers:', generationConfig.triggers);
       const fullTriggersConfig = {
         ...generationConfig.triggers,
         triggerConfig: generationConfig.triggers?.triggerConfig,
@@ -559,6 +560,7 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
         stock_codes: generationConfig.triggers?.stock_codes || [],
         stock_names: generationConfig.triggers?.stock_names || []
       };
+      console.log('🔍 DEBUG: fullTriggersConfig built:', fullTriggersConfig);
 
       // 🔥 NON-BLOCKING BATCH POSTING - Fire and forget
       // Start batch generation in background without waiting
