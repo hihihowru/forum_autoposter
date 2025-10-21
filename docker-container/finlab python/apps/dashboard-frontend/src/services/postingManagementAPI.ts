@@ -261,6 +261,7 @@ export class PostingManagementAPI {
     post_mode?: string;
     max_stocks_per_post?: number;
     max_words?: number;
+    full_triggers_config?: any;  // 🔥 Add full_triggers_config to interface
   }): Promise<GeneratePostsResponse> {
     try {
       console.log('🚀 開始批量生成貼文:', {
@@ -314,6 +315,10 @@ export class PostingManagementAPI {
           console.log('  - topic_title:', (post as any).topic_title || batch_config.topic_title);
           
           const startTime = Date.now();
+
+          // 🔍 DEBUG: Log what's actually being sent in the request
+          console.log('🔍 DEBUG - full_triggers_config in request:', JSON.stringify((batchConfig as any).full_triggers_config, null, 2));
+
           // 調用單個貼文生成 API
           const response = await axios.post(`${POSTING_SERVICE_URL}/api/manual-posting`, {
             stock_code: post.stock_code,
@@ -361,9 +366,9 @@ export class PostingManagementAPI {
             trigger_data: batchConfig.trigger_data,
             generation_config: batchConfig.generation_config,
             // 🔥 FIX: Pass full triggers config for schedule recreation
-            full_triggers_config: (batchConfig as any).full_triggers_config
+            full_triggers_config: batchConfig.full_triggers_config
           });
-          
+
           const endTime = Date.now();
           console.log(`✅ 貼文生成完成 ${i + 1}/${posts.length} ${post.stock_code}-${post.kol_serial}:`, {
             duration: `${endTime - startTime}ms`,
