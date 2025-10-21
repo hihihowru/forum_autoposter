@@ -12,9 +12,9 @@ import api from '../../services/api';
 import axios from 'axios';
 
 const KOLDetail: React.FC = () => {
-  const { memberId } = useParams<{ memberId: string }>();
+  const { serial } = useParams<{ serial: string }>();
   const navigate = useNavigate();
-  
+
   // 狀態管理
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -23,7 +23,7 @@ const KOLDetail: React.FC = () => {
   const [posts, setPosts] = useState<PostHistoryType[]>([]);
   const [, setInteractionTrend] = useState<InteractionTrend[]>([]);
   const [lastUpdated, setLastUpdated] = useState<string>('');
-  
+
   // 編輯模式狀態
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingKolInfo, setEditingKolInfo] = useState<KOLInfo | null>(null);
@@ -31,30 +31,19 @@ const KOLDetail: React.FC = () => {
 
   // 載入 KOL 詳情數據
   const fetchKOLDetail = async () => {
-    if (!memberId) return;
-    
+    if (!serial) return;
+
     setLoading(true);
     setError(null);
-    
+
     try {
       // 使用 Vercel API proxy 或直接 Railway URL
       const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
-      
-      // 首先獲取 KOL 列表，找到對應的 serial
-      const listResponse = await axios.get(`${API_BASE_URL}/api/kol/list`);
-      const kols = listResponse.data.data || [];
-      
-      // 根據 member_id 找到對應的 KOL
-      const kol = kols.find((k: any) => k.member_id === memberId);
-      if (!kol) {
-        setError(`找不到 member_id 為 ${memberId} 的 KOL`);
-        return;
-      }
-      
-      // 獲取完整的 KOL 詳情
-      const response = await axios.get(`${API_BASE_URL}/api/kol/${kol.serial}`);
-      
-      if (response.data) {
+
+      // 直接獲取 KOL 詳情
+      const response = await axios.get(`${API_BASE_URL}/api/kol/${serial}`);
+
+      if (response.data && !response.data.error) {
         // 直接使用 PostgreSQL API 返回的數據
         setKolInfo(response.data);
         // 創建統計數據結構
@@ -66,11 +55,11 @@ const KOLDetail: React.FC = () => {
         });
         setLastUpdated(new Date().toISOString());
       } else {
-        setError('獲取 KOL 詳情失敗');
+        setError(response.data.error || '獲取 KOL 詳情失敗');
       }
     } catch (err: any) {
       console.error('獲取 KOL 詳情失敗:', err);
-      setError(err.response?.data?.detail || '獲取 KOL 詳情失敗');
+      setError(err.response?.data?.error || err.response?.data?.detail || '獲取 KOL 詳情失敗');
     } finally {
       setLoading(false);
     }
@@ -78,13 +67,13 @@ const KOLDetail: React.FC = () => {
 
   // 載入發文歷史
   const fetchPosts = async (page: number = 1, pageSize: number = 10) => {
-    if (!memberId) return;
-    
+    if (!serial) return;
+
     try {
-      const response = await api.get(`/dashboard/kols/${memberId}/posts`, {
+      const response = await api.get(`/dashboard/kols/${serial}/posts`, {
         params: { page, page_size: pageSize }
       });
-      
+
       if (response.data && response.data.success && response.data.data) {
         setPosts(response.data.data.posts);
       }
@@ -96,11 +85,11 @@ const KOLDetail: React.FC = () => {
 
   // 載入互動數據
   const fetchInteractions = async () => {
-    if (!memberId) return;
-    
+    if (!serial) return;
+
     try {
-      const response = await api.get(`/dashboard/kols/${memberId}/interactions`);
-      
+      const response = await api.get(`/dashboard/kols/${serial}/interactions`);
+
       if (response.data && response.data.success && response.data.data) {
         setInteractionTrend(response.data.data.interaction_trend);
       }
@@ -111,12 +100,12 @@ const KOLDetail: React.FC = () => {
 
   // 初始化載入
   useEffect(() => {
-    if (memberId) {
+    if (serial) {
       fetchKOLDetail();
       fetchPosts();
       fetchInteractions();
     }
-  }, [memberId]);
+  }, [serial]);
 
   // 刷新數據
   const handleRefresh = () => {
@@ -156,12 +145,12 @@ const KOLDetail: React.FC = () => {
   };
 
   const handleSaveEdit = async () => {
-    if (!editingKolInfo || !memberId) return;
-    
+    if (!editingKolInfo || !serial) return;
+
     setSaving(true);
     try {
-      const response = await api.put(`/dashboard/kols/${memberId}`, editingKolInfo);
-      
+      const response = await api.put(`/dashboard/kols/${serial}`, editingKolInfo);
+
       if (response.data && response.data.success) {
         setKolInfo(editingKolInfo);
         setIsEditMode(false);
@@ -221,7 +210,7 @@ const KOLDetail: React.FC = () => {
       <div style={{ padding: '24px' }}>
         <Alert
           message="KOL 不存在"
-          description={`找不到 Member ID: ${memberId}`}
+          description={`找不到 Serial: ${serial}`}
           type="warning"
           showIcon
         />
@@ -430,7 +419,7 @@ const KOLDetail: React.FC = () => {
         <Col span={24}>
           <Card title="互動表現分析" size="small">
             <InteractionChart
-              memberId={memberId || ''}
+              memberId={serial || ''}
               loading={loading}
               error={error}
             />

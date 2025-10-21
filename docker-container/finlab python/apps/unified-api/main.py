@@ -4049,6 +4049,75 @@ async def get_kol_list():
             return_db_connection(conn)
 
 
+@app.get("/api/kol/{serial}")
+async def get_kol_detail(serial: str):
+    """獲取單個 KOL 的詳細資料（含統計數據）"""
+    logger.info(f"收到 get_kol_detail 請求 - Serial: {serial}")
+
+    conn = None
+    try:
+        if not db_pool:
+            logger.warning("數據庫連接不可用")
+            return {
+                "success": False,
+                "error": "數據庫連接不可用"
+            }
+
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            # 查詢單個 KOL 的資料，包含統計數據
+            query = """
+                SELECT
+                    k.*,
+                    COALESCE(COUNT(p.post_id), 0) as total_posts,
+                    COALESCE(COUNT(CASE WHEN p.status = 'published' THEN 1 END), 0) as published_posts,
+                    COALESCE(AVG(CASE
+                        WHEN p.status = 'published' AND (p.likes + p.comments + p.shares) > 0
+                        THEN (p.likes + p.comments + p.shares) * 1.0
+                        ELSE NULL
+                    END), 0) as avg_interaction_rate
+                FROM kol_profiles k
+                LEFT JOIN post_records p ON k.serial::integer = p.kol_serial
+                WHERE k.serial = %s
+                GROUP BY k.id, k.serial, k.nickname, k.member_id, k.persona, k.status, k.owner,
+                         k.email, k.password, k.whitelist, k.notes, k.post_times, k.target_audience,
+                         k.interaction_threshold, k.content_types, k.common_terms, k.colloquial_terms,
+                         k.tone_style, k.typing_habit, k.backstory, k.expertise, k.data_source,
+                         k.prompt_persona, k.prompt_style, k.prompt_guardrails, k.prompt_skeleton,
+                         k.prompt_cta, k.prompt_hashtags, k.signature, k.emoji_pack, k.model_id,
+                         k.template_variant, k.model_temp, k.max_tokens, k.title_openers,
+                         k.title_signature_patterns, k.title_tail_word, k.title_banned_words,
+                         k.title_style_examples, k.title_retry_max, k.tone_formal, k.tone_emotion,
+                         k.tone_confidence, k.tone_urgency, k.tone_interaction, k.question_ratio,
+                         k.content_length, k.interaction_starters, k.require_finlab_api, k.allow_hashtags,
+                         k.created_time, k.last_updated, k.best_performing_post, k.humor_probability,
+                         k.humor_enabled, k.content_style_probabilities, k.analysis_depth_probabilities,
+                         k.content_length_probabilities
+            """
+            cursor.execute(query, (serial,))
+            kol = cursor.fetchone()
+
+            if not kol:
+                logger.warning(f"找不到 serial 為 {serial} 的 KOL")
+                return {
+                    "success": False,
+                    "error": f"找不到 serial 為 {serial} 的 KOL"
+                }
+
+            logger.info(f"查詢到 KOL: {kol['nickname']}")
+            return dict(kol)
+
+    except Exception as e:
+        logger.error(f"查詢 KOL 詳情失敗: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+
 @app.get("/api/kol/weekly-posts")
 async def get_weekly_posts():
     """獲取本週發文總數"""
