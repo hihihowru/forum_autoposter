@@ -5715,7 +5715,7 @@ async def toggle_auto_posting(task_id: str, request: Request):
 
 
 @app.post("/api/schedule/execute/{task_id}")
-async def execute_schedule_now(task_id: str):
+async def execute_schedule_now(task_id: str, request: Request):
     """
     立即執行排程 (手動觸發)
     Execute a schedule immediately without waiting for scheduled time
@@ -5747,17 +5747,146 @@ async def execute_schedule_now(task_id: str):
                     "error": f"找不到排程: {task_id}"
                 }
 
-        # 🔥 FIX: Comment out broken import - feature not fully implemented yet
-        logger.warning("⚠️  立即執行排程功能尚未完全實現")
-        logger.info(f"📋 排程資訊: {schedule['schedule_name']}, trigger_type: {schedule.get('generation_config', {}).get('trigger_type')}")
+        logger.info(f"📋 排程資訊: {schedule['schedule_name']}")
 
-        # For now, return a message that the feature is being implemented
+        # Extract configuration
+        trigger_config = schedule.get('trigger_config', {})
+        schedule_config = schedule.get('schedule_config', {})
+        generation_config = schedule.get('generation_config', {})
+
+        # Parse JSON fields if they're strings
+        if isinstance(trigger_config, str):
+            trigger_config = json.loads(trigger_config)
+        if isinstance(schedule_config, str):
+            schedule_config = json.loads(schedule_config)
+        if isinstance(generation_config, str):
+            generation_config = json.loads(generation_config)
+
+        logger.info(f"🔍 trigger_config: {json.dumps(trigger_config, ensure_ascii=False)[:200]}")
+        logger.info(f"🔍 schedule_config: {json.dumps(schedule_config, ensure_ascii=False)[:200]}")
+
+        # Extract stock codes and KOL assignments
+        stock_codes = trigger_config.get('stock_codes', [])
+        kol_assignment = trigger_config.get('kol_assignment', 'random')
+        max_stocks = trigger_config.get('max_stocks', 5)
+
+        if not stock_codes:
+            return {
+                "success": False,
+                "error": "排程未配置股票列表"
+            }
+
+        # Limit stock count
+        stock_codes = stock_codes[:max_stocks]
+
+        # Generate unique session ID for this execution
+        import time
+        session_id = int(time.time() * 1000)  # Milliseconds timestamp
+
+        logger.info(f"🚀 開始執行排程: session_id={session_id}, stocks={stock_codes}, kol_assignment={kol_assignment}")
+
+        # TODO: Implement stock selection logic based on trigger_type
+        # For now, use custom_stocks mode with provided stock codes
+
+        #  Generate posts for each stock
+        generated_posts = []
+        failed_posts = []
+
+        # Get KOL list (simplified - using fixed KOLs for now)
+        kol_serials = [200, 201, 202]  # TODO: Get from database based on assignment strategy
+
+        for stock_code in stock_codes:
+            # Select KOL based on assignment strategy
+            if kol_assignment == 'random':
+                import random
+                kol_serial = random.choice(kol_serials)
+            else:
+                kol_serial = kol_serials[0]  # Default to first KOL
+
+            try:
+                # Call manual_posting logic internally
+                # Build request body
+                post_body = {
+                    "stock_code": stock_code,
+                    "stock_name": stock_code,  # TODO: Get actual stock name
+                    "kol_serial": kol_serial,
+                    "kol_persona": generation_config.get('kol_persona', 'technical'),
+                    "session_id": session_id,
+                    "trigger_type": trigger_config.get('trigger_type', 'custom_stocks'),
+                    "posting_type": generation_config.get('posting_type', 'analysis'),
+                    "max_words": generation_config.get('max_words', 200),
+                    "full_triggers_config": {
+                        "trigger_type": trigger_config.get('trigger_type'),
+                        "stock_codes": stock_codes,
+                        "kol_assignment": kol_assignment,
+                        "max_stocks": max_stocks
+                    }
+                }
+
+                # Create a Request object from the body
+                from starlette.requests import Request
+                from starlette.datastructures import Headers
+
+                # Use the existing manual_posting function
+                # We'll call it directly by reconstructing the request
+                scope = {
+                    'type': 'http',
+                    'method': 'POST',
+                    'headers': [(b'content-type', b'application/json')],
+                }
+
+                # Create mock request
+                import io
+                body_bytes = json.dumps(post_body).encode('utf-8')
+
+                async def receive():
+                    return {'type': 'http.request', 'body': body_bytes}
+
+                async def send(message):
+                    pass
+
+                mock_request = Request(scope, receive, send)
+                mock_request._body = body_bytes
+
+                # Call manual_posting
+                result = await manual_posting(mock_request)
+
+                if isinstance(result, dict) and result.get('success'):
+                    generated_posts.append({
+                        "post_id": result.get('post_id'),
+                        "stock_code": stock_code,
+                        "kol_serial": kol_serial,
+                        "title": result.get('content', {}).get('title', ''),
+                        "content": result.get('content', {}).get('content', '')
+                    })
+                    logger.info(f"✅ 生成成功: {stock_code} - KOL {kol_serial}")
+                else:
+                    failed_posts.append({
+                        "stock_code": stock_code,
+                        "error": result.get('message', 'Unknown error')
+                    })
+                    logger.error(f"❌ 生成失敗: {stock_code}")
+
+            except Exception as e:
+                logger.error(f"❌ 生成貼文失敗: {stock_code}, error: {e}")
+                failed_posts.append({
+                    "stock_code": stock_code,
+                    "error": str(e)
+                })
+
+        logger.info(f"📊 排程執行完成: 成功={len(generated_posts)}, 失敗={len(failed_posts)}")
+
         return {
             "success": True,
-            "message": "排程配置已保存，自動執行功能開發中",
+            "message": f"排程執行完成",
             "task_id": task_id,
+            "session_id": session_id,
             "schedule_name": schedule['schedule_name'],
-            "note": "請等待自動排程執行，或手動在發文生成頁面生成新貼文"
+            "generated_count": len(generated_posts),
+            "failed_count": len(failed_posts),
+            "posts": generated_posts,
+            "errors": failed_posts,
+            "timestamp": get_current_time().isoformat()
         }
 
     except Exception as e:
