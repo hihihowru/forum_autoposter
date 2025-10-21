@@ -5538,30 +5538,40 @@ async def create_schedule(request: Request):
             # 生成配置 (generation_config)
             generation_config = data.get('generation_config', {})
 
-            # 觸發器配置 (trigger_config)
-            trigger_type = generation_config.get('trigger_type', 'limit_up_after_hours')
-            stock_sorting = generation_config.get('stock_sorting', {})
-            kol_assignment = generation_config.get('kol_assignment', 'random')
-            max_stocks = generation_config.get('max_stocks', 5)
+            # 🔥 FIX: Use trigger_config from frontend if provided, otherwise build from generation_config
+            trigger_config = data.get('trigger_config')
+            if not trigger_config:
+                # Fallback: Build from generation_config for backward compatibility
+                trigger_type = generation_config.get('trigger_type', 'limit_up_after_hours')
+                stock_sorting = generation_config.get('stock_sorting', {})
+                kol_assignment = generation_config.get('kol_assignment', 'random')
+                max_stocks = generation_config.get('max_stocks', 5)
 
-            trigger_config = {
-                "trigger_type": trigger_type,
-                "stock_codes": [],  # 將由排程器執行時根據觸發器動態獲取
-                "kol_assignment": kol_assignment,
-                "max_stocks": max_stocks,
-                "stock_sorting": stock_sorting
-            }
+                trigger_config = {
+                    "trigger_type": trigger_type,
+                    "stock_codes": [],  # 將由排程器執行時根據觸發器動態獲取
+                    "kol_assignment": kol_assignment,
+                    "max_stocks": max_stocks,
+                    "stock_sorting": stock_sorting
+                }
 
-            # 排程配置 (schedule_config)
-            daily_execution_time = data.get('daily_execution_time')
-            posting_time_slots = [daily_execution_time] if daily_execution_time else []
+            # 🔥 FIX: Use schedule_config from frontend if provided, otherwise build from data
+            schedule_config = data.get('schedule_config')
+            if not schedule_config:
+                # Fallback: Build from daily_execution_time for backward compatibility
+                daily_execution_time = data.get('daily_execution_time')
+                posting_time_slots = [daily_execution_time] if daily_execution_time else []
 
-            schedule_config = {
-                "enabled": enabled,
-                "posting_time_slots": posting_time_slots,
-                "timezone": timezone,
-                "weekdays_only": weekdays_only
-            }
+                schedule_config = {
+                    "enabled": enabled,
+                    "posting_time_slots": posting_time_slots,
+                    "timezone": timezone,
+                    "weekdays_only": weekdays_only
+                }
+
+            # Log what we're storing
+            logger.info(f"📝 Storing trigger_config: {json.dumps(trigger_config, ensure_ascii=False)[:200]}...")
+            logger.info(f"📝 Storing schedule_config: {json.dumps(schedule_config, ensure_ascii=False)[:200]}...")
 
             # 批次信息 (batch_info)
             batch_info = data.get('batch_info', {})
