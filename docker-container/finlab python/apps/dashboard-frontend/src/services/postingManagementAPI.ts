@@ -150,6 +150,7 @@ export interface GeneratePostsRequest {
   session_id: number;
   max_posts?: number;
   force_regenerate?: boolean;
+  full_triggers_config?: any;
 }
 
 export interface GeneratePostsResponse {
@@ -358,7 +359,9 @@ export class PostingManagementAPI {
             has_topic_tags: batchConfig.has_topic_tags,
             trigger_type: batchConfig.trigger_type,
             trigger_data: batchConfig.trigger_data,
-            generation_config: batchConfig.generation_config
+            generation_config: batchConfig.generation_config,
+            // 🔥 FIX: Pass full triggers config for schedule recreation
+            full_triggers_config: (batchConfig as any).full_triggers_config
           });
           
           const endTime = Date.now();

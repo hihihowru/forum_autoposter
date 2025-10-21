@@ -548,6 +548,18 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
         topic_title: generationConfig.triggers?.triggerConfig?.triggerKey === 'trending_topics' ? '自動獲取熱門話題' : null
       };
 
+      // 🔥 Build fullTriggersConfig with ALL trigger settings for schedule recreation
+      const fullTriggersConfig = {
+        ...generationConfig.triggers,
+        triggerConfig: generationConfig.triggers?.triggerConfig,
+        trigger_type: generationConfig.triggers?.triggerConfig?.triggerKey || 'manual',
+        stock_sorting: generationConfig.triggers?.stockSorting,
+        threshold: generationConfig.triggers?.threshold || 20,
+        filters: generationConfig.triggers?.filters || {},
+        stock_codes: generationConfig.triggers?.stock_codes || [],
+        stock_names: generationConfig.triggers?.stock_names || []
+      };
+
       // 🔥 NON-BLOCKING BATCH POSTING - Fire and forget
       // Start batch generation in background without waiting
       PostingManagementAPI.generateBatchPosts({
@@ -582,7 +594,9 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
         // 🔥 FIX: Use triggerKey (e.g., "limit_up_after_hours") not triggerType ("individual")
         trigger_type: generationConfig.triggers?.triggerConfig?.triggerKey || 'manual',
         trigger_data: generationConfig.triggers?.triggerConfig,
-        generation_config: generationConfig.settings
+        generation_config: generationConfig.settings,
+        // 🔥 FIX: Pass full triggers config for schedule recreation
+        full_triggers_config: fullTriggersConfig
       }).then(result => {
         // Silent completion toast (non-blocking)
         if (result.success) {
