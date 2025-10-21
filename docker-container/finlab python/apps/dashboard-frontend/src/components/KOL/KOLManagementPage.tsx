@@ -30,8 +30,12 @@ import {
   ReloadOutlined,
   SettingOutlined,
   BarChartOutlined,
-  DeleteOutlined
+  DeleteOutlined,
+  EyeOutlined,
+  CheckCircleOutlined,
+  FileTextOutlined
 } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { getApiBaseUrl } from '../../config/api';
 
@@ -123,6 +127,7 @@ interface KOLProfile {
 }
 
 const KOLManagementPage: React.FC = () => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [kolProfiles, setKolProfiles] = useState<KOLProfile[]>([]);
@@ -136,6 +141,13 @@ const KOLManagementPage: React.FC = () => {
   const [confirmForm] = Form.useForm();
   const [confirmModalVisible, setConfirmModalVisible] = useState(false);
 
+  // 統計資料狀態
+  const [statistics, setStatistics] = useState({
+    totalKOLs: 0,
+    activeKOLs: 0,
+    weeklyPosts: 0
+  });
+
   // 測試狀態
   const [testingLogin, setTestingLogin] = useState(false);
   const [testLoginResult, setTestLoginResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -148,11 +160,27 @@ const KOLManagementPage: React.FC = () => {
     try {
       // 使用 Railway API URL
       const response = await axios.get(`${API_BASE_URL}/api/kol/list`);
-      
+
       // 檢查響應結構
       if (response.data && response.data.success) {
-        setKolProfiles(response.data.data || []);
-        console.log('✅ KOL 列表載入成功:', response.data.data?.length || 0, '個 KOL');
+        const kols = response.data.data || [];
+        setKolProfiles(kols);
+
+        // 計算統計資料
+        const totalKOLs = kols.length;
+        const activeKOLs = kols.filter((k: KOLProfile) => k.status === 'active').length;
+
+        // TODO: 本週發文數需要後端API支援，暫時顯示0
+        // 可以調用 /api/kol/weekly-posts API 獲取真實數據
+        const weeklyPosts = 0;
+
+        setStatistics({
+          totalKOLs,
+          activeKOLs,
+          weeklyPosts
+        });
+
+        console.log('✅ KOL 列表載入成功:', totalKOLs, '個 KOL,', activeKOLs, '個啟用中');
       } else {
         console.error('❌ API 響應格式錯誤:', response.data);
         message.error('API 響應格式錯誤');
@@ -172,6 +200,33 @@ const KOLManagementPage: React.FC = () => {
     setSelectedKOL(kol);
     form.setFieldsValue(kol);
     setModalVisible(true);
+  };
+
+  // 查看KOL詳情
+  const handleViewKOL = (kol: KOLProfile) => {
+    // 使用 serial 導航到詳情頁
+    navigate(`/content-management/kols/${kol.serial}`);
+  };
+
+  // 切換KOL狀態
+  const handleStatusToggle = async (serial: string, checked: boolean) => {
+    try {
+      const newStatus = checked ? 'active' : 'inactive';
+      const response = await axios.put(`${API_BASE_URL}/api/kol/${serial}`, {
+        status: newStatus
+      });
+
+      if (response.data.success) {
+        message.success(`KOL 狀態已更新為${checked ? '啟用' : '停用'}`);
+        // 重新載入列表
+        await loadKOLProfiles();
+      } else {
+        message.error('更新狀態失敗');
+      }
+    } catch (error: any) {
+      console.error('更新狀態失敗:', error);
+      message.error(error.response?.data?.error || '更新狀態失敗');
+    }
   };
 
   // 刪除KOL
@@ -567,11 +622,14 @@ const KOLManagementPage: React.FC = () => {
       title: '狀態',
       dataIndex: 'status',
       key: 'status',
-      width: 80,
-      render: (status: string) => (
-        <Tag color={status === 'active' ? 'green' : 'red'}>
-          {status === 'active' ? '啟用' : '停用'}
-        </Tag>
+      width: 100,
+      render: (status: string, record: KOLProfile) => (
+        <Switch
+          checked={status === 'active'}
+          checkedChildren="啟用"
+          unCheckedChildren="停用"
+          onChange={(checked) => handleStatusToggle(record.serial, checked)}
+        />
       ),
     },
     {
@@ -596,9 +654,16 @@ const KOLManagementPage: React.FC = () => {
     {
       title: '操作',
       key: 'action',
-      width: 180,
+      width: 220,
       render: (_, record: KOLProfile) => (
-        <Space>
+        <Space size="small">
+          <Button
+            size="small"
+            icon={<EyeOutlined />}
+            onClick={() => handleViewKOL(record)}
+          >
+            查看
+          </Button>
           <Button
             type="primary"
             size="small"
@@ -652,6 +717,52 @@ const KOLManagementPage: React.FC = () => {
             </Button>
           </Space>
         </div>
+
+        {/* 統計區塊 */}
+        <Row gutter={16} style={{ marginBottom: 24 }}>
+          <Col span={8}>
+            <Card>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <Text type="secondary" style={{ fontSize: 14 }}>KOL 總數</Text>
+                  <div style={{ fontSize: 30, fontWeight: 'bold', color: '#1890ff', marginTop: 8 }}>
+                    {statistics.totalKOLs}
+                  </div>
+                </div>
+                <UserOutlined style={{ fontSize: 40, color: '#1890ff', opacity: 0.3 }} />
+              </div>
+            </Card>
+          </Col>
+          <Col span={8}>
+            <Card>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <Text type="secondary" style={{ fontSize: 14 }}>啟用中</Text>
+                  <div style={{ fontSize: 30, fontWeight: 'bold', color: '#52c41a', marginTop: 8 }}>
+                    {statistics.activeKOLs}
+                  </div>
+                </div>
+                <CheckCircleOutlined style={{ fontSize: 40, color: '#52c41a', opacity: 0.3 }} />
+              </div>
+            </Card>
+          </Col>
+          <Col span={8}>
+            <Card>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <Text type="secondary" style={{ fontSize: 14 }}>本週發文數</Text>
+                  <div style={{ fontSize: 30, fontWeight: 'bold', color: '#faad14', marginTop: 8 }}>
+                    {statistics.weeklyPosts}
+                    {statistics.weeklyPosts === 0 && (
+                      <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>（待實作）</Text>
+                    )}
+                  </div>
+                </div>
+                <FileTextOutlined style={{ fontSize: 40, color: '#faad14', opacity: 0.3 }} />
+              </div>
+            </Card>
+          </Col>
+        </Row>
 
         <Table
           columns={columns}
