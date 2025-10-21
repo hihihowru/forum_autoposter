@@ -3268,6 +3268,51 @@ async def update_post_content(post_id: str, request: Request):
         if conn:
             return_db_connection(conn)
 
+@app.delete("/api/posts/{post_id}")
+async def delete_post(post_id: str):
+    """刪除貼文（軟刪除）"""
+    logger.info(f"🗑️ 開始刪除貼文 - Post ID: {post_id}")
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            # 檢查貼文是否存在
+            cursor.execute("""
+                SELECT post_id, status, cmoney_post_id, kol_serial
+                FROM post_records
+                WHERE post_id = %s
+            """, (post_id,))
+
+            existing_post = cursor.fetchone()
+            if not existing_post:
+                logger.error(f"❌ 貼文不存在 - Post ID: {post_id}")
+                raise HTTPException(status_code=404, detail=f"貼文不存在: {post_id}")
+
+            # 軟刪除：更新狀態為 'deleted'
+            cursor.execute("""
+                UPDATE post_records
+                SET status = 'deleted',
+                    updated_at = %s
+                WHERE post_id = %s
+            """, (get_current_time(), post_id))
+
+            conn.commit()
+
+            logger.info(f"✅ 貼文軟刪除成功 - Post ID: {post_id}")
+            return {"success": True, "message": "貼文已刪除"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"❌ 刪除貼文失敗: {e}")
+        raise HTTPException(status_code=500, detail=f"刪除貼文失敗: {str(e)}")
+    finally:
+        if conn:
+            return_db_connection(conn)
+
 # ==================== Trending API 功能 ====================
 
 @app.get("/api/trending")
