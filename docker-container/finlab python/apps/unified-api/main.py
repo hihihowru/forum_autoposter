@@ -315,8 +315,8 @@ def execute_schedule_task(task):
     Args:
         task: Schedule task dictionary with parsed JSON fields
     """
-    task_id = task.get('task_id')
-    task_name = task.get('name', 'Unnamed Task')
+    task_id = task.get('schedule_id')
+    task_name = task.get('schedule_name', 'Unnamed Task')
 
     logger.info(f"🚀 開始執行排程任務: {task_name} (ID: {task_id})")
 
@@ -356,9 +356,8 @@ def execute_schedule_task(task):
                         next_run = %s,
                         run_count = run_count + 1,
                         success_count = success_count + 1,
-                        success_rate = (success_count + 1.0) / (run_count + 1.0) * 100,
                         updated_at = %s
-                    WHERE task_id = %s
+                    WHERE schedule_id = %s
                 """, (get_current_time(), next_run, get_current_time(), task_id))
                 logger.info(f"✅ 排程任務執行成功: {task_name}")
             else:
@@ -368,10 +367,9 @@ def execute_schedule_task(task):
                         next_run = %s,
                         run_count = run_count + 1,
                         failure_count = failure_count + 1,
-                        success_rate = (success_count * 1.0) / (run_count + 1.0) * 100,
                         updated_at = %s,
-                        last_error = %s
-                    WHERE task_id = %s
+                        error_message = %s
+                    WHERE schedule_id = %s
                 """, (get_current_time(), next_run, get_current_time(), "執行失敗 (placeholder)", task_id))
                 logger.warning(f"⚠️  排程任務執行失敗: {task_name}")
 
@@ -390,10 +388,9 @@ def execute_schedule_task(task):
                     UPDATE schedule_tasks
                     SET run_count = run_count + 1,
                         failure_count = failure_count + 1,
-                        success_rate = (success_count * 1.0) / (run_count + 1.0) * 100,
-                        last_error = %s,
+                        error_message = %s,
                         updated_at = %s
-                    WHERE task_id = %s
+                    WHERE schedule_id = %s
                 """, (str(e), get_current_time(), task_id))
             conn.commit()
         except:
@@ -478,9 +475,9 @@ def create_schedule_tasks_table():
                 logger.info("📋 開始創建 schedule_tasks 表...")
                 cursor.execute("""
                     CREATE TABLE schedule_tasks (
-                        task_id VARCHAR PRIMARY KEY,
-                        name VARCHAR NOT NULL,
-                        description TEXT,
+                        schedule_id VARCHAR PRIMARY KEY,
+                        schedule_name VARCHAR NOT NULL,
+                        schedule_description TEXT,
                         status VARCHAR DEFAULT 'active',
                         schedule_type VARCHAR NOT NULL,
                         interval_seconds INTEGER DEFAULT 300,
@@ -4698,7 +4695,7 @@ async def get_schedule_tasks(
                         try:
                             task_dict[field] = json.loads(task_dict[field])
                         except (json.JSONDecodeError, TypeError):
-                            logger.warning(f"Failed to parse {field} for task {task_dict.get('task_id')}")
+                            logger.warning(f"Failed to parse {field} for task {task_dict.get('schedule_id')}")
                             task_dict[field] = None
 
                 parsed_tasks.append(task_dict)
@@ -5136,26 +5133,26 @@ async def create_schedule(request: Request):
             # 插入排程任務到資料庫
             insert_sql = """
                 INSERT INTO schedule_tasks (
-                    task_id, name, description, status, schedule_type,
+                    schedule_id, schedule_name, schedule_description, status, schedule_type,
                     interval_seconds, auto_posting, max_posts_per_hour,
-                    schedule_config, trigger_config, batch_info, generation_config,
+                    timezone, weekdays_only, batch_info, generation_config,
                     next_run, created_at, updated_at,
-                    run_count, success_count, failure_count, success_rate
+                    run_count, success_count, failure_count
                 ) VALUES (
                     %s, %s, %s, %s, %s,
                     %s, %s, %s,
                     %s, %s, %s, %s,
                     %s, NOW(), NOW(),
-                    0, 0, 0, 0.0
+                    0, 0, 0
                 )
-                RETURNING task_id, name, status, next_run, created_at
+                RETURNING schedule_id, schedule_name, status, next_run, created_at
             """
 
             status = 'active' if enabled else 'paused'
 
             import json
             cursor.execute(insert_sql, (
-                task_id,
+                task_id,  # This maps to schedule_id column
                 schedule_name,
                 schedule_description,
                 status,
@@ -5163,8 +5160,8 @@ async def create_schedule(request: Request):
                 interval_seconds,
                 auto_posting,
                 max_posts_per_hour,
-                json.dumps(schedule_config),
-                json.dumps(trigger_config),
+                timezone,
+                weekdays_only,
                 json.dumps(batch_info),
                 json.dumps(generation_config),
                 next_run
@@ -5173,13 +5170,13 @@ async def create_schedule(request: Request):
             result = cursor.fetchone()
             conn.commit()
 
-            logger.info(f"排程創建成功: task_id={task_id}, name={schedule_name}")
+            logger.info(f"排程創建成功: schedule_id={task_id}, name={schedule_name}")
 
             return {
                 "success": True,
                 "message": "排程創建成功",
-                "task_id": result['task_id'],
-                "task_name": result['name'],
+                "task_id": result['schedule_id'],  # Return as task_id for backwards compatibility
+                "task_name": result['schedule_name'],
                 "status": result['status'],
                 "next_run": result['next_run'].isoformat() if result['next_run'] else None,
                 "created_at": result['created_at'].isoformat(),
