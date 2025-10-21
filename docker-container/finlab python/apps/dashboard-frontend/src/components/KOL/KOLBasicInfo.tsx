@@ -209,7 +209,7 @@ const KOLBasicInfo: React.FC<KOLBasicInfoProps> = ({
                 </Select>
               ) : (
                 <Space wrap>
-                  {kolInfo.content_types.map((type, index) => (
+                  {(kolInfo.content_types || []).map((type, index) => (
                     <Tag key={index} color="purple">
                       {type.trim()}
                     </Tag>

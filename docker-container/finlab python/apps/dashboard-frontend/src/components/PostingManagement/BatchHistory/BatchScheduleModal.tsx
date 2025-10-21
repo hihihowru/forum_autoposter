@@ -236,6 +236,12 @@ const BatchScheduleModal: React.FC<BatchScheduleModalProps> = ({
         }
       };
 
+      // 🔥 DEBUG: Log what we're sending
+      console.log('🚀 Sending scheduleConfig to API:', scheduleConfig);
+      console.log('🔍 batchData.posts[0]?.generation_config:', originalConfig);
+      console.log('🔍 triggerConfig:', triggerConfig);
+      console.log('🔍 scheduleConfigData:', scheduleConfigData);
+
       onConfirm(scheduleConfig);
     } catch (error) {
       console.error('表單驗證失敗:', error);
