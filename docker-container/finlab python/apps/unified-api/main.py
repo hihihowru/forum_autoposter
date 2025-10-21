@@ -255,6 +255,73 @@ def create_post_records_table():
         if conn:
             return_db_connection(conn)
 
+def create_schedule_tasks_table():
+    """創建 schedule_tasks 表（如果不存在）"""
+    conn = None
+    try:
+        if not db_pool:
+            logger.error("❌ 數據庫連接池不存在，無法創建表")
+            return
+
+        conn = get_db_connection()
+
+        with conn.cursor() as cursor:
+            logger.info("🔍 檢查 schedule_tasks 表是否存在...")
+            # 檢查表是否存在
+            cursor.execute("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_schema = 'public'
+                    AND table_name = 'schedule_tasks'
+                );
+            """)
+            table_exists = cursor.fetchone()[0]
+            logger.info(f"📊 表存在狀態: {table_exists}")
+
+            if not table_exists:
+                logger.info("📋 開始創建 schedule_tasks 表...")
+                cursor.execute("""
+                    CREATE TABLE schedule_tasks (
+                        task_id VARCHAR PRIMARY KEY,
+                        name VARCHAR NOT NULL,
+                        description TEXT,
+                        status VARCHAR DEFAULT 'active',
+                        schedule_type VARCHAR NOT NULL,
+                        interval_seconds INTEGER DEFAULT 300,
+                        auto_posting BOOLEAN DEFAULT FALSE,
+                        max_posts_per_hour INTEGER DEFAULT 2,
+                        schedule_config TEXT,
+                        trigger_config TEXT,
+                        batch_info TEXT,
+                        generation_config TEXT,
+                        next_run TIMESTAMP,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        run_count INTEGER DEFAULT 0,
+                        success_count INTEGER DEFAULT 0,
+                        failure_count INTEGER DEFAULT 0,
+                        success_rate FLOAT DEFAULT 0.0,
+                        last_run TIMESTAMP,
+                        last_error TEXT
+                    );
+                """)
+                conn.commit()
+                logger.info("✅ schedule_tasks 表創建成功")
+            else:
+                logger.info("✅ schedule_tasks 表已存在")
+
+    except Exception as e:
+        logger.error(f"❌ 創建 schedule_tasks 表失敗: {e}")
+        logger.error(f"❌ 錯誤詳情: {type(e).__name__}: {str(e)}")
+        import traceback
+        logger.error(f"❌ 完整錯誤堆疊: {traceback.format_exc()}")
+        if conn:
+            conn.rollback()
+        raise
+    finally:
+        if conn:
+            return_db_connection(conn)
+
 @app.on_event("startup")
 def startup_event():
     """啟動時初始化 FinLab 和數據庫連接"""
@@ -313,6 +380,10 @@ def startup_event():
                 logger.info("📋 開始創建 post_records 表...")
                 create_post_records_table()
                 logger.info("✅ post_records 表創建完成")
+
+                logger.info("📋 開始創建 schedule_tasks 表...")
+                create_schedule_tasks_table()
+                logger.info("✅ schedule_tasks 表創建完成")
             except Exception as table_error:
                 logger.error(f"❌ 創建表失敗: {table_error}")
                 # Don't fail startup if table creation fails
