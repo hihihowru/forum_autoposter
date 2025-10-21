@@ -608,23 +608,29 @@ const ScheduleManagementPage: React.FC = () => {
       dataIndex: 'schedule_config',
       key: 'posting_time',
       width: 140,
-      render: (_: any, record: ScheduleTask) => (
-        <div>
-          <Space>
-            <ClockCircleOutlined />
-            <Text style={{ fontSize: '11px' }}>
-              {record.schedule_config?.posting_time_slots && record.schedule_config.posting_time_slots.length > 0 
-                ? record.schedule_config.posting_time_slots.join(', ') 
-                : record.schedule_config?.daily_execution_time 
-                ? record.schedule_config.daily_execution_time
-                : '未設定'}
-            </Text>
-          </Space>
-          <div style={{ fontSize: '10px', color: '#666' }}>
-            {record.schedule_config?.timezone || 'Asia/Taipei'}
+      render: (_: any, record: ScheduleTask) => {
+        const dailyTime = record.schedule_config?.daily_execution_time;
+        const intervalSec = record.interval_seconds || 300;
+
+        return (
+          <div>
+            <Space>
+              <ClockCircleOutlined />
+              <Text style={{ fontSize: '11px' }}>
+                {dailyTime ? dailyTime : `每 ${intervalSec}秒`}
+              </Text>
+            </Space>
+            <div style={{ fontSize: '10px', color: '#666' }}>
+              {record.schedule_config?.timezone || 'Asia/Taipei'}
+            </div>
+            {dailyTime && (
+              <div style={{ fontSize: '10px', color: '#999' }}>
+                間隔: {intervalSec}秒
+              </div>
+            )}
           </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       title: '發文間隔',
