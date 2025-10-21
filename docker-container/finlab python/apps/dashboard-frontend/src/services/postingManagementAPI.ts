@@ -629,6 +629,21 @@ export class PostingManagementAPI {
     
     // 轉換後端數據格式為前端期望的格式
     console.log('🔍 後端響應數據:', response.data);
+
+    // 🔍 DEBUG: Log first post's generation_config
+    if (response.data.posts && response.data.posts.length > 0) {
+      const firstPost = response.data.posts[0];
+      console.log('🔍 DEBUG - First post generation_config type:', typeof firstPost.generation_config);
+      console.log('🔍 DEBUG - First post generation_config value:', JSON.stringify(firstPost.generation_config).substring(0, 200));
+      if (firstPost.generation_config) {
+        console.log('🔍 DEBUG - generation_config keys:', Object.keys(firstPost.generation_config));
+        console.log('🔍 DEBUG - has full_triggers_config:', 'full_triggers_config' in firstPost.generation_config);
+        if ('full_triggers_config' in firstPost.generation_config) {
+          console.log('🔍 DEBUG - full_triggers_config value:', JSON.stringify(firstPost.generation_config.full_triggers_config).substring(0, 200));
+        }
+      }
+    }
+
     const posts = (response.data.posts || []).map((post: any) => ({
       id: post.post_id, // 直接使用UUID作為ID
       session_id: post.session_id,
@@ -641,11 +656,11 @@ export class PostingManagementAPI {
       stock_codes: [post.stock_code], // 轉換為數組
       stock_names: [post.stock_name], // 轉換為數組
       stock_data: null,
-      generation_config: post.generation_params,
+      generation_config: post.generation_config,  // 🔥 FIX: Backend returns generation_config, not generation_params
       trigger_type: post.trigger_type, // ✅ 添加 trigger_type 欄位
       commodity_tags: post.commodity_tags || [],
       prompt_template: undefined,
-      technical_indicators: post.generation_params?.technical_indicators || [],
+      technical_indicators: post.generation_config?.technical_indicators || [],  // 🔥 FIX: Use generation_config
       quality_score: post.quality_score,
       ai_detection_score: post.ai_detection_score,
       risk_level: post.risk_level,
