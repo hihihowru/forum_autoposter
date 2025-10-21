@@ -112,10 +112,18 @@ class RandomContentGenerator:
 
         versions = []
 
-        # 獲取 KOL 特色
+        # 獲取 KOL 特色 - 優先使用 NEW prompt_* 字段，回退到 OLD 字段
         kol_nickname = getattr(kol_profile, 'nickname', '分析師')
-        kol_persona = getattr(kol_profile, 'persona', '專業')
-        tone_style = getattr(kol_profile, 'tone_style', '專業分析')
+
+        # 🔥 FIX: Use NEW prompt_* fields (from KOL creation confirmation modal)
+        prompt_persona = getattr(kol_profile, 'prompt_persona', '')
+        prompt_style = getattr(kol_profile, 'prompt_style', '')
+        prompt_guardrails = getattr(kol_profile, 'prompt_guardrails', '')
+        prompt_skeleton = getattr(kol_profile, 'prompt_skeleton', '')
+
+        # Fallback to OLD fields if NEW fields are empty
+        kol_persona = prompt_persona if prompt_persona else getattr(kol_profile, 'persona', '專業')
+        tone_style = prompt_style if prompt_style else getattr(kol_profile, 'tone_style', '專業分析')
         common_terms = getattr(kol_profile, 'common_terms', '')
         colloquial_terms = getattr(kol_profile, 'colloquial_terms', '')
 
@@ -129,13 +137,15 @@ class RandomContentGenerator:
                 version = self._generate_interaction_version(
                     version_num, kol_nickname, kol_persona, tone_style,
                     common_terms, colloquial_terms, stock_name, stock_code,
-                    original_content, serper_data, max_words
+                    original_content, serper_data, max_words,
+                    prompt_guardrails, prompt_skeleton  # 🔥 Pass NEW fields
                 )
             else:
                 version = self._generate_analysis_version(
                     version_num, kol_nickname, kol_persona, tone_style,
                     common_terms, colloquial_terms, stock_name, stock_code,
-                    original_content, trigger_type, serper_data, max_words
+                    original_content, trigger_type, serper_data, max_words,
+                    prompt_guardrails, prompt_skeleton  # 🔥 Pass NEW fields
                 )
 
             versions.append(version)
@@ -155,7 +165,9 @@ class RandomContentGenerator:
         original_content: str,
         trigger_type: str = None,
         serper_data: Dict = None,
-        max_words: int = None
+        max_words: int = None,
+        prompt_guardrails: str = '',  # 🔥 NEW parameter
+        prompt_skeleton: str = ''  # 🔥 NEW parameter
     ) -> Dict[str, str]:
         """生成分析發表版本"""
 
@@ -186,13 +198,17 @@ class RandomContentGenerator:
                 # 手動發文時，使用通用分析提示
                 trigger_context = f"注意：這是手動發文，請根據{stock_name}的當前市場情況進行客觀分析。"
 
+        # 🔥 Construct guardrails and skeleton sections
+        guardrails_section = f"\n\n寫作守則：\n{prompt_guardrails}" if prompt_guardrails else ""
+        skeleton_section = f"\n\n內容架構：\n{prompt_skeleton}" if prompt_skeleton else ""
+
         # 構建 Prompt
         prompt = f"""
 你是 {kol_nickname}，人設是 {kol_persona}，寫作風格是 {tone_style}。
 
 請針對 {stock_name}({stock_code}) 生成一個分析發表內容，重點是 {angle}。
 
-{trigger_context}
+{trigger_context}{guardrails_section}{skeleton_section}
 
 要求：
 1. 標題要吸引人，體現你的個人特色
@@ -234,7 +250,9 @@ class RandomContentGenerator:
         stock_code: str,
         original_content: str,
         serper_data: Dict = None,
-        max_words: int = None
+        max_words: int = None,
+        prompt_guardrails: str = '',  # 🔥 NEW parameter
+        prompt_skeleton: str = ''  # 🔥 NEW parameter
     ) -> Dict[str, str]:
         """生成互動提問版本"""
 
@@ -252,11 +270,14 @@ class RandomContentGenerator:
         # 🔥 FIX: Use dynamic max_words instead of hardcoded 50-80
         word_limit = max_words if max_words else 80
 
+        # 🔥 Construct guardrails section (skeleton not needed for short interaction posts)
+        guardrails_section = f"\n\n寫作守則：\n{prompt_guardrails}" if prompt_guardrails else ""
+
         # 構建 Prompt - Dynamic word limit based on user's max_words parameter
         prompt = f"""
 你是 {kol_nickname}，人設是 {kol_persona}，寫作風格是 {tone_style}。
 
-請針對 {stock_name}({stock_code}) 生成一個**簡短的互動提問**，重點是 {angle}。
+請針對 {stock_name}({stock_code}) 生成一個**簡短的互動提問**，重點是 {angle}。{guardrails_section}
 
 要求：
 1. 標題要引發討論，體現你的個人特色（10-20字）
