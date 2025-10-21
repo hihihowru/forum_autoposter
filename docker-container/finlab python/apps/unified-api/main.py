@@ -5570,8 +5570,8 @@ async def create_schedule(request: Request):
                 }
 
             # Log what we're storing
-            logger.info(f"📝 Storing trigger_config: {json.dumps(trigger_config, ensure_ascii=False)[:200]}...")
-            logger.info(f"📝 Storing schedule_config: {json.dumps(schedule_config, ensure_ascii=False)[:200]}...")
+            logger.info(f"📝 Storing trigger_config: {str(trigger_config)[:200]}...")
+            logger.info(f"📝 Storing schedule_config: {str(schedule_config)[:200]}...")
 
             # 批次信息 (batch_info)
             batch_info = data.get('batch_info', {})
