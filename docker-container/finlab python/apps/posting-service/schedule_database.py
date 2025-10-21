@@ -103,6 +103,8 @@ class ScheduleDatabaseService:
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
         # 🔥 自動創建資料表
         self.create_tables()
+        # 🔥 執行資料庫遷移
+        self.run_migrations()
     
     def get_db_session(self) -> Session:
         """獲取資料庫會話"""
@@ -116,6 +118,48 @@ class ScheduleDatabaseService:
         except Exception as e:
             logger.error(f"❌ 創建排程資料表失敗: {e}")
             raise
+
+    def run_migrations(self):
+        """執行資料庫遷移 - 添加缺失的列"""
+        try:
+            conn = self.engine.raw_connection()
+            cursor = conn.cursor()
+
+            # 檢查 trigger_config 列是否存在
+            cursor.execute("""
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name='schedule_tasks'
+                AND column_name='trigger_config'
+            """)
+
+            if not cursor.fetchone():
+                logger.info("🔄 添加 trigger_config 列...")
+                cursor.execute("ALTER TABLE schedule_tasks ADD COLUMN trigger_config JSONB")
+                conn.commit()
+                logger.info("✅ trigger_config 列添加成功")
+
+            # 檢查 schedule_config 列是否存在
+            cursor.execute("""
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name='schedule_tasks'
+                AND column_name='schedule_config'
+            """)
+
+            if not cursor.fetchone():
+                logger.info("🔄 添加 schedule_config 列...")
+                cursor.execute("ALTER TABLE schedule_tasks ADD COLUMN schedule_config JSONB")
+                conn.commit()
+                logger.info("✅ schedule_config 列添加成功")
+
+            cursor.close()
+            conn.close()
+            logger.info("✅ 資料庫遷移完成")
+
+        except Exception as e:
+            logger.error(f"❌ 資料庫遷移失敗: {e}")
+            # Don't raise - allow app to continue even if migration fails
     
     async def create_schedule_task(self,
                                  schedule_name: str,
