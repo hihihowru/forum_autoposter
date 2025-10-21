@@ -88,13 +88,19 @@ def convert_post_datetimes_to_taipei(post_dict):
         if field in result and result[field] is not None:
             if isinstance(result[field], str):
                 try:
-                    result[field] = json.loads(result[field])
-                except:
+                    parsed = json.loads(result[field])
+                    result[field] = parsed
+                    if field == 'generation_params':
+                        logger.info(f"🔍 DEBUG: Parsed generation_params, has full_triggers_config: {'full_triggers_config' in parsed}")
+                except Exception as e:
+                    logger.error(f"❌ Failed to parse {field}: {e}")
                     result[field] = None
 
     # 🔥 FIX: Rename generation_params to generation_config for frontend compatibility
     if 'generation_params' in result:
         result['generation_config'] = result.pop('generation_params')
+        if result['generation_config']:
+            logger.info(f"🔍 DEBUG: Renamed to generation_config, type: {type(result['generation_config'])}")
 
     return result
 
