@@ -3797,7 +3797,7 @@ async def get_kol_list():
                         ELSE NULL
                     END), 0) as avg_interaction_rate
                 FROM kol_profiles k
-                LEFT JOIN post_records p ON k.serial = p.kol_serial
+                LEFT JOIN post_records p ON k.serial::integer = p.kol_serial
                 GROUP BY k.id, k.serial, k.nickname, k.member_id, k.persona, k.status, k.owner,
                          k.email, k.password, k.whitelist, k.notes, k.post_times, k.target_audience,
                          k.interaction_threshold, k.content_types, k.common_terms, k.colloquial_terms,
