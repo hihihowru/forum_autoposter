@@ -21,3 +21,6 @@ sqlalchemy>=2.0.0
 
 # Financial data
 finlab>=0.4.0
+
+# Scheduling
+apscheduler>=3.10.0

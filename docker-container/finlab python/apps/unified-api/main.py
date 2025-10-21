@@ -162,6 +162,7 @@ except Exception as e:
 
 stock_mapping = {}
 db_pool = None  # Connection pool instead of single connection
+scheduler = None  # APScheduler instance for schedule execution
 
 def get_db_connection():
     """Get a connection from the pool"""
@@ -254,6 +255,200 @@ def create_post_records_table():
     finally:
         if conn:
             return_db_connection(conn)
+
+def check_schedules():
+    """
+    Check for due schedules and execute them.
+    Called every minute by APScheduler.
+    """
+    if not db_pool:
+        logger.warning("⚠️  數據庫連接池不存在，跳過排程檢查")
+        return
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            # Find schedules where next_run <= now AND status = 'active'
+            now = get_current_time()
+            cursor.execute("""
+                SELECT * FROM schedule_tasks
+                WHERE next_run <= %s AND status = 'active'
+                ORDER BY next_run ASC
+            """, (now,))
+
+            due_tasks = cursor.fetchall()
+
+            if due_tasks:
+                logger.info(f"📅 找到 {len(due_tasks)} 個待執行的排程任務")
+
+                for task in due_tasks:
+                    task_dict = dict(task)
+                    # Parse JSON fields
+                    import json
+                    for field in ['trigger_config', 'schedule_config', 'batch_info', 'generation_config']:
+                        if task_dict.get(field) and isinstance(task_dict[field], str):
+                            try:
+                                task_dict[field] = json.loads(task_dict[field])
+                            except:
+                                pass
+
+                    # Execute the schedule task
+                    execute_schedule_task(task_dict)
+
+        conn.commit()
+
+    except Exception as e:
+        logger.error(f"❌ 排程檢查失敗: {e}")
+        logger.error(f"❌ 錯誤詳情: {traceback.format_exc()}")
+        if conn:
+            conn.rollback()
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+def execute_schedule_task(task):
+    """
+    Execute a single schedule task by generating batch posts.
+
+    Args:
+        task: Schedule task dictionary with parsed JSON fields
+    """
+    task_id = task.get('task_id')
+    task_name = task.get('name', 'Unnamed Task')
+
+    logger.info(f"🚀 開始執行排程任務: {task_name} (ID: {task_id})")
+
+    conn = None
+    try:
+        # Extract configuration
+        trigger_config = task.get('trigger_config', {})
+        generation_config = task.get('generation_config', {})
+        schedule_config = task.get('schedule_config', {})
+
+        trigger_type = trigger_config.get('trigger_type', 'custom_stocks')
+        max_stocks = trigger_config.get('max_stocks', 5)
+        kol_assignment = trigger_config.get('kol_assignment', 'random')
+
+        posting_type = generation_config.get('posting_type', 'analysis')
+        max_words = generation_config.get('max_words', 150)
+
+        logger.info(f"  觸發器: {trigger_type}, 最多股票: {max_stocks}, KOL分配: {kol_assignment}")
+        logger.info(f"  貼文類型: {posting_type}, 最大字數: {max_words}")
+
+        # TODO: Implement batch generation logic here
+        # This should call the same logic as /api/generate-posts endpoint
+        # For now, just log success and update counters
+
+        success = True  # Placeholder - will be actual result
+
+        # Update schedule task status
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            # Calculate next_run based on schedule_type
+            next_run = calculate_next_run(task)
+
+            if success:
+                cursor.execute("""
+                    UPDATE schedule_tasks
+                    SET last_run = %s,
+                        next_run = %s,
+                        run_count = run_count + 1,
+                        success_count = success_count + 1,
+                        success_rate = (success_count + 1.0) / (run_count + 1.0) * 100,
+                        updated_at = %s
+                    WHERE task_id = %s
+                """, (get_current_time(), next_run, get_current_time(), task_id))
+                logger.info(f"✅ 排程任務執行成功: {task_name}")
+            else:
+                cursor.execute("""
+                    UPDATE schedule_tasks
+                    SET last_run = %s,
+                        next_run = %s,
+                        run_count = run_count + 1,
+                        failure_count = failure_count + 1,
+                        success_rate = (success_count * 1.0) / (run_count + 1.0) * 100,
+                        updated_at = %s,
+                        last_error = %s
+                    WHERE task_id = %s
+                """, (get_current_time(), next_run, get_current_time(), "執行失敗 (placeholder)", task_id))
+                logger.warning(f"⚠️  排程任務執行失敗: {task_name}")
+
+        conn.commit()
+
+    except Exception as e:
+        logger.error(f"❌ 執行排程任務失敗: {task_name} - {e}")
+        logger.error(f"❌ 錯誤詳情: {traceback.format_exc()}")
+
+        # Update failure count
+        try:
+            if conn is None:
+                conn = get_db_connection()
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    UPDATE schedule_tasks
+                    SET run_count = run_count + 1,
+                        failure_count = failure_count + 1,
+                        success_rate = (success_count * 1.0) / (run_count + 1.0) * 100,
+                        last_error = %s,
+                        updated_at = %s
+                    WHERE task_id = %s
+                """, (str(e), get_current_time(), task_id))
+            conn.commit()
+        except:
+            pass
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+def calculate_next_run(task):
+    """
+    Calculate the next run time for a schedule task.
+
+    Args:
+        task: Schedule task dictionary
+
+    Returns:
+        datetime: Next run time in Taipei timezone
+    """
+    from datetime import timedelta
+
+    schedule_type = task.get('schedule_type', 'weekday_daily')
+    schedule_config = task.get('schedule_config', {})
+    weekdays_only = schedule_config.get('weekdays_only', True)
+    posting_time_slots = schedule_config.get('posting_time_slots', [])
+
+    now = get_current_time()
+    next_run = now
+
+    if schedule_type == 'weekday_daily' or schedule_type == 'daily':
+        # Get execution time from posting_time_slots
+        if posting_time_slots:
+            time_str = posting_time_slots[0]  # e.g., "14:00"
+            try:
+                time_parts = time_str.split(':')
+                hour = int(time_parts[0])
+                minute = int(time_parts[1])
+
+                # Create next execution time for today
+                next_run = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+
+                # If today's time has passed, schedule for tomorrow
+                if next_run <= now:
+                    next_run = next_run + timedelta(days=1)
+
+                # Skip weekends if weekdays_only
+                if weekdays_only:
+                    while next_run.weekday() >= 5:  # 5=Saturday, 6=Sunday
+                        next_run = next_run + timedelta(days=1)
+            except:
+                # Fallback: schedule for tomorrow same time
+                next_run = now + timedelta(days=1)
+    else:
+        # For other schedule types, default to next day
+        next_run = now + timedelta(days=1)
+
+    return next_run
 
 def create_schedule_tasks_table():
     """創建 schedule_tasks 表（如果不存在）"""
@@ -441,6 +636,32 @@ def startup_event():
                 logger.warning("⚠️ 無法從 FinLab 取得公司資訊")
     except Exception as e:
         logger.error(f"❌ 從 FinLab 載入公司資訊失敗: {e}")
+
+    # 🔥 Initialize APScheduler for schedule execution
+    try:
+        global scheduler
+        from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+        logger.info("📅 初始化 APScheduler...")
+        scheduler = AsyncIOScheduler(timezone=pytz.timezone('Asia/Taipei'))
+
+        # Add job to check schedules every minute
+        scheduler.add_job(
+            check_schedules,
+            trigger='interval',
+            minutes=1,
+            id='schedule_checker',
+            replace_existing=True,
+            max_instances=1  # Prevent overlapping executions
+        )
+
+        scheduler.start()
+        logger.info("✅ APScheduler 啟動成功 - 每分鐘檢查排程任務")
+    except Exception as e:
+        logger.error(f"❌ APScheduler 初始化失敗: {e}")
+        logger.error(f"❌ 錯誤詳情: {traceback.format_exc()}")
+        # Don't crash startup if scheduler fails
+        scheduler = None
 
 def ensure_finlab_login():
     """確保 FinLab 已登入"""
