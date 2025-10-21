@@ -123,7 +123,7 @@ class RandomContentGenerator:
                 version = self._generate_interaction_version(
                     version_num, kol_nickname, kol_persona, tone_style,
                     common_terms, colloquial_terms, stock_name, stock_code,
-                    original_content, serper_data
+                    original_content, trigger_type, serper_data
                 )
             else:
                 version = self._generate_analysis_version(
@@ -224,10 +224,11 @@ class RandomContentGenerator:
         stock_name: str,
         stock_code: str,
         original_content: str,
+        trigger_type: str = None,
         serper_data: Dict = None
     ) -> Dict[str, str]:
         """生成互動提問版本"""
-        
+
         # 不同的互動角度
         interaction_angles = [
             "技術指標討論",
@@ -236,12 +237,24 @@ class RandomContentGenerator:
             "市場看法交流",
             "投資策略分享"
         ]
-        
+
         angle = interaction_angles[version_num - 1]
-        
+
+        # 根據觸發器類型調整提示
+        trigger_context = ""
+        if trigger_type and trigger_type != "manual":
+            if "limit_down" in trigger_type or "跌停" in trigger_type:
+                trigger_context = f"注意：{stock_name} 目前處於跌停狀態，請從負面角度提問，探討跌停原因、風險、後續影響。不要暗示這是投資機會。"
+            elif "limit_up" in trigger_type or "漲停" in trigger_type:
+                trigger_context = f"注意：{stock_name} 目前處於漲停狀態，請從漲停角度提問，探討漲停原因、後續走勢。"
+            elif "volume" in trigger_type:
+                trigger_context = f"注意：{stock_name} 出現異常成交量，請重點詢問量價關係。"
+
         # 構建 Prompt
         prompt = f"""
 你是 {kol_nickname}，人設是 {kol_persona}，寫作風格是 {tone_style}。
+
+{trigger_context}
 
 請針對 {stock_name}({stock_code}) 生成一個互動提問內容，重點是 {angle}。
 
