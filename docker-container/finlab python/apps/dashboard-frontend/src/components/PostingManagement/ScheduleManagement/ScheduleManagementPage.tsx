@@ -257,6 +257,30 @@ const ScheduleManagementPage: React.FC = () => {
 
   const statistics = getStatistics();
 
+  // 將 UTC 時間字串轉換為台灣時間顯示
+  const formatUtcToTaiwanTime = (utcTimeString: string | null | undefined): string => {
+    if (!utcTimeString) return '未設定';
+
+    // API 返回的時間格式: "2025-10-21T07:14:14.115996" (UTC但沒有Z標記)
+    // 需要手動加上Z來標記為UTC，然後轉換為台灣時間
+    let dateStr = utcTimeString;
+    if (!dateStr.endsWith('Z') && !dateStr.includes('+') && !dateStr.includes('T00:00:00')) {
+      dateStr = dateStr + 'Z'; // 標記為UTC
+    }
+
+    const date = new Date(dateStr);
+
+    return date.toLocaleString('zh-TW', {
+      timeZone: 'Asia/Taipei',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    });
+  };
+
   // 轉換 API 數據結構到前端期望的格式
   const transformApiTask = (apiTask: any): ScheduleTask => {
     // 從 generation_config 解析出觸發器配置
@@ -725,14 +749,7 @@ const ScheduleManagementPage: React.FC = () => {
       render: (createdAt: string) => (
         <div>
           <Text style={{ fontSize: '11px' }}>
-            {new Date(createdAt).toLocaleString('zh-TW', {
-              timeZone: 'Asia/Taipei',
-              year: 'numeric',
-              month: '2-digit',
-              day: '2-digit',
-              hour: '2-digit',
-              minute: '2-digit'
-            })}
+            {formatUtcToTaiwanTime(createdAt)}
           </Text>
         </div>
       ),
@@ -749,13 +766,13 @@ const ScheduleManagementPage: React.FC = () => {
               <Space style={{ marginBottom: 4 }}>
                 <CalendarOutlined />
                 <Text style={{ fontSize: '11px' }}>
-                  {new Date(nextRun).toLocaleString()}
+                  {formatUtcToTaiwanTime(nextRun)}
                 </Text>
               </Space>
               <div>
-                <Text 
-                  type="secondary" 
-                  style={{ 
+                <Text
+                  type="secondary"
+                  style={{
                     fontSize: '11px',
                     color: '#1890ff',
                     fontWeight: 500
@@ -1054,7 +1071,7 @@ const ScheduleManagementPage: React.FC = () => {
                       <Timeline>
                         {record.last_run && (
                           <Timeline.Item color="green">
-                            {new Date(record.last_run).toLocaleString()} - ✅ 最後執行
+                            {formatUtcToTaiwanTime(record.last_run)} - ✅ 最後執行
                           </Timeline.Item>
                         )}
                         <Timeline.Item color={record.success_count > 0 ? 'green' : 'gray'}>
