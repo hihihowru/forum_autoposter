@@ -2379,6 +2379,9 @@ async def manual_posting(request: Request):
         ]
 
         # 生成參數記錄
+        full_triggers_config_from_request = body.get('full_triggers_config', {})
+        logger.info(f"🔍 DEBUG: Received full_triggers_config from request: {json.dumps(full_triggers_config_from_request, ensure_ascii=False)[:200]}...")
+
         generation_params = {
             "method": "manual",
             "kol_persona": kol_persona,
@@ -2388,8 +2391,10 @@ async def manual_posting(request: Request):
             "posting_type": posting_type,
             "created_at": now.isoformat(),
             # 🔥 FIX: Store full triggers config for schedule recreation
-            "full_triggers_config": body.get('full_triggers_config', {})
+            "full_triggers_config": full_triggers_config_from_request
         }
+
+        logger.info(f"🔍 DEBUG: generation_params to store: {json.dumps(generation_params, ensure_ascii=False)[:200]}...")
 
         # 確認數據庫連接可用
         if not db_pool:
