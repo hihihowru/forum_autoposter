@@ -284,22 +284,32 @@ const PostReviewPage: React.FC<PostReviewPageProps> = ({ sessionId, onBack }) =>
     });
   };
 
-  // 保存編輯
+  // 保存編輯 (只更新內容，不改變狀態)
   const handleSaveEdit = async () => {
     if (!editingPost) return;
-    
+
     try {
       // 獲取表單值
       const formValues = form.getFieldsValue();
       const { title, content } = formValues;
-      
+
       console.log('🔄 保存編輯:', { title, content });
-      
-      await handleApprove(editingPost.id.toString(), title, content);
-      setEditModalVisible(false);
-      setEditingPost(null);
-      form.resetFields();
-      message.success('貼文已編輯並審核通過');
+
+      // 使用 updatePostContent API - 只更新內容，不改變狀態
+      const result = await PostingManagementAPI.updatePostContent(
+        editingPost.id.toString(),
+        { title, content }
+      );
+
+      if (result.success) {
+        message.success('貼文已保存');
+        setEditModalVisible(false);
+        setEditingPost(null);
+        form.resetFields();
+        loadPosts(); // 重新載入以顯示更新
+      } else {
+        message.error(result.error || '保存失敗');
+      }
     } catch (error) {
       console.error('保存編輯失敗:', error);
       message.error('保存編輯失敗');
@@ -987,7 +997,7 @@ const PostReviewPage: React.FC<PostReviewPageProps> = ({ sessionId, onBack }) =>
             取消
           </Button>,
           <Button key="save" type="primary" onClick={handleSaveEdit} icon={<SaveOutlined />}>
-            保存並審核通過
+            保存
           </Button>
         ]}
       >
