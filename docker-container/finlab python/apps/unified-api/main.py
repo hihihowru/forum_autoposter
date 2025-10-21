@@ -39,6 +39,46 @@ def get_current_time():
     """Returns current time in Asia/Taipei timezone"""
     return datetime.now(pytz.timezone('Asia/Taipei'))
 
+def convert_post_datetimes_to_taipei(post_dict):
+    """
+    Convert naive UTC datetime fields in post dictionary to Taipei timezone strings.
+
+    This fixes the issue where database TIMESTAMP columns (without timezone) are returned
+    as naive datetime objects, which get serialized as UTC but displayed incorrectly.
+
+    Args:
+        post_dict: Dictionary containing post data from database
+
+    Returns:
+        Dictionary with datetime fields converted to Taipei timezone ISO strings
+    """
+    taipei_tz = pytz.timezone('Asia/Taipei')
+    utc_tz = pytz.utc
+
+    # Datetime fields that need conversion
+    datetime_fields = ['created_at', 'updated_at', 'published_at', 'scheduled_time']
+
+    result = dict(post_dict)
+
+    for field in datetime_fields:
+        if field in result and result[field] is not None:
+            dt = result[field]
+
+            # If datetime is naive (no tzinfo), assume it's UTC
+            if isinstance(dt, datetime) and dt.tzinfo is None:
+                # Add UTC timezone
+                dt_utc = utc_tz.localize(dt)
+                # Convert to Taipei timezone
+                dt_taipei = dt_utc.astimezone(taipei_tz)
+                # Store as ISO format string
+                result[field] = dt_taipei.isoformat()
+            elif isinstance(dt, datetime):
+                # Already has timezone info, just convert to Taipei
+                dt_taipei = dt.astimezone(taipei_tz)
+                result[field] = dt_taipei.isoformat()
+
+    return result
+
 # 配置日誌
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -2685,9 +2725,12 @@ async def get_posts(
             conn.commit()  # Commit after all reads
             logger.info(f"✅ 查詢到 {len(posts)} 條貼文數據，總數: {total_count}")
 
+            # 🔥 FIX: Convert naive UTC datetimes to Taipei timezone
+            posts_with_timezone = [convert_post_datetimes_to_taipei(dict(post)) for post in posts]
+
             return {
                 "success": True,
-                "posts": [dict(post) for post in posts],
+                "posts": posts_with_timezone,
                 "count": total_count,
                 "skip": skip,
                 "limit": limit,
