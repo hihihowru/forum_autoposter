@@ -182,6 +182,9 @@ const BatchScheduleModal: React.FC<BatchScheduleModalProps> = ({
 
       console.log('🔍 originalConfig:', originalConfig);
       console.log('🔍 fullTriggersConfig:', fullTriggersConfig);
+      console.log('🔍 fullTriggersConfig type:', typeof fullTriggersConfig);
+      console.log('🔍 fullTriggersConfig keys:', Object.keys(fullTriggersConfig));
+      console.log('🔍 fullTriggersConfig JSON:', JSON.stringify(fullTriggersConfig, null, 2).substring(0, 300));
 
       // 🔥 FIX: Build comprehensive trigger_config for schedule execution using stored full config
       const triggerConfig = fullTriggersConfig.triggerConfig ? {
