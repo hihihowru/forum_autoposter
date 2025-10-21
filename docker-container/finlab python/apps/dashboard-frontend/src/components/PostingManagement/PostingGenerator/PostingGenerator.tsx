@@ -599,10 +599,11 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
 
       // 🔥 IMMEDIATELY navigate to review page (don't wait for generation)
       console.log('🚀 立即跳轉到審核頁面，貼文將在背景生成');
+      message.destroy(); // 🔥 FIX: Destroy loading message before navigation
       setCurrentSessionId(session.id);
       setShowReviewPage(true);
       message.info(`開始生成 ${postsToGenerate.length} 篇貼文，頁面將自動更新`, 5);
-      
+
       return; // 提前返回，不執行後續的同步邏輯
       
     } catch (error) {
