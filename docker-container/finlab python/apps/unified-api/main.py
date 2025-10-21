@@ -3867,8 +3867,16 @@ async def create_kol(request: Request):
         nickname = data.get("nickname")
         member_id_from_user = data.get("member_id", "")  # 用戶手動輸入的 member_id（選填）
         ai_description = data.get("ai_description", "")  # AI 描述（選填）
+        model_id = data.get("model_id", "gpt-4o-mini")  # AI 模型 ID
+
+        # Prompt 欄位（Phase 1: 手動填寫）
+        prompt_persona = data.get("prompt_persona", "")
+        prompt_style = data.get("prompt_style", "")
+        prompt_guardrails = data.get("prompt_guardrails", "")
+        prompt_skeleton = data.get("prompt_skeleton", "")
 
         logger.info(f"📝 收到創建 KOL 請求: email={email}, nickname={nickname}, member_id={member_id_from_user or '(未提供)'}")
+        logger.info(f"📝 Prompt 欄位: persona={bool(prompt_persona)}, style={bool(prompt_style)}, guardrails={bool(prompt_guardrails)}, skeleton={bool(prompt_skeleton)}")
 
         # 驗證必填欄位
         if not email or not password or not nickname:
@@ -4072,14 +4080,18 @@ async def create_kol(request: Request):
                     common_terms, colloquial_terms, tone_style, typing_habit, backstory,
                     expertise, signature, emoji_pack, tone_formal, tone_emotion,
                     tone_confidence, tone_urgency, tone_interaction, question_ratio,
-                    content_length, created_time, last_updated
+                    content_length, model_id,
+                    prompt_persona, prompt_style, prompt_guardrails, prompt_skeleton,
+                    created_time, last_updated
                 ) VALUES (
                     %s, %s, %s, %s, 'active', 'system', %s, %s,
                     true, '通過 API 創建', '09:00,12:00,15:00', %s, 0,
                     %s, %s, %s, %s, %s,
                     %s, %s, %s, %s, %s,
                     %s, %s, %s, %s,
-                    %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                    %s, %s,
+                    %s, %s, %s, %s,
+                    CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
                 )
                 RETURNING serial, nickname, member_id, persona, email
             """
@@ -4089,7 +4101,8 @@ async def create_kol(request: Request):
                 target_audience, common_terms, colloquial_terms, tone_style, typing_habit, backstory,
                 expertise, signature, emoji_pack, tone_formal, tone_emotion,
                 tone_confidence, tone_urgency, tone_interaction, question_ratio,
-                content_length
+                content_length, model_id,
+                prompt_persona, prompt_style, prompt_guardrails, prompt_skeleton
             ))
 
             new_kol = cursor.fetchone()

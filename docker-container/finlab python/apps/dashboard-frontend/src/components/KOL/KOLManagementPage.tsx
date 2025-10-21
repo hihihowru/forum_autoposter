@@ -366,13 +366,49 @@ const KOLManagementPage: React.FC = () => {
   const handleCreateKOL = async () => {
     try {
       const values = await createForm.validateFields();
-      console.log('📝 表單驗證通過，直接創建 KOL');
+      console.log('📝 表單驗證通過，打開 Confirmation Modal');
 
-      // Directly proceed with creation
-      await proceedWithCreation(values);
+      // Populate confirmation form with values from create form + default values
+      confirmForm.setFieldsValue({
+        // Basic fields
+        email: values.email,
+        password: values.password,
+        nickname: values.nickname,
+        member_id: values.member_id || '',
+        ai_description: values.ai_description || '',
+        model_id: values.model_id || 'gpt-4o-mini',
+
+        // Prompt fields with default values
+        prompt_persona: values.prompt_persona || '技術分析師（技術派）- K線、均線、MACD專家',
+        prompt_style: values.prompt_style || '邏輯清晰（理性風格）',
+        prompt_guardrails: values.prompt_guardrails || '標準守則（合規）- 不提供明確買賣建議',
+        prompt_skeleton: values.prompt_skeleton || '技術分析骨架 - 當前狀況→技術分析→買賣策略→風險提醒'
+      });
+
+      // Open confirmation modal
+      setConfirmModalVisible(true);
+      console.log('✅ Confirmation Modal 已打開');
 
     } catch (error) {
       console.error('❌ 表單驗證失敗:', error);
+      message.error('請填寫所有必填欄位');
+    }
+  };
+
+  // Handle confirmation modal submit
+  const handleConfirmSubmit = async () => {
+    try {
+      const values = await confirmForm.validateFields();
+      console.log('📝 Confirmation Modal 驗證通過，執行創建');
+
+      // Close confirmation modal
+      setConfirmModalVisible(false);
+
+      // Proceed with creation using confirmed values
+      await proceedWithCreation(values);
+
+    } catch (error) {
+      console.error('❌ Confirmation 表單驗證失敗:', error);
       message.error('請填寫所有必填欄位');
     }
   };
@@ -388,8 +424,14 @@ const KOLManagementPage: React.FC = () => {
         email: values.email,
         password: values.password,
         nickname: values.nickname,
-        member_id: values.member_id || '',  // 新增 member_id 欄位
-        ai_description: values.ai_description || ''
+        member_id: values.member_id || '',
+        ai_description: values.ai_description || '',
+        model_id: values.model_id || 'gpt-4o-mini',
+        // Prompt fields
+        prompt_persona: values.prompt_persona || '',
+        prompt_style: values.prompt_style || '',
+        prompt_guardrails: values.prompt_guardrails || '',
+        prompt_skeleton: values.prompt_skeleton || ''
       };
 
       console.log('📤 發送到後端的 payload:', {
@@ -1343,6 +1385,145 @@ const KOLManagementPage: React.FC = () => {
             />
           </>
         )}
+      </Modal>
+
+      {/* ✅ Confirmation Modal - Review all KOL profile fields before creation */}
+      <Modal
+        title="📋 確認 KOL 設定"
+        open={confirmModalVisible}
+        onCancel={() => setConfirmModalVisible(false)}
+        onOk={handleConfirmSubmit}
+        okText="確認創建"
+        cancelText="返回修改"
+        width={800}
+        confirmLoading={saving}
+      >
+        <Alert
+          message="請檢查並完善所有欄位"
+          description="以下是即將創建的 KOL 設定。你可以在創建前修改任何欄位（包括 Prompt 相關欄位）。"
+          type="info"
+          showIcon
+          style={{ marginBottom: 24 }}
+        />
+
+        <Form
+          form={confirmForm}
+          layout="vertical"
+        >
+          {/* Basic Information */}
+          <Card title="基本資訊" size="small" style={{ marginBottom: 16 }}>
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item
+                  name="email"
+                  label="郵箱 (Email)"
+                  rules={[{ required: true, message: '請輸入郵箱' }]}
+                >
+                  <Input disabled />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item
+                  name="password"
+                  label="密碼 (Password)"
+                  rules={[{ required: true, message: '請輸入密碼' }]}
+                >
+                  <Input.Password disabled />
+                </Form.Item>
+              </Col>
+            </Row>
+
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item
+                  name="nickname"
+                  label="暱稱 (Nickname)"
+                  rules={[{ required: true, message: '請輸入暱稱' }]}
+                >
+                  <Input />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item
+                  name="member_id"
+                  label="會員 ID (Member ID)"
+                >
+                  <Input />
+                </Form.Item>
+              </Col>
+            </Row>
+
+            <Form.Item
+              name="ai_description"
+              label="AI 描述"
+            >
+              <Input.TextArea rows={2} placeholder="例如：專注技術分析的股市老手" />
+            </Form.Item>
+
+            <Form.Item
+              name="model_id"
+              label="AI 模型 ID"
+              rules={[{ required: true, message: '請選擇模型' }]}
+            >
+              <Select>
+                <Select.Option value="gpt-4o-mini">gpt-4o-mini (推薦)</Select.Option>
+                <Select.Option value="gpt-4o">gpt-4o (高品質)</Select.Option>
+                <Select.Option value="gpt-4-turbo">gpt-4-turbo (進階)</Select.Option>
+                <Select.Option value="gpt-4">gpt-4 (穩定)</Select.Option>
+                <Select.Option value="gpt-3.5-turbo">gpt-3.5-turbo (基礎)</Select.Option>
+              </Select>
+            </Form.Item>
+          </Card>
+
+          {/* Prompt Configuration */}
+          <Card title="Prompt 設定（可手動填寫）" size="small" style={{ marginBottom: 16 }}>
+            <Alert
+              message="這些欄位將用於生成 KOL 的個性化內容"
+              type="warning"
+              showIcon
+              style={{ marginBottom: 12 }}
+            />
+
+            <Form.Item
+              name="prompt_persona"
+              label="Prompt 人設"
+              extra="定義 KOL 的專業角色和專長"
+            >
+              <Input.TextArea rows={2} placeholder="例如：技術分析師（技術派）- K線、均線、MACD專家" />
+            </Form.Item>
+
+            <Form.Item
+              name="prompt_style"
+              label="Prompt 風格"
+              extra="定義內容的表達風格"
+            >
+              <Input.TextArea rows={2} placeholder="例如：邏輯清晰（理性風格）" />
+            </Form.Item>
+
+            <Form.Item
+              name="prompt_guardrails"
+              label="Prompt 守則"
+              extra="定義內容的規範和限制"
+            >
+              <Input.TextArea rows={2} placeholder="例如：標準守則（合規）- 不提供明確買賣建議" />
+            </Form.Item>
+
+            <Form.Item
+              name="prompt_skeleton"
+              label="Prompt 骨架"
+              extra="定義內容的結構模板"
+            >
+              <Input.TextArea rows={3} placeholder="例如：技術分析骨架 - 當前狀況→技術分析→買賣策略→風險提醒" />
+            </Form.Item>
+          </Card>
+        </Form>
+
+        <Alert
+          message="Phase 2 將支援 AI 自動生成"
+          description="未來版本將在每個欄位旁邊添加 🤖 按鈕，可以根據 AI 描述自動生成 Prompt 欄位內容。"
+          type="info"
+          showIcon
+        />
       </Modal>
     </div>
   );
