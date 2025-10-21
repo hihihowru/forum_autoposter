@@ -256,6 +256,10 @@ export class PostingManagementAPI {
     trigger_type?: string;
     trigger_data?: any;
     generation_config?: any;
+    posting_type?: string;  // 🔥 Add posting_type to interface
+    post_mode?: string;
+    max_stocks_per_post?: number;
+    max_words?: number;
   }): Promise<GeneratePostsResponse> {
     try {
       console.log('🚀 開始批量生成貼文:', {
