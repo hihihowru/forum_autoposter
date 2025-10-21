@@ -184,25 +184,44 @@ curl -X DELETE "https://forumautoposter-production.up.railway.app/api/kol/999"
 
 ## 📋 OPTIONAL: Additional Checks
 
-### ✅ Feature 5: Comprehensive Confirmation Modal (Infrastructure)
-**Commit**: 6d1107a5
-**Status**: 🟡 **INFRASTRUCTURE READY, UI PENDING**
+### ✅ Feature 5: KOL Prompt Fields AI Prefill ⚠️ **NOT IMPLEMENTED**
+**Status**: 🟡 **INVESTIGATION COMPLETE**
 
-**What's Done**:
-- State variables: `confirmForm`, `confirmModalVisible`
-- Handler functions: `handleConfirmSubmit`
-- All values populate with defaults (including prompt fields)
+**User Report**: "kol 人設、流派、 prompt 人設等欄位都沒有 fill. not sure openai model are implemented here"
 
-**What's Pending**:
-- Actual Modal UI component with all fields visible and editable
+**Investigation Findings**:
+1. ✅ Frontend HAS form fields (prompt_persona, prompt_style, prompt_guardrails, prompt_skeleton)
+2. ✅ Frontend HAS default values (added in commit 9c7bcdbe)
+3. ❌ Frontend DOES NOT send these fields to backend in payload
+4. ❌ Backend DOES NOT accept or store these fields
+5. ❌ Database probably doesn't have columns for these fields
+
+**Issue**: When user fills in prompt fields, they are **lost** when creating KOL.
+
+**Detailed Report**: See `KOL_AI_PREFILL_INVESTIGATION.md`
+
+**User's Expected Behavior**:
+- User provides ai_description
+- System uses LLM to auto-generate prompt fields
+- User can review and modify before final submission
 
 **Current Behavior**:
-When creating a KOL, the system should:
-1. Validate the create form
-2. Populate confirmation form with all values
-3. Open confirmation modal (but UI is not implemented yet)
+- User manually fills prompt fields
+- Fields are lost (not sent to backend)
+- Database doesn't store them
 
-**You can skip this** for now - infrastructure is ready, UI will be added later.
+**Recommended Fix** (Phase 1 - Basic):
+1. Add database columns for prompt fields
+2. Frontend: Include prompt fields in API payload
+3. Backend: Accept and store prompt fields
+
+**Enhancement** (Phase 2 - AI):
+4. Backend: Call OpenAI to generate prompt fields from ai_description
+5. Frontend: Display AI-generated values for review
+
+**Decision Required**: Implement now or defer to post-scheduling?
+
+**You can skip this** for now - needs database migration and backend changes.
 
 ---
 
@@ -211,10 +230,13 @@ When creating a KOL, the system should:
 | Feature | Priority | Status | Testing Required |
 |---------|----------|--------|------------------|
 | **Alternative Versions** | 🔥 HIGH | Previous session | ⏳ PENDING YOUR REPORT |
-| **KOL Serial Extraction** | 🔥 HIGH | Just deployed | ⏳ NEEDS TESTING |
-| **KOL Delete Button** | 🔥 HIGH | Just deployed | ⏳ NEEDS TESTING |
-| **Trending Topics UI** | 🔥 HIGH | Just deployed | ⏳ NEEDS TESTING |
-| **Confirmation Modal** | 🟡 LOW | Infrastructure only | 🟡 OPTIONAL |
+| **KOL Serial Extraction** | 🔥 HIGH | Deployed (9916d70d) | ⏳ NEEDS TESTING |
+| **KOL Delete Button** | 🔥 HIGH | Deployed (6d1107a5) | ⏳ NEEDS TESTING |
+| **Trending Topics UI** | 🔥 HIGH | Deployed (0fd360ab) | ⏳ NEEDS TESTING |
+| **KOL Creation Button** | 🔥 HIGH | Deployed (33be8599) | ⏳ NEEDS TESTING |
+| **Trending Topics Summary** | 🔥 HIGH | Deployed (33be8599) | ⏳ NEEDS TESTING |
+| **Posting Type Handler** | 🔥 HIGH | Deployed (e34aec20) | ⏳ NEEDS TESTING |
+| **KOL Prompt AI Prefill** | 🟡 MEDIUM | NOT IMPLEMENTED | 🟡 OPTIONAL (needs DB migration) |
 
 ---
 
