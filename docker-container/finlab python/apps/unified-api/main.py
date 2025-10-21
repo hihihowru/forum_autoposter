@@ -4183,6 +4183,143 @@ async def get_weekly_posts():
             return_db_connection(conn)
 
 
+@app.get("/api/dashboard/kols/{serial}/posts")
+async def get_kol_posts(serial: str, page: int = 1, page_size: int = 10):
+    """獲取 KOL 的發文歷史"""
+    logger.info(f"收到 get_kol_posts 請求 - Serial: {serial}, Page: {page}, PageSize: {page_size}")
+
+    conn = None
+    try:
+        if not db_pool:
+            logger.warning("數據庫連接不可用")
+            return {
+                "success": False,
+                "error": "數據庫連接不可用"
+            }
+
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            # Calculate offset
+            offset = (page - 1) * page_size
+
+            # Count total posts for this KOL
+            count_query = """
+                SELECT COUNT(*) as count
+                FROM post_records
+                WHERE kol_serial = %s
+            """
+            cursor.execute(count_query, (int(serial),))
+            total = cursor.fetchone()['count']
+
+            # Get paginated posts
+            query = """
+                SELECT
+                    post_id,
+                    title,
+                    content,
+                    status,
+                    stock_code,
+                    created_at,
+                    published_at,
+                    likes,
+                    comments,
+                    shares,
+                    cmoney_post_url
+                FROM post_records
+                WHERE kol_serial = %s
+                ORDER BY created_at DESC
+                LIMIT %s OFFSET %s
+            """
+            cursor.execute(query, (int(serial), page_size, offset))
+            posts = cursor.fetchall()
+
+            logger.info(f"查詢到 {len(posts)} 篇貼文，總數: {total}")
+
+            return {
+                "success": True,
+                "data": {
+                    "posts": [dict(post) for post in posts],
+                    "pagination": {
+                        "current_page": page,
+                        "page_size": page_size,
+                        "total_items": total,
+                        "total_pages": (total + page_size - 1) // page_size
+                    }
+                }
+            }
+
+    except Exception as e:
+        logger.error(f"查詢 KOL 發文歷史失敗: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {
+            "success": False,
+            "error": str(e)
+        }
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+
+@app.get("/api/dashboard/kols/{serial}/interactions")
+async def get_kol_interactions(serial: str):
+    """獲取 KOL 的互動數據和趨勢"""
+    logger.info(f"收到 get_kol_interactions 請求 - Serial: {serial}")
+
+    conn = None
+    try:
+        if not db_pool:
+            logger.warning("數據庫連接不可用")
+            return {
+                "success": False,
+                "error": "數據庫連接不可用"
+            }
+
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            # Get interaction trend data (daily aggregation for last 30 days)
+            query = """
+                SELECT
+                    DATE(created_at) as date,
+                    COUNT(*) as post_count,
+                    COALESCE(SUM(likes), 0) as total_likes,
+                    COALESCE(SUM(comments), 0) as total_comments,
+                    COALESCE(SUM(shares), 0) as total_shares,
+                    COALESCE(AVG(likes), 0) as avg_likes,
+                    COALESCE(AVG(comments), 0) as avg_comments,
+                    COALESCE(AVG(shares), 0) as avg_shares
+                FROM post_records
+                WHERE kol_serial = %s
+                  AND status = 'published'
+                  AND created_at >= CURRENT_DATE - INTERVAL '30 days'
+                GROUP BY DATE(created_at)
+                ORDER BY DATE(created_at) DESC
+            """
+            cursor.execute(query, (int(serial),))
+            trend_data = cursor.fetchall()
+
+            logger.info(f"查詢到 {len(trend_data)} 天的互動數據")
+
+            return {
+                "success": True,
+                "data": {
+                    "interaction_trend": [dict(row) for row in trend_data]
+                }
+            }
+
+    except Exception as e:
+        logger.error(f"查詢 KOL 互動數據失敗: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {
+            "success": False,
+            "error": str(e)
+        }
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+
 @app.post("/api/kol/test-login")
 async def test_kol_login(request: Request):
     """
