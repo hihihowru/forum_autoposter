@@ -70,7 +70,9 @@ const KOLDetail: React.FC = () => {
     if (!serial) return;
 
     try {
-      const response = await api.get(`/dashboard/kols/${serial}/posts`, {
+      // Call Railway API directly for KOL posts endpoint
+      const RAILWAY_API_URL = import.meta.env.VITE_RAILWAY_API_URL || 'https://forumautoposter-production.up.railway.app';
+      const response = await axios.get(`${RAILWAY_API_URL}/api/dashboard/kols/${serial}/posts`, {
         params: { page, page_size: pageSize }
       });
 
@@ -88,7 +90,9 @@ const KOLDetail: React.FC = () => {
     if (!serial) return;
 
     try {
-      const response = await api.get(`/dashboard/kols/${serial}/interactions`);
+      // Call Railway API directly for KOL interactions endpoint
+      const RAILWAY_API_URL = import.meta.env.VITE_RAILWAY_API_URL || 'https://forumautoposter-production.up.railway.app';
+      const response = await axios.get(`${RAILWAY_API_URL}/api/dashboard/kols/${serial}/interactions`);
 
       if (response.data && response.data.success && response.data.data) {
         setInteractionTrend(response.data.data.interaction_trend);
