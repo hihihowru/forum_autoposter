@@ -138,7 +138,11 @@ const BatchScheduleModal: React.FC<BatchScheduleModalProps> = ({
           posting_type: originalConfig.posting_type || 'analysis', // 🔥 修復：從 batchData 獲取 posting_type
           stock_sorting: defaultStockSorting,
           max_stocks: originalMaxStocks, // 🔥 修復：使用原始配置的最大股票數量
-          kol_assignment: batchData.kol_assignment || 'random', // 也從 batchData 獲取
+          // 🔥 修復：只使用有效的 kol_assignment 值，否則默認為 'random'
+          // batchData.kol_assignment 可能是 KOL serial (如 "208") 而不是分配策略
+          kol_assignment: ['fixed', 'random', 'round_robin', 'performance_based'].includes(batchData.kol_assignment)
+            ? batchData.kol_assignment
+            : 'random',
           content_style: originalConfig.content_style || originalConfig.settings?.content_style || 'technical',
           content_length: originalConfig.content_length || originalConfig.settings?.content_length || 'medium',
           max_words: originalConfig.max_words || originalConfig.settings?.max_words || 1000,
