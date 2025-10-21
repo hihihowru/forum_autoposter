@@ -107,7 +107,7 @@ const GenerationSettings: React.FC<GenerationSettingsProps> = ({ value, onChange
     });
   };
 
-  const handlePostingTypeChange = (postingType: 'interaction' | 'analysis') => {
+  const handlePostingTypeChange = (postingType: 'interaction' | 'analysis' | 'personalized') => {
     const newSettings = {
       ...value,
       posting_type: postingType
@@ -117,16 +117,25 @@ const GenerationSettings: React.FC<GenerationSettingsProps> = ({ value, onChange
     if (postingType === 'interaction') {
       // 互動發問類型：簡短內容，包含問句和表情符號
       newSettings.content_length = 'short';
-      newSettings.max_words = 30;
+      newSettings.max_words = 50;  // 🔥 Fixed: Changed from 30 to 50 (more reasonable)
       newSettings.include_questions = true;
       newSettings.include_emoji = true;
       newSettings.include_hashtag = true;
       newSettings.content_style = 'casual';
       newSettings.include_analysis_depth = 'basic';
+    } else if (postingType === 'personalized') {
+      // 個人化內容類型：使用 KOL 人設生成多版本
+      newSettings.content_length = 'medium';
+      newSettings.max_words = 200;  // 🔥 Capped at 200 to prevent 502 timeouts
+      newSettings.include_questions = false;
+      newSettings.include_emoji = false;
+      newSettings.include_hashtag = true;
+      newSettings.content_style = 'professional';
+      newSettings.include_analysis_depth = 'detailed';
     } else {
       // 發表分析類型：正常流程
       newSettings.content_length = 'medium';
-      newSettings.max_words = 200;
+      newSettings.max_words = 150;  // 🔥 Changed from 200 to 150 for better quality
       newSettings.include_questions = false;
       newSettings.include_emoji = false;
       newSettings.include_hashtag = true;
