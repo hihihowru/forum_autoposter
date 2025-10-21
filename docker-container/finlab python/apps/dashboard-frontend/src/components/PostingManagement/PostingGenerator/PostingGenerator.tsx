@@ -579,8 +579,8 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
         has_topic_tags: generationConfig.tags?.tag_mode === 'topic_tags' || generationConfig.tags?.tag_mode === 'both',
         // 🔥 FIX: Use batchMode posting_type (from Step 9) instead of settings (Step 7)
         posting_type: generationConfig.batchMode?.posting_type || 'analysis',
-        // 🔥 FIX: Pass actual trigger type (e.g., "limit_up_after_hours") not triggerKey ("individual")
-        trigger_type: generationConfig.triggers?.selectedTrigger || generationConfig.triggers?.triggerConfig?.trigger_type || 'manual',
+        // 🔥 FIX: Use triggerKey (e.g., "limit_up_after_hours") not triggerType ("individual")
+        trigger_type: generationConfig.triggers?.triggerConfig?.triggerKey || 'manual',
         trigger_data: generationConfig.triggers?.triggerConfig,
         generation_config: generationConfig.settings
       }).then(result => {
