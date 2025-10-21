@@ -609,25 +609,21 @@ const ScheduleManagementPage: React.FC = () => {
       key: 'posting_time',
       width: 140,
       render: (_: any, record: ScheduleTask) => {
-        const dailyTime = record.schedule_config?.daily_execution_time;
+        const startTime = record.schedule_config?.daily_execution_time;
         const intervalSec = record.interval_seconds || 300;
 
         return (
           <div>
-            <Space>
-              <ClockCircleOutlined />
-              <Text style={{ fontSize: '11px' }}>
-                {dailyTime ? dailyTime : `每 ${intervalSec}秒`}
-              </Text>
-            </Space>
+            <div style={{ fontSize: '11px', marginBottom: 2 }}>
+              <ClockCircleOutlined style={{ marginRight: 4 }} />
+              開始: {startTime || '未設定'}
+            </div>
             <div style={{ fontSize: '10px', color: '#666' }}>
+              間隔: {intervalSec}秒 ({Math.round(intervalSec / 60)}分鐘)
+            </div>
+            <div style={{ fontSize: '10px', color: '#999' }}>
               {record.schedule_config?.timezone || 'Asia/Taipei'}
             </div>
-            {dailyTime && (
-              <div style={{ fontSize: '10px', color: '#999' }}>
-                間隔: {intervalSec}秒
-              </div>
-            )}
           </div>
         );
       },
