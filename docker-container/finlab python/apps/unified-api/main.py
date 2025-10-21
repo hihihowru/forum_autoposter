@@ -5140,21 +5140,27 @@ async def get_schedule_tasks(
 
             conn.commit()
 
-            # 🔥 FIX: Parse JSON fields from TEXT to objects
+            # 🔥 FIX: Handle JSON fields (JSONB or TEXT types)
             import json
             parsed_tasks = []
             for task in tasks:
                 task_dict = dict(task)
 
-                # Parse JSON fields (stored as TEXT in database)
+                # Parse JSON fields - handle both JSONB (already dict) and TEXT (needs parsing)
                 json_fields = ['trigger_config', 'schedule_config', 'batch_info', 'generation_config']
                 for field in json_fields:
-                    if task_dict.get(field):
-                        try:
-                            task_dict[field] = json.loads(task_dict[field])
-                        except (json.JSONDecodeError, TypeError):
-                            logger.warning(f"Failed to parse {field} for task {task_dict.get('schedule_id')}")
-                            task_dict[field] = None
+                    field_value = task_dict.get(field)
+                    if field_value:
+                        # If already a dict (JSONB type from PostgreSQL), keep as is
+                        if isinstance(field_value, dict):
+                            continue
+                        # If string (TEXT type), parse it
+                        elif isinstance(field_value, str):
+                            try:
+                                task_dict[field] = json.loads(field_value)
+                            except (json.JSONDecodeError, TypeError) as e:
+                                logger.warning(f"Failed to parse {field} for task {task_dict.get('schedule_id')}: {e}")
+                                task_dict[field] = None
 
                 parsed_tasks.append(task_dict)
 
