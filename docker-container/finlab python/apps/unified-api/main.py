@@ -3062,21 +3062,36 @@ async def publish_post(post_id: str):
             # Publish post
             logger.info(f"📤 發布貼文到 CMoney: {post['title'][:50]}...")
 
-            from src.clients.cmoney.cmoney_types import ArticleInput
-            article_input = ArticleInput(
-                StockNo=post.get('stock_code', '0000'),
-                Title=post['title'],
-                Content=post['content'],
-                TopicId=post.get('topic_id')
+            from src.clients.cmoney.cmoney_client import ArticleData
+
+            # Prepare article data with commodity tags and community topic
+            article_data = ArticleData(
+                title=post['title'],
+                text=post['content']
             )
 
-            publish_result = await cmoney_client.publish_post(
-                token=login_result.token,
-                article=article_input
+            # Add community topic if exists
+            if post.get('topic_id'):
+                article_data.communityTopic = {"id": post['topic_id']}
+
+            # Add commodity tags (stock tags) if exists
+            if post.get('stock_code') and post['stock_code'] != '0000':
+                article_data.commodity_tags = [
+                    {
+                        "type": "Stock",
+                        "key": post['stock_code'],
+                        "bullOrBear": 0  # 0 = neutral, can be set based on trigger type
+                    }
+                ]
+
+            publish_result = await cmoney_client.publish_article(
+                access_token=login_result.token,
+                article=article_data
             )
 
-            if not publish_result or not publish_result.article_id:
-                raise ValueError("Failed to publish to CMoney")
+            if not publish_result or not publish_result.success:
+                error_msg = publish_result.error_message if publish_result else "Unknown error"
+                raise ValueError(f"Failed to publish to CMoney: {error_msg}")
 
             # Update database
             cursor.execute("""
@@ -3088,18 +3103,18 @@ async def publish_post(post_id: str):
                 WHERE post_id = %s
             """, (
                 get_current_time(),
-                str(publish_result.article_id),
-                publish_result.article_url,
+                publish_result.post_id,
+                publish_result.post_url,
                 post_id
             ))
             conn.commit()
 
-            logger.info(f"✅ 貼文發布成功 - Article ID: {publish_result.article_id}")
+            logger.info(f"✅ 貼文發布成功 - Article ID: {publish_result.post_id}")
 
         return {
             "success": True,
-            "article_id": publish_result.article_id,
-            "article_url": publish_result.article_url
+            "post_id": publish_result.post_id,
+            "post_url": publish_result.post_url
         }
 
     except Exception as e:
@@ -5282,12 +5297,14 @@ async def create_schedule(request: Request):
                     schedule_id, schedule_name, schedule_description, status, schedule_type,
                     interval_seconds, auto_posting, max_posts_per_hour,
                     timezone, weekdays_only, batch_info, generation_config,
+                    trigger_config, schedule_config,
                     next_run, created_at, updated_at,
                     run_count, success_count, failure_count
                 ) VALUES (
                     %s, %s, %s, %s, %s,
                     %s, %s, %s,
                     %s, %s, %s, %s,
+                    %s, %s,
                     %s, NOW(), NOW(),
                     0, 0, 0
                 )
@@ -5310,6 +5327,8 @@ async def create_schedule(request: Request):
                 weekdays_only,
                 json.dumps(batch_info),
                 json.dumps(generation_config),
+                json.dumps(trigger_config),  # 🔥 FIX: Add trigger_config
+                json.dumps(schedule_config),  # 🔥 FIX: Add schedule_config
                 next_run
             ))
 
