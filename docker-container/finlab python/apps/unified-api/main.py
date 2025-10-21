@@ -5538,6 +5538,9 @@ async def create_schedule(request: Request):
             # 生成配置 (generation_config)
             generation_config = data.get('generation_config', {})
 
+            # Extract daily_execution_time first (needed for next_run calculation later)
+            daily_execution_time = data.get('daily_execution_time')
+
             # 🔥 FIX: Use trigger_config from frontend if provided, otherwise build from generation_config
             trigger_config = data.get('trigger_config')
             if not trigger_config:
@@ -5559,7 +5562,6 @@ async def create_schedule(request: Request):
             schedule_config = data.get('schedule_config')
             if not schedule_config:
                 # Fallback: Build from daily_execution_time for backward compatibility
-                daily_execution_time = data.get('daily_execution_time')
                 posting_time_slots = [daily_execution_time] if daily_execution_time else []
 
                 schedule_config = {
