@@ -15,7 +15,8 @@ import {
   Statistic,
   Badge,
   Descriptions,
-  Timeline
+  Timeline,
+  Modal
 } from 'antd';
 import {
   EditOutlined,
@@ -256,6 +257,57 @@ const ScheduleManagementPage: React.FC = () => {
 
   const statistics = getStatistics();
 
+  // 轉換 API 數據結構到前端期望的格式
+  const transformApiTask = (apiTask: any): ScheduleTask => {
+    // 從 generation_config 解析出觸發器配置
+    const generationConfig = apiTask.generation_config ?
+      (typeof apiTask.generation_config === 'string' ? JSON.parse(apiTask.generation_config) : apiTask.generation_config)
+      : null;
+
+    return {
+      task_id: apiTask.schedule_id,
+      name: apiTask.schedule_name || '未命名排程',
+      description: apiTask.schedule_description || '',
+      status: apiTask.status || 'active',
+      created_at: apiTask.created_at,
+      last_run: apiTask.last_run,
+      next_run: apiTask.next_run,
+      run_count: apiTask.run_count || 0,
+      success_count: apiTask.success_count || 0,
+      failure_count: apiTask.failure_count || 0,
+      success_rate: apiTask.run_count > 0
+        ? ((apiTask.success_count || 0) / apiTask.run_count) * 100
+        : 0,
+      interval_seconds: apiTask.interval_seconds || 300,
+      schedule_type: apiTask.schedule_type || 'weekday_daily',
+      auto_posting: apiTask.auto_posting || false,
+      schedule_config: {
+        enabled: apiTask.status === 'active',
+        posting_time_slots: apiTask.daily_execution_time ? [apiTask.daily_execution_time] : [],
+        timezone: apiTask.timezone || 'Asia/Taipei',
+        daily_execution_time: apiTask.daily_execution_time
+      },
+      trigger_config: {
+        trigger_type: generationConfig?.trigger_type || generationConfig?.triggers?.triggerConfig?.triggerKey || 'custom_stocks',
+        stock_codes: generationConfig?.stock_codes || generationConfig?.triggers?.stock_codes || [],
+        kol_assignment: generationConfig?.kol_assignment || generationConfig?.kol?.assignment_mode || 'random',
+        max_stocks: generationConfig?.max_stocks || generationConfig?.triggers?.stockCountLimit || 10,
+        stock_sorting: generationConfig?.stock_sorting || {
+          primary_sort: generationConfig?.triggers?.stockFilterCriteria?.primary_sort,
+          secondary_sort: generationConfig?.triggers?.stockFilterCriteria?.secondary_sort,
+          tertiary_sort: generationConfig?.triggers?.stockFilterCriteria?.tertiary_sort
+        }
+      },
+      batch_info: apiTask.batch_info ?
+        (typeof apiTask.batch_info === 'string' ? JSON.parse(apiTask.batch_info) : apiTask.batch_info)
+        : {
+          session_id: apiTask.session_id?.toString() || '',
+          total_posts: apiTask.total_posts_generated || 0,
+          published_posts: apiTask.success_count || 0
+        }
+    };
+  };
+
   // 獲取排程列表
   const loadSchedules = async () => {
     setLoading(true);
@@ -263,12 +315,16 @@ const ScheduleManagementPage: React.FC = () => {
       const response = await fetch(`${API_BASE_URL}/api/schedule/tasks`);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
-      }  
+      }
       const result = await response.json();
       // API 返回的數據結構是 {success: true, tasks: [...]}
       const tasks = result.tasks || [];
+
+      // 轉換 API 數據到前端期望的格式
+      const transformedTasks = tasks.map(transformApiTask);
+
       // 按創建時間降序排序，最新的排在最前面
-      const sortedTasks = tasks.sort((a: ScheduleTask, b: ScheduleTask) => {
+      const sortedTasks = transformedTasks.sort((a: ScheduleTask, b: ScheduleTask) => {
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       });
       setSchedules(sortedTasks);
