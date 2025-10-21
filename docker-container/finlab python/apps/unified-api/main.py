@@ -5790,19 +5790,44 @@ async def execute_schedule_now(task_id: str, request: Request):
         logger.info(f"🔍 trigger_config: {json.dumps(trigger_config, ensure_ascii=False)[:200]}")
         logger.info(f"🔍 schedule_config: {json.dumps(schedule_config, ensure_ascii=False)[:200]}")
 
-        # Extract stock codes and KOL assignments
-        stock_codes = trigger_config.get('stock_codes', [])
+        # Extract KOL assignment and max stocks
         kol_assignment = trigger_config.get('kol_assignment', 'random')
         max_stocks = trigger_config.get('max_stocks', 5)
+
+        # 🔥 FIX: Support both old format (stock_codes) and new format (triggerKey)
+        stock_codes = trigger_config.get('stock_codes', [])
+        trigger_key = trigger_config.get('triggerKey') or trigger_config.get('trigger_type')
+
+        # If no pre-configured stock codes, execute trigger to get stocks
+        if not stock_codes and trigger_key:
+            logger.info(f"🎯 執行觸發器: {trigger_key}")
+
+            # Get threshold and filters from trigger_config
+            threshold = trigger_config.get('threshold', 20)
+            filters = trigger_config.get('filters', {})
+
+            # Execute trigger based on type
+            if trigger_key == 'limit_up_after_hours':
+                trigger_result = await get_after_hours_limit_up_stocks(
+                    limit=1000,
+                    changeThreshold=9.5,
+                    industries=""
+                )
+                if 'stocks' in trigger_result:
+                    stock_codes = [stock['stock_id'] for stock in trigger_result['stocks']]
+                    logger.info(f"✅ 觸發器返回 {len(stock_codes)} 檔股票")
+            else:
+                logger.warning(f"⚠️ 未支持的觸發器類型: {trigger_key}")
 
         if not stock_codes:
             return {
                 "success": False,
-                "error": "排程未配置股票列表"
+                "error": "無法獲取股票列表：排程未配置股票且觸發器未返回結果"
             }
 
-        # Limit stock count
+        # Apply max_stocks limit
         stock_codes = stock_codes[:max_stocks]
+        logger.info(f"📊 最終選定 {len(stock_codes)} 檔股票: {stock_codes}")
 
         # Generate unique session ID for this execution
         import time

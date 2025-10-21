@@ -701,7 +701,10 @@ const ScheduleManagementPage: React.FC = () => {
           'intraday_volume_leaders': { text: '盤中量(成交量)大', color: 'orange' },
           'intraday_amount_leaders': { text: '盤中量(金額)大', color: 'gold' }
         };
-        const triggerType = triggerConfig?.trigger_type || record.trigger_config?.trigger_type || 'N/A';
+        // 🔥 FIX: Support both old and new trigger_config structures
+        // New structure: triggerConfig.triggerKey
+        // Old structure: triggerConfig.trigger_type
+        const triggerType = triggerConfig?.triggerKey || triggerConfig?.trigger_type || record.trigger_config?.triggerKey || record.trigger_config?.trigger_type || 'N/A';
         const mapped = triggerTypeMap[triggerType] || { text: triggerType, color: 'default' };
         return <Tag color={mapped.color}>{mapped.text}</Tag>;
       },
