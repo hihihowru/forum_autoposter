@@ -75,43 +75,50 @@ async def startup_event():
     logger.info("📋 正在初始化各項服務...")
     print("📋 正在初始化各項服務...")
     
-    try:
-        # 🔥 重新啟用排程服務
-        logger.info("🚀🚀🚀 開始啟動排程服務背景任務 🚀🚀🚀")
-        logger.info("📋 正在導入排程服務模組...")
-        print("🚀🚀🚀 開始啟動排程服務背景任務 🚀🚀🚀")
-        
-        try:
-            from schedule_service import schedule_service
-            logger.info("✅ 排程服務模組導入成功")
-            print("✅ 排程服務模組導入成功")
-            
-            logger.info("🔄 正在創建背景排程任務...")
-            print("🔄 正在創建背景排程任務...")
-            background_task = asyncio.create_task(schedule_service.start_background_scheduler())
-            app.state.background_scheduler_task = background_task
-            logger.info("✅ 背景排程任務創建成功")
-            print("✅ 背景排程任務創建成功")
-            
-            logger.info("✅ ✅ ✅ 排程服務已啟動，API 服務已啟動 ✅ ✅ ✅")
-            print("✅ ✅ ✅ 排程服務已啟動，API 服務已啟動 ✅ ✅ ✅")
-            
-        except Exception as import_error:
-            logger.error(f"❌ 排程服務模組導入或啟動失敗: {import_error}")
-            logger.error(f"🔍 導入錯誤詳情: {str(import_error)}")
-            print(f"❌ 排程服務模組導入或啟動失敗: {import_error}")
-            import traceback
-            logger.error(f"🔍 導入錯誤堆疊:\n{traceback.format_exc()}")
-            print(f"🔍 導入錯誤堆疊:\n{traceback.format_exc()}")
-            raise
-        
-    except Exception as e:
-        logger.error(f"❌ 排程服務啟動失敗: {e}")
-        logger.error(f"🔍 錯誤詳情: {str(e)}")
-        print(f"❌ 排程服務啟動失敗: {e}")
-        import traceback
-        traceback.print_exc()
-    
+    # 🔥 TEMPORARILY DISABLED: posting-service background scheduler
+    # TODO: Fix time check logic before re-enabling
+    # The background scheduler was executing all active schedules continuously
+    # Disabled to prevent infinite loop execution
+    logger.warning("⚠️  排程服務背景任務已暫時停用 - 需修復時間檢查邏輯")
+    print("⚠️  排程服務背景任務已暫時停用 - 需修復時間檢查邏輯")
+
+    # try:
+    #     # 🔥 重新啟用排程服務
+    #     logger.info("🚀🚀🚀 開始啟動排程服務背景任務 🚀🚀🚀")
+    #     logger.info("📋 正在導入排程服務模組...")
+    #     print("🚀🚀🚀 開始啟動排程服務背景任務 🚀🚀🚀")
+    #
+    #     try:
+    #         from schedule_service import schedule_service
+    #         logger.info("✅ 排程服務模組導入成功")
+    #         print("✅ 排程服務模組導入成功")
+    #
+    #         logger.info("🔄 正在創建背景排程任務...")
+    #         print("🔄 正在創建背景排程任務...")
+    #         background_task = asyncio.create_task(schedule_service.start_background_scheduler())
+    #         app.state.background_scheduler_task = background_task
+    #         logger.info("✅ 背景排程任務創建成功")
+    #         print("✅ 背景排程任務創建成功")
+    #
+    #         logger.info("✅ ✅ ✅ 排程服務已啟動，API 服務已啟動 ✅ ✅ ✅")
+    #         print("✅ ✅ ✅ 排程服務已啟動，API 服務已啟動 ✅ ✅ ✅")
+    #
+    #     except Exception as import_error:
+    #         logger.error(f"❌ 排程服務模組導入或啟動失敗: {import_error}")
+    #         logger.error(f"🔍 導入錯誤詳情: {str(import_error)}")
+    #         print(f"❌ 排程服務模組導入或啟動失敗: {import_error}")
+    #         import traceback
+    #         logger.error(f"🔍 導入錯誤堆疊:\n{traceback.format_exc()}")
+    #         print(f"🔍 導入錯誤堆疊:\n{traceback.format_exc()}")
+    #         raise
+    #
+    # except Exception as e:
+    #     logger.error(f"❌ 排程服務啟動失敗: {e}")
+    #     logger.error(f"🔍 錯誤詳情: {str(e)}")
+    #     print(f"❌ 排程服務啟動失敗: {e}")
+    #     import traceback
+    #     traceback.print_exc()
+
     logger.info("🎉 所有服務初始化完成！應用開始運行...")
     print("🎉 所有服務初始化完成！應用開始運行...")
 
