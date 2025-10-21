@@ -3768,7 +3768,7 @@ async def import_post_records():
 
 @app.get("/api/kol/list")
 async def get_kol_list():
-    """獲取 KOL 列表"""
+    """獲取 KOL 列表（含真實統計數據）"""
     logger.info("收到 get_kol_list 請求")
 
     conn = None
@@ -3785,10 +3785,39 @@ async def get_kol_list():
 
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-            cursor.execute("SELECT * FROM kol_profiles ORDER BY serial")
+            # 使用 LEFT JOIN 計算每個 KOL 的真實統計數據
+            query = """
+                SELECT
+                    k.*,
+                    COALESCE(COUNT(p.post_id), 0) as total_posts,
+                    COALESCE(COUNT(CASE WHEN p.status = 'published' THEN 1 END), 0) as published_posts,
+                    COALESCE(AVG(CASE
+                        WHEN p.status = 'published' AND (p.likes + p.comments + p.shares) > 0
+                        THEN (p.likes + p.comments + p.shares) * 1.0
+                        ELSE NULL
+                    END), 0) as avg_interaction_rate
+                FROM kol_profiles k
+                LEFT JOIN post_records p ON k.serial = p.kol_serial
+                GROUP BY k.id, k.serial, k.nickname, k.member_id, k.persona, k.status, k.owner,
+                         k.email, k.password, k.whitelist, k.notes, k.post_times, k.target_audience,
+                         k.interaction_threshold, k.content_types, k.common_terms, k.colloquial_terms,
+                         k.tone_style, k.typing_habit, k.backstory, k.expertise, k.data_source,
+                         k.prompt_persona, k.prompt_style, k.prompt_guardrails, k.prompt_skeleton,
+                         k.prompt_cta, k.prompt_hashtags, k.signature, k.emoji_pack, k.model_id,
+                         k.template_variant, k.model_temp, k.max_tokens, k.title_openers,
+                         k.title_signature_patterns, k.title_tail_word, k.title_banned_words,
+                         k.title_style_examples, k.title_retry_max, k.tone_formal, k.tone_emotion,
+                         k.tone_confidence, k.tone_urgency, k.tone_interaction, k.question_ratio,
+                         k.content_length, k.interaction_starters, k.require_finlab_api, k.allow_hashtags,
+                         k.created_time, k.last_updated, k.best_performing_post, k.humor_probability,
+                         k.humor_enabled, k.content_style_probabilities, k.analysis_depth_probabilities,
+                         k.content_length_probabilities
+                ORDER BY k.serial
+            """
+            cursor.execute(query)
             kols = cursor.fetchall()
 
-            logger.info(f"查詢到 {len(kols)} 個 KOL 配置")
+            logger.info(f"查詢到 {len(kols)} 個 KOL 配置（含統計數據）")
 
             return {
                 "success": True,
@@ -3803,6 +3832,56 @@ async def get_kol_list():
             "success": False,
             "data": [],
             "count": 0,
+            "error": str(e),
+            "timestamp": get_current_time().isoformat()
+        }
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+
+@app.get("/api/kol/weekly-posts")
+async def get_weekly_posts():
+    """獲取本週發文總數"""
+    logger.info("收到 get_weekly_posts 請求")
+
+    conn = None
+    try:
+        if not db_pool:
+            logger.warning("數據庫連接不可用，返回空數據")
+            return {
+                "success": False,
+                "weekly_posts": 0,
+                "error": "數據庫連接不可用",
+                "timestamp": get_current_time().isoformat()
+            }
+
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            # 計算本週發文數（從週一開始）
+            query = """
+                SELECT COUNT(*) as weekly_posts
+                FROM post_records
+                WHERE created_at >= date_trunc('week', CURRENT_DATE)
+                  AND status = 'published'
+            """
+            cursor.execute(query)
+            result = cursor.fetchone()
+            weekly_posts = result[0] if result else 0
+
+            logger.info(f"本週發文數: {weekly_posts}")
+
+            return {
+                "success": True,
+                "weekly_posts": weekly_posts,
+                "timestamp": get_current_time().isoformat()
+            }
+
+    except Exception as e:
+        logger.error(f"查詢本週發文數失敗: {e}")
+        return {
+            "success": False,
+            "weekly_posts": 0,
             "error": str(e),
             "timestamp": get_current_time().isoformat()
         }

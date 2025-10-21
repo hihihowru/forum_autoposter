@@ -170,9 +170,17 @@ const KOLManagementPage: React.FC = () => {
         const totalKOLs = kols.length;
         const activeKOLs = kols.filter((k: KOLProfile) => k.status === 'active').length;
 
-        // TODO: 本週發文數需要後端API支援，暫時顯示0
-        // 可以調用 /api/kol/weekly-posts API 獲取真實數據
-        const weeklyPosts = 0;
+        // 獲取本週發文數
+        let weeklyPosts = 0;
+        try {
+          const weeklyResponse = await axios.get(`${API_BASE_URL}/api/kol/weekly-posts`);
+          if (weeklyResponse.data && weeklyResponse.data.success) {
+            weeklyPosts = weeklyResponse.data.weekly_posts || 0;
+          }
+        } catch (weeklyError) {
+          console.error('❌ 獲取本週發文數失敗:', weeklyError);
+          // 即使獲取失敗也繼續，只是顯示0
+        }
 
         setStatistics({
           totalKOLs,
@@ -180,7 +188,7 @@ const KOLManagementPage: React.FC = () => {
           weeklyPosts
         });
 
-        console.log('✅ KOL 列表載入成功:', totalKOLs, '個 KOL,', activeKOLs, '個啟用中');
+        console.log('✅ KOL 列表載入成功:', totalKOLs, '個 KOL,', activeKOLs, '個啟用中，本週發文', weeklyPosts, '篇');
       } else {
         console.error('❌ API 響應格式錯誤:', response.data);
         message.error('API 響應格式錯誤');
@@ -753,9 +761,6 @@ const KOLManagementPage: React.FC = () => {
                   <Text type="secondary" style={{ fontSize: 14 }}>本週發文數</Text>
                   <div style={{ fontSize: 30, fontWeight: 'bold', color: '#faad14', marginTop: 8 }}>
                     {statistics.weeklyPosts}
-                    {statistics.weeklyPosts === 0 && (
-                      <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>（待實作）</Text>
-                    )}
                   </div>
                 </div>
                 <FileTextOutlined style={{ fontSize: 40, color: '#faad14', opacity: 0.3 }} />
