@@ -577,7 +577,10 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
         generation_mode: generationConfig.batchMode?.generation_mode || 'simple',
         has_stock_tags: generationConfig.tags?.tag_mode === 'stock_tags' || generationConfig.tags?.tag_mode === 'both',
         has_topic_tags: generationConfig.tags?.tag_mode === 'topic_tags' || generationConfig.tags?.tag_mode === 'both',
-        trigger_type: generationConfig.triggers?.triggerConfig?.triggerKey,
+        // 🔥 FIX: Pass posting_type at top level (not just in batch_config)
+        posting_type: generationConfig.settings?.posting_type || 'analysis',
+        // 🔥 FIX: Pass actual trigger type (e.g., "limit_up_after_hours") not triggerKey ("individual")
+        trigger_type: generationConfig.triggers?.selectedTrigger || generationConfig.triggers?.triggerConfig?.trigger_type || 'manual',
         trigger_data: generationConfig.triggers?.triggerConfig,
         generation_config: generationConfig.settings
       }).then(result => {

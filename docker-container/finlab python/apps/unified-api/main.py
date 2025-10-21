@@ -4197,6 +4197,93 @@ async def delete_kol(serial: str):
         if conn:
             return_db_connection(conn)
 
+@app.put("/api/kol/{serial}/personalization")
+async def update_kol_personalization(serial: str, request: Request):
+    """
+    更新 KOL 個人化設定（內容風格、分析深度、內容長度的機率分布）
+
+    Parameters:
+    - serial: KOL 序號
+    - request body: {
+        content_style_probabilities: dict,
+        analysis_depth_probabilities: dict,
+        content_length_probabilities: dict
+      }
+    """
+    logger.info(f"收到更新 KOL 個人化設定請求: serial={serial}")
+
+    conn = None
+    try:
+        data = await request.json()
+        logger.info(f"接收到個人化設定: {data}")
+
+        # 檢查數據庫連接
+        if not db_pool:
+            logger.warning("數據庫連接不可用")
+            return {
+                "success": False,
+                "error": "數據庫連接不可用",
+                "timestamp": datetime.now().isoformat()
+            }
+
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            # 檢查 KOL 是否存在
+            cursor.execute("SELECT serial, nickname FROM kol_profiles WHERE serial = %s", (serial,))
+            existing_kol = cursor.fetchone()
+
+            if not existing_kol:
+                logger.warning(f"⚠️ KOL serial {serial} 不存在")
+                return {
+                    "success": False,
+                    "error": f"KOL serial {serial} 不存在",
+                    "timestamp": datetime.now().isoformat()
+                }
+
+            # 提取個人化設定
+            content_style_probabilities = data.get('content_style_probabilities', {})
+            analysis_depth_probabilities = data.get('analysis_depth_probabilities', {})
+            content_length_probabilities = data.get('content_length_probabilities', {})
+
+            # 更新 KOL 個人化設定
+            import json
+            update_sql = """
+                UPDATE kol_profiles
+                SET content_style_probabilities = %s,
+                    analysis_depth_probabilities = %s,
+                    content_length_probabilities = %s,
+                    last_updated = NOW()
+                WHERE serial = %s
+            """
+            cursor.execute(update_sql, (
+                json.dumps(content_style_probabilities),
+                json.dumps(analysis_depth_probabilities),
+                json.dumps(content_length_probabilities),
+                serial
+            ))
+            conn.commit()
+
+            logger.info(f"✅ KOL 個人化設定更新成功: Serial={serial}, Nickname={existing_kol['nickname']}")
+
+            return {
+                "success": True,
+                "message": f"KOL 個人化設定更新成功 (Serial: {serial}, Nickname: {existing_kol['nickname']})",
+                "timestamp": datetime.now().isoformat()
+            }
+
+    except Exception as e:
+        logger.error(f"❌ 更新 KOL 個人化設定失敗: {e}")
+        if conn:
+            conn.rollback()
+        return {
+            "success": False,
+            "error": f"更新失敗: {str(e)}",
+            "timestamp": datetime.now().isoformat()
+        }
+    finally:
+        if conn:
+            return_db_connection(conn)
+
 
 # ==================== Schedule API 功能 ====================
 

@@ -1,0 +1,20 @@
+# Claude Code Session Backup - 2025-10-20
+
+## 完成的工作：
+✅ 創建業務版操作手冊 (35,000+ 字)
+✅ 建立 user-manual/ 文件夾
+✅ 創建 README.md 和 SUMMARY.md
+✅ 複製文件到 gitbook-docs/
+✅ Git commit: f62ca0e7
+✅ 已推送到 GitHub
+
+## 文件位置：
+- 主文件：~/Documents/autoposter/forum_autoposter/發文系統操作手冊_業務版.md
+- GitBook文件夾：~/Documents/autoposter/forum_autoposter/user-manual/
+- 備份位置：~/Documents/autoposter/forum_autoposter/gitbook-docs/
+
+## 下一步：
+在 GitBook.com 設定新專案，連結到 user-manual/ 文件夾
+
+## 目前狀態：
+所有工作已完成並安全保存！

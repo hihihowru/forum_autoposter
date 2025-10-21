@@ -403,15 +403,17 @@ const BatchScheduleModal: React.FC<BatchScheduleModalProps> = ({
                 }}>
                   <Option value="limit_up_after_hours">盤後漲停</Option>
                   <Option value="limit_down_after_hours">盤後跌停</Option>
+                  <Option value="volume_surge_after_hours">盤後爆量</Option>
+                  <Option value="news_hot_after_hours">盤後新聞</Option>
+                  <Option value="foreign_buy_after_hours">盤後外資買超</Option>
+                  <Option value="institutional_buy_after_hours">盤後投信買超</Option>
                   <Option value="intraday_limit_up">盤中漲停</Option>
                   <Option value="intraday_limit_down">盤中跌停</Option>
-                  <Option value="volume_surge">成交量暴增</Option>
-                  <Option value="news_hot">新聞熱股</Option>
-                  <Option value="custom_stocks">自選股</Option>
-                  <Option value="intraday_gainers_by_amount">漲幅排序+成交額</Option>
-                  <Option value="intraday_volume_leaders">成交量排序</Option>
-                  <Option value="intraday_amount_leaders">成交額排序</Option>
-                  <Option value="intraday_limit_down_by_amount">跌停篩選+成交額</Option>
+                  <Option value="intraday_volume_surge">盤中爆量</Option>
+                  <Option value="intraday_news_hot">盤中新聞</Option>
+                  <Option value="intraday_foreign_buy">盤中外資買超</Option>
+                  <Option value="intraday_institutional_buy">盤中投信買超</Option>
+                  <Option value="trending_topics">熱門話題</Option>
                 </Select>
               </Form.Item>
             </Col>
@@ -423,8 +425,9 @@ const BatchScheduleModal: React.FC<BatchScheduleModalProps> = ({
                 rules={[{ required: true, message: '請選擇發文類型' }]}
               >
                 <Select>
-                  <Option value="analysis">發表分析</Option>
                   <Option value="interaction">互動發問</Option>
+                  <Option value="analysis">發表分析</Option>
+                  <Option value="personalized">個人化內容</Option>
                 </Select>
               </Form.Item>
             </Col>
