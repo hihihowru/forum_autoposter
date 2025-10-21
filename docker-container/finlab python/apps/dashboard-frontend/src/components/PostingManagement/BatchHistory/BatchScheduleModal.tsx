@@ -176,6 +176,37 @@ const BatchScheduleModal: React.FC<BatchScheduleModalProps> = ({
         }
       }
 
+      // 🔥 FIX: Extract full trigger configuration from the batch
+      const originalConfig = batchData.posts?.[0]?.generation_config || {};
+
+      // 🔥 FIX: Build comprehensive trigger_config for schedule execution
+      const triggerConfig = {
+        triggerType: "individual",  // Most common type
+        triggerKey: values.generation_config.trigger_type,
+        stockFilter: "limit_up_stocks",  // Default, will be overridden by trigger execution
+        stock_sorting: values.generation_config.stock_sorting,
+        max_stocks: values.generation_config.max_stocks,
+        filters: originalConfig.filters || {},
+        threshold: originalConfig.threshold || 20
+      };
+
+      // 🔥 FIX: Build comprehensive schedule_config
+      const scheduleConfigData = {
+        posting_type: values.generation_config.posting_type,
+        content_style: values.generation_config.content_style,
+        content_length: values.generation_config.content_length,
+        max_words: values.generation_config.max_words,
+        generation_mode: values.generation_config.generation_mode,
+        include_risk_warning: values.generation_config.include_risk_warning,
+        include_charts: values.generation_config.include_charts,
+        enable_news_links: values.generation_config.enable_news_links,
+        news_max_links: values.generation_config.news_max_links,
+        kol_assignment: values.generation_config.kol_assignment,
+        // KOL selection from batch
+        selected_kols: batchData.kol_names || [],
+        stock_codes: batchData.stock_codes || []
+      };
+
       const scheduleConfig = {
         session_id: parseInt(batchData.session_id),
         post_ids: batchData.posts.map(post => post.post_id),
@@ -193,6 +224,9 @@ const BatchScheduleModal: React.FC<BatchScheduleModalProps> = ({
         weekdays_only: values.weekdays_only,
         // 新增：生成配置參數
         generation_config: values.generation_config,
+        // 🔥 FIX: Add trigger_config and schedule_config
+        trigger_config: triggerConfig,
+        schedule_config: scheduleConfigData,
         batch_info: {
           total_posts: batchData.total_posts,
           published_posts: batchData.published_posts,

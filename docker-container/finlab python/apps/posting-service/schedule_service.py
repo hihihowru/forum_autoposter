@@ -61,7 +61,7 @@ class ScheduleService:
         self.db_service = schedule_db_service
         self.background_scheduler_running = False
     
-    async def create_schedule_task(self, session_id: int, post_ids: List[str], 
+    async def create_schedule_task(self, session_id: int, post_ids: List[str],
                                  schedule_type: str, interval_seconds: int = 30,
                                  batch_duration_hours: Optional[int] = None,
                                  schedule_name: Optional[str] = None,
@@ -72,6 +72,9 @@ class ScheduleService:
                                  timezone: str = 'Asia/Taipei',
                                  generation_config: Optional[Dict[str, Any]] = None,
                                  batch_info: Optional[Dict[str, Any]] = None,
+                                 # 🔥 FIX: Add trigger_config and schedule_config parameters
+                                 trigger_config: Optional[Dict[str, Any]] = None,
+                                 schedule_config: Optional[Dict[str, Any]] = None,
                                  auto_posting: bool = False,
                                  # 來源追蹤參數
                                  source_type: Optional[str] = None,
@@ -173,6 +176,9 @@ class ScheduleService:
             timezone=timezone,
             generation_config=generation_config,
             batch_info=batch_info,
+            # 🔥 FIX: Pass trigger_config and schedule_config to database
+            trigger_config=trigger_config,
+            schedule_config=schedule_config,
             auto_posting=auto_posting,
             # 來源追蹤參數
             source_type=source_type,

@@ -29,6 +29,9 @@ class CreateScheduleRequest(BaseModel):
     timezone: str = 'Asia/Taipei'
     generation_config: Optional[Dict[str, Any]] = None
     batch_info: Optional[Dict[str, Any]] = None
+    # 🔥 FIX: Add trigger_config and schedule_config
+    trigger_config: Optional[Dict[str, Any]] = None
+    schedule_config: Optional[Dict[str, Any]] = None
     auto_posting: bool = False
     # 來源追蹤參數
     source_type: Optional[str] = None  # 'batch_history' | 'self_learning'
@@ -76,6 +79,9 @@ async def create_schedule_task(request: CreateScheduleRequest):
             timezone=request.timezone,
             generation_config=request.generation_config,
             batch_info=request.batch_info,
+            # 🔥 FIX: Add trigger_config and schedule_config
+            trigger_config=request.trigger_config,
+            schedule_config=request.schedule_config,
             auto_posting=request.auto_posting,
             # 來源追蹤參數
             source_type=request.source_type,

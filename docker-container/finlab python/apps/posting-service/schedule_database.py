@@ -114,7 +114,7 @@ class ScheduleDatabaseService:
             logger.error(f"❌ 創建排程資料表失敗: {e}")
             raise
     
-    async def create_schedule_task(self, 
+    async def create_schedule_task(self,
                                  schedule_name: str,
                                  schedule_description: Optional[str] = None,
                                  session_id: Optional[int] = None,
@@ -127,6 +127,9 @@ class ScheduleDatabaseService:
                                  timezone: str = 'Asia/Taipei',
                                  generation_config: Optional[Dict[str, Any]] = None,
                                  batch_info: Optional[Dict[str, Any]] = None,
+                                 # 🔥 FIX: Add trigger_config and schedule_config parameters
+                                 trigger_config: Optional[Dict[str, Any]] = None,
+                                 schedule_config: Optional[Dict[str, Any]] = None,
                                  auto_posting: bool = False,
                                  # 來源追蹤參數
                                  source_type: Optional[str] = None,
@@ -136,7 +139,7 @@ class ScheduleDatabaseService:
                                  created_by: str = 'system') -> str:
         """創建排程任務"""
         schedule_id = str(uuid.uuid4())
-        
+
         db = self.get_db_session()
         try:
             schedule_task = ScheduleTask(
@@ -153,6 +156,9 @@ class ScheduleDatabaseService:
                 timezone=timezone,
                 generation_config=generation_config or {},
                 batch_info=batch_info or {},
+                # 🔥 FIX: Store trigger_config and schedule_config to database
+                trigger_config=trigger_config or {},
+                schedule_config=schedule_config or {},
                 auto_posting=auto_posting,
                 # 來源追蹤
                 source_type=source_type,
