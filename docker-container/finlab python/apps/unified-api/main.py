@@ -2368,7 +2368,9 @@ async def manual_posting(request: Request):
             "target_audience": body.get('target_audience', 'active_traders'),
             "trigger_type": trigger_type,
             "posting_type": posting_type,
-            "created_at": now.isoformat()
+            "created_at": now.isoformat(),
+            # 🔥 FIX: Store full triggers config for schedule recreation
+            "full_triggers_config": body.get('full_triggers_config', {})
         }
 
         # 確認數據庫連接可用

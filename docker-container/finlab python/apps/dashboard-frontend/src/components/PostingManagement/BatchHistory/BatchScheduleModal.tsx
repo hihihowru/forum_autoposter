@@ -178,24 +178,43 @@ const BatchScheduleModal: React.FC<BatchScheduleModalProps> = ({
 
       // 🔥 FIX: Extract full trigger configuration from the batch
       const originalConfig = batchData.posts?.[0]?.generation_config || {};
+      const fullTriggersConfig = originalConfig.full_triggers_config || {};
 
-      // 🔥 FIX: Build comprehensive trigger_config for schedule execution
-      const triggerConfig = {
-        triggerType: "individual",  // Most common type
+      console.log('🔍 originalConfig:', originalConfig);
+      console.log('🔍 fullTriggersConfig:', fullTriggersConfig);
+
+      // 🔥 FIX: Build comprehensive trigger_config for schedule execution using stored full config
+      const triggerConfig = fullTriggersConfig.triggerConfig ? {
+        triggerType: fullTriggersConfig.triggerConfig.triggerType || "individual",
+        triggerKey: fullTriggersConfig.trigger_type || fullTriggersConfig.triggerConfig.triggerKey || values.generation_config.trigger_type,
+        stockFilter: fullTriggersConfig.triggerConfig.stockFilter || "limit_up_stocks",
+        stock_sorting: fullTriggersConfig.stock_sorting || fullTriggersConfig.stockSorting,
+        max_stocks: fullTriggersConfig.stockCountLimit || fullTriggersConfig.threshold,
+        filters: fullTriggersConfig.filters || {},
+        threshold: fullTriggersConfig.threshold || 20,
+        // Include all filter details
+        volumeFilter: fullTriggersConfig.filters?.volumeFilter,
+        priceFilter: fullTriggersConfig.filters?.priceFilter,
+        marketCapFilter: fullTriggersConfig.filters?.marketCapFilter,
+        sectorFilter: fullTriggersConfig.filters?.sectorFilter,
+        technicalFilter: fullTriggersConfig.filters?.technicalFilter
+      } : {
+        // Fallback if no full_triggers_config
+        triggerType: "individual",
         triggerKey: values.generation_config.trigger_type,
-        stockFilter: "limit_up_stocks",  // Default, will be overridden by trigger execution
+        stockFilter: "limit_up_stocks",
         stock_sorting: values.generation_config.stock_sorting,
         max_stocks: values.generation_config.max_stocks,
-        filters: originalConfig.filters || {},
-        threshold: originalConfig.threshold || 20
+        filters: {},
+        threshold: 20
       };
 
       // 🔥 FIX: Build comprehensive schedule_config
       const scheduleConfigData = {
-        posting_type: values.generation_config.posting_type,
-        content_style: values.generation_config.content_style,
-        content_length: values.generation_config.content_length,
-        max_words: values.generation_config.max_words,
+        posting_type: originalConfig.posting_type || values.generation_config.posting_type,
+        content_style: originalConfig.content_style || values.generation_config.content_style,
+        content_length: originalConfig.content_length || values.generation_config.content_length,
+        max_words: originalConfig.max_words || values.generation_config.max_words,
         generation_mode: values.generation_config.generation_mode,
         include_risk_warning: values.generation_config.include_risk_warning,
         include_charts: values.generation_config.include_charts,
@@ -204,7 +223,9 @@ const BatchScheduleModal: React.FC<BatchScheduleModalProps> = ({
         kol_assignment: values.generation_config.kol_assignment,
         // KOL selection from batch
         selected_kols: batchData.kol_names || [],
-        stock_codes: batchData.stock_codes || []
+        stock_codes: batchData.stock_codes || [],
+        // Store full triggers config for later use
+        full_triggers_config: fullTriggersConfig
       };
 
       const scheduleConfig = {
