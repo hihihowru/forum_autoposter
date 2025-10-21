@@ -207,18 +207,43 @@ const KOLManagementPage: React.FC = () => {
       const values = await form.validateFields();
       setSaving(true);
 
-      await axios.put(`${API_BASE_URL}/api/kol/${selectedKOL?.serial}/personalization`, {
+      const response = await axios.put(`${API_BASE_URL}/api/kol/${selectedKOL?.serial}/personalization`, {
         content_style_probabilities: values.content_style_probabilities,
         analysis_depth_probabilities: values.analysis_depth_probabilities,
         content_length_probabilities: values.content_length_probabilities
       });
 
-      message.success('KOL設定已保存');
-      setModalVisible(false);
-      await loadKOLProfiles();
-    } catch (error) {
+      // Show success modal with details
+      Modal.success({
+        title: '保存成功',
+        content: (
+          <div>
+            <p>{response.data.message || 'KOL 個人化設定已成功保存'}</p>
+            <p style={{ marginTop: 8, fontSize: '12px', color: '#666' }}>
+              KOL: {selectedKOL?.nickname} (Serial: {selectedKOL?.serial})
+            </p>
+          </div>
+        ),
+        onOk: () => {
+          setModalVisible(false);
+          loadKOLProfiles();
+        }
+      });
+    } catch (error: any) {
       console.error('保存設定失敗:', error);
-      message.error('保存設定失敗');
+
+      // Show error modal with details
+      Modal.error({
+        title: '保存失敗',
+        content: (
+          <div>
+            <p>KOL 個人化設定保存失敗</p>
+            <p style={{ marginTop: 8, fontSize: '12px', color: '#ff4d4f' }}>
+              錯誤訊息: {error.response?.data?.error || error.message || '未知錯誤'}
+            </p>
+          </div>
+        )
+      });
     } finally {
       setSaving(false);
     }

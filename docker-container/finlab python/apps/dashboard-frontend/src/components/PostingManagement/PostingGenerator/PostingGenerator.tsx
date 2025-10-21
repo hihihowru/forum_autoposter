@@ -543,7 +543,7 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
       // 根據觸發器類型設置 topic_id 和 posting_type
       const batchConfigWithTopic = {
         ...batchMode,
-        posting_type: generationConfig.settings.posting_type || 'analysis', // 🔥 新增：確保 posting_type 正確傳遞
+        posting_type: generationConfig.batchMode?.posting_type || 'analysis', // 🔥 Use batchMode posting_type (from Step 9)
         topic_id: generationConfig.triggers?.triggerConfig?.triggerKey === 'trending_topics' ? 'auto_fetch' : null,
         topic_title: generationConfig.triggers?.triggerConfig?.triggerKey === 'trending_topics' ? '自動獲取熱門話題' : null
       };
@@ -577,8 +577,8 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
         generation_mode: generationConfig.batchMode?.generation_mode || 'simple',
         has_stock_tags: generationConfig.tags?.tag_mode === 'stock_tags' || generationConfig.tags?.tag_mode === 'both',
         has_topic_tags: generationConfig.tags?.tag_mode === 'topic_tags' || generationConfig.tags?.tag_mode === 'both',
-        // 🔥 FIX: Pass posting_type at top level (not just in batch_config)
-        posting_type: generationConfig.settings?.posting_type || 'analysis',
+        // 🔥 FIX: Use batchMode posting_type (from Step 9) instead of settings (Step 7)
+        posting_type: generationConfig.batchMode?.posting_type || 'analysis',
         // 🔥 FIX: Pass actual trigger type (e.g., "limit_up_after_hours") not triggerKey ("individual")
         trigger_type: generationConfig.triggers?.selectedTrigger || generationConfig.triggers?.triggerConfig?.trigger_type || 'manual',
         trigger_data: generationConfig.triggers?.triggerConfig,
