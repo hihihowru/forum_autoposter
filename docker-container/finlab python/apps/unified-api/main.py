@@ -4958,7 +4958,14 @@ async def get_scheduler_status():
             earliest_start_row = cursor.fetchone()
             uptime = "N/A"
             if earliest_start_row['earliest_start']:
-                uptime_delta = get_current_time() - earliest_start_row['earliest_start']
+                # Ensure both datetimes are timezone-aware to avoid subtraction error
+                earliest_start = earliest_start_row['earliest_start']
+                if earliest_start.tzinfo is None:
+                    # Database returns naive datetime, assume it's UTC and convert to Taipei
+                    tz = pytz.timezone('Asia/Taipei')
+                    earliest_start = pytz.utc.localize(earliest_start).astimezone(tz)
+
+                uptime_delta = get_current_time() - earliest_start
                 days = uptime_delta.days
                 hours = uptime_delta.seconds // 3600
                 uptime = f"{days} days, {hours} hours"
