@@ -36,6 +36,7 @@ import {
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import ScheduleConfigModal from './ScheduleConfigModal';
+import ScheduleExecutionModal from './ScheduleExecutionModal';
 import { getApiBaseUrl } from '../../../config/api';
 
 const { Title, Text } = Typography;
@@ -86,6 +87,11 @@ const ScheduleManagementPage: React.FC = () => {
   const [editingSchedule, setEditingSchedule] = useState<ScheduleTask | undefined>(undefined);
   const [dailyStats, setDailyStats] = useState<any>(null);
   const [schedulerEnabled, setSchedulerEnabled] = useState(true);
+
+  // Execution modal state
+  const [executionModalVisible, setExecutionModalVisible] = useState(false);
+  const [executionResult, setExecutionResult] = useState<any>(null);
+  const [executionLoading, setExecutionLoading] = useState(false);
 
   // 控制背景排程器開關
   const handleSchedulerToggle = async (enabled: boolean) => {
@@ -465,28 +471,39 @@ const ScheduleManagementPage: React.FC = () => {
   // 立即執行排程
   const handleExecuteNow = async (scheduleId: string) => {
     try {
-      setLoading(true);
-      
+      // Open modal immediately with loading state
+      setExecutionModalVisible(true);
+      setExecutionLoading(true);
+      setExecutionResult(null);
+
       const response = await fetch(`${API_BASE_URL}/api/schedule/execute/${scheduleId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         }
       });
-      
+
       const result = await response.json();
-      
+
+      // Store execution result
+      setExecutionResult(result);
+      setExecutionLoading(false);
+
       if (result.success) {
-        message.success('排程已觸發執行，請稍後查看貼文列表');
-        loadSchedules();
+        message.success(`排程執行成功！生成 ${result.generated_count} 篇貼文`);
+        loadSchedules();  // Refresh schedule list
       } else {
-        message.error(result.message || '執行排程失敗');
+        message.error(result.error || result.message || '執行排程失敗');
       }
     } catch (error) {
       console.error('執行排程失敗:', error);
+      setExecutionLoading(false);
+      setExecutionResult({
+        success: false,
+        message: '執行排程失敗',
+        error: error instanceof Error ? error.message : String(error)
+      });
       message.error('執行排程失敗');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -1151,6 +1168,17 @@ const ScheduleManagementPage: React.FC = () => {
         }}
         onSave={handleSaveConfig}
         initialData={editingSchedule as any}
+      />
+
+      {/* Schedule Execution Result Modal */}
+      <ScheduleExecutionModal
+        visible={executionModalVisible}
+        executionResult={executionResult}
+        loading={executionLoading}
+        onClose={() => {
+          setExecutionModalVisible(false);
+          setExecutionResult(null);
+        }}
       />
     </div>
   );
