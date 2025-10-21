@@ -43,6 +43,7 @@ def get_current_time():
 def convert_post_datetimes_to_taipei(post_dict):
     """
     Convert naive UTC datetime fields in post dictionary to Taipei timezone strings.
+    Also parse JSON fields from TEXT to dict/list.
 
     This fixes the issue where database TIMESTAMP columns (without timezone) are returned
     as naive datetime objects, which get serialized as UTC but displayed incorrectly.
@@ -52,6 +53,7 @@ def convert_post_datetimes_to_taipei(post_dict):
 
     Returns:
         Dictionary with datetime fields converted to Taipei timezone ISO strings
+        and JSON fields parsed from TEXT to dict/list
     """
     taipei_tz = pytz.timezone('Asia/Taipei')
     utc_tz = pytz.utc
@@ -61,6 +63,7 @@ def convert_post_datetimes_to_taipei(post_dict):
 
     result = dict(post_dict)
 
+    # Convert datetime fields
     for field in datetime_fields:
         if field in result and result[field] is not None:
             dt = result[field]
@@ -77,6 +80,21 @@ def convert_post_datetimes_to_taipei(post_dict):
                 # Already has timezone info, just convert to Taipei
                 dt_taipei = dt.astimezone(taipei_tz)
                 result[field] = dt_taipei.isoformat()
+
+    # 🔥 FIX: Parse JSON fields from TEXT to dict/list
+    json_fields = ['technical_analysis', 'serper_data', 'generation_params', 'commodity_tags', 'alternative_versions']
+
+    for field in json_fields:
+        if field in result and result[field] is not None:
+            if isinstance(result[field], str):
+                try:
+                    result[field] = json.loads(result[field])
+                except:
+                    result[field] = None
+
+    # 🔥 FIX: Rename generation_params to generation_config for frontend compatibility
+    if 'generation_params' in result:
+        result['generation_config'] = result.pop('generation_params')
 
     return result
 
