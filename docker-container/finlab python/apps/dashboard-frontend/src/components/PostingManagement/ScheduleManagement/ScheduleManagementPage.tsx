@@ -668,13 +668,22 @@ const ScheduleManagementPage: React.FC = () => {
       width: 120,
       render: (triggerConfig: any, record: ScheduleTask) => {
         const triggerTypeMap: Record<string, { text: string; color: string }> = {
+          // 熱門話題
+          'trending_topics': { text: 'CMoney熱門話題', color: 'purple' },
+          // 盤後觸發器 (6個)
           'limit_up_after_hours': { text: '盤後漲停', color: 'red' },
           'limit_down_after_hours': { text: '盤後跌停', color: 'green' },
+          'after_hours_volume_amount_high': { text: '盤後量(金額)大', color: 'orange' },
+          'after_hours_volume_amount_low': { text: '盤後量(金額)小', color: 'blue' },
+          'after_hours_volume_change_rate_high': { text: '盤後量增(比率)高', color: 'gold' },
+          'after_hours_volume_change_rate_low': { text: '盤後量增(比率)低', color: 'cyan' },
+          // 盤中觸發器 (6個)
           'intraday_limit_up': { text: '盤中漲停', color: 'volcano' },
-          'intraday_limit_down': { text: '盤中跌停', color: 'cyan' },
-          'volume_surge': { text: '成交量暴增', color: 'orange' },
-          'news_hot': { text: '新聞熱股', color: 'magenta' },
-          'custom_stocks': { text: '自選股', color: 'purple' }
+          'intraday_limit_down': { text: '盤中跌停', color: 'geekblue' },
+          'intraday_limit_up_by_amount': { text: '盤中漲(金額)', color: 'magenta' },
+          'intraday_limit_down_by_amount': { text: '盤中跌(金額)', color: 'lime' },
+          'intraday_volume_leaders': { text: '盤中量(成交量)大', color: 'orange' },
+          'intraday_amount_leaders': { text: '盤中量(金額)大', color: 'gold' }
         };
         const triggerType = triggerConfig?.trigger_type || record.trigger_config?.trigger_type || 'N/A';
         const mapped = triggerTypeMap[triggerType] || { text: triggerType, color: 'default' };

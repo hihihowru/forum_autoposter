@@ -1551,7 +1551,6 @@ export class PostingManagementAPI {
     }
 
     // 如果都沒有，返回 unknown
-    console.log(`⚠️ Session 沒有找到 trigger_type 信息，返回 unknown`);
     return 'unknown';
   }
   

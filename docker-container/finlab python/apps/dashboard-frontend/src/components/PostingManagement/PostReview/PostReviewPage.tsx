@@ -191,16 +191,16 @@ const PostReviewPage: React.FC<PostReviewPageProps> = ({ sessionId, onBack }) =>
 
   useEffect(() => {
     loadPosts();
-    
-    // 設置定時刷新，每30秒檢查一次新貼文（減少數據庫負載）
+
+    // 設置定時刷新，快速輪詢以立即顯示新生成的貼文
     // 只在頁面可見時才進行輪詢
     const interval = setInterval(() => {
       if (!document.hidden) {
         console.log('🔄 定時刷新貼文列表');
         loadPosts();
       }
-    }, 60000); // 改為60秒，減少數據庫負載
-    
+    }, 5000); // 5秒輪詢，確保貼文生成後立即顯示
+
     return () => clearInterval(interval);
   }, [sessionId]);
 
