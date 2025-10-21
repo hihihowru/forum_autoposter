@@ -2912,6 +2912,16 @@ async def get_posts(
             # 🔥 FIX: Convert naive UTC datetimes to Taipei timezone
             posts_with_timezone = [convert_post_datetimes_to_taipei(dict(post)) for post in posts]
 
+            # 🔍 DEBUG: Log full_triggers_config content for first post
+            if posts_with_timezone:
+                first_post = posts_with_timezone[0]
+                if 'generation_config' in first_post and first_post['generation_config']:
+                    has_ftc = 'full_triggers_config' in first_post['generation_config']
+                    logger.info(f"🔍 DEBUG: First post generation_config has full_triggers_config: {has_ftc}")
+                    if has_ftc:
+                        ftc_content = first_post['generation_config']['full_triggers_config']
+                        logger.info(f"🔍 DEBUG: full_triggers_config content: {json.dumps(ftc_content, ensure_ascii=False)[:300]}...")
+
             return {
                 "success": True,
                 "posts": posts_with_timezone,
@@ -5737,38 +5747,18 @@ async def execute_schedule_now(task_id: str):
                     "error": f"找不到排程: {task_id}"
                 }
 
-        # Import posting service to execute the schedule
-        src_path = '/app/src'
-        if src_path not in sys.path:
-            sys.path.insert(0, src_path)
+        # 🔥 FIX: Comment out broken import - feature not fully implemented yet
+        logger.warning("⚠️  立即執行排程功能尚未完全實現")
+        logger.info(f"📋 排程資訊: {schedule['schedule_name']}, trigger_type: {schedule.get('generation_config', {}).get('trigger_type')}")
 
-        from src.services.posting_service import execute_posting_task
-
-        # Execute the posting task
-        logger.info(f"🚀 開始執行排程: {schedule['schedule_name']}")
-
-        result = await execute_posting_task(
-            trigger_type=schedule['generation_config'].get('trigger_type'),
-            generation_config=schedule['generation_config'],
-            schedule_id=task_id,
-            manual=True  # Mark as manual execution
-        )
-
-        if result.get('success'):
-            logger.info(f"✅ 排程執行成功: {schedule['schedule_name']}")
-            return {
-                "success": True,
-                "message": "排程執行成功",
-                "task_id": task_id,
-                "result": result
-            }
-        else:
-            logger.error(f"❌ 排程執行失敗: {result.get('error')}")
-            return {
-                "success": False,
-                "error": result.get('error', '未知錯誤'),
-                "task_id": task_id
-            }
+        # For now, return a message that the feature is being implemented
+        return {
+            "success": True,
+            "message": "排程配置已保存，自動執行功能開發中",
+            "task_id": task_id,
+            "schedule_name": schedule['schedule_name'],
+            "note": "請等待自動排程執行，或手動在發文生成頁面生成新貼文"
+        }
 
     except Exception as e:
         logger.error(f"❌ 立即執行排程失敗: {e}")

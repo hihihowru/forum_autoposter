@@ -18,11 +18,11 @@ try:
 
     # Query for the latest posts with those session IDs
     query = """
-        SELECT id, session_id, generation_params
-        FROM generated_posts
-        WHERE session_id IN ('1761061609389', '1761060872395')
+        SELECT id, session_id, post_id, generation_params
+        FROM post_records
+        WHERE session_id = '1761062669234'
         ORDER BY id DESC
-        LIMIT 5;
+        LIMIT 1;
     """
 
     cursor.execute(query)
@@ -31,10 +31,11 @@ try:
     print(f"📊 Found {len(results)} posts\n")
 
     for row in results:
-        post_id, session_id, generation_params = row
+        post_id, session_id, post_uuid, generation_params = row
         print(f"{'='*80}")
         print(f"Post ID: {post_id}")
         print(f"Session ID: {session_id}")
+        print(f"Post UUID: {post_uuid}")
         print(f"Generation Params Type: {type(generation_params)}")
 
         if generation_params:
