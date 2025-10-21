@@ -5547,9 +5547,10 @@ async def create_schedule(request: Request):
             logger.info(f"🔍 Frontend sent schedule_config type: {type(data.get('schedule_config'))}")
             logger.info(f"🔍 Frontend sent schedule_config: {str(data.get('schedule_config'))[:500]}")
 
-            # 🔥 FIX: Use trigger_config from frontend if provided, otherwise build from generation_config
+            # 🔥 FIX: Use trigger_config from frontend if provided AND not empty
             trigger_config = data.get('trigger_config')
-            if not trigger_config:
+            # Check if trigger_config is None or empty dict (both should use fallback)
+            if not trigger_config or (isinstance(trigger_config, dict) and len(trigger_config) == 0):
                 # Fallback: Build from generation_config for backward compatibility
                 trigger_type = generation_config.get('trigger_type', 'limit_up_after_hours')
                 stock_sorting = generation_config.get('stock_sorting', {})

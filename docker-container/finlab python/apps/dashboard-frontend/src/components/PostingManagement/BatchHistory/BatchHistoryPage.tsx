@@ -149,7 +149,12 @@ const BatchHistoryPage: React.FC = () => {
   const handleConfirmSchedule = async (scheduleConfig: any) => {
     try {
       setLoading(true);
-      
+
+      // 🔥 DEBUG: Log what we're sending to the API
+      console.log('🚀 API Request to /api/schedule/create');
+      console.log('🔍 trigger_config:', scheduleConfig.trigger_config);
+      console.log('🔍 schedule_config:', scheduleConfig.schedule_config);
+
       // 創建排程
       const response = await fetch(`${API_BASE_URL}/api/schedule/create`, {
         method: 'POST',

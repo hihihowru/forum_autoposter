@@ -1746,31 +1746,41 @@ const SelfLearningPage: React.FC = () => {
             feature_based: true,
             feature_name: feature.feature_name,
             improvement_potential: feature.improvement_potential
+          },
+
+          // 🔥 FIX: Add trigger_config for complete schedule creation
+          trigger_config: {
+            trigger_type: featureBasedConfig.trigger_type,
+            stock_codes: [],
+            kol_assignment: 'random',
+            max_stocks: featureBasedConfig.max_stocks,
+            stock_sorting: featureBasedConfig.stock_sorting
+          },
+
+          // 🔥 FIX: Add schedule_config for complete schedule creation
+          schedule_config: {
+            enabled: true,
+            posting_time_slots: [executionTime],
+            timezone: 'Asia/Taipei',
+            weekdays_only: true,
+            posting_type: featureBasedConfig.posting_type,
+            content_style: featureBasedConfig.content_style || 'technical',
+            content_length: featureBasedConfig.content_length || 'medium',
+            max_words: featureBasedConfig.max_words || 500
           }
         };
-        
+
         console.log('🎯 自動填上的排程設定:', scheduleConfig);
       }
       
       // 創建排程 - 直接調用 posting-service 的 API
+      // 🔥 FIX: Send complete scheduleConfig including generation_config
       const response = await fetch(`${API_BASE_URL}/api/schedule/create`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          session_id: scheduleConfig.session_id,
-          post_ids: [], // 空陣列，因為這是新排程
-          schedule_type: scheduleConfig.schedule_type,
-          interval_seconds: 30,
-          batch_duration_hours: null,
-          // 來源追蹤參數
-          source_type: scheduleConfig.source_type,
-          source_batch_id: scheduleConfig.source_batch_id,
-          source_experiment_id: scheduleConfig.source_experiment_id,
-          source_feature_name: scheduleConfig.source_feature_name,
-          created_by: scheduleConfig.created_by
-        })
+        body: JSON.stringify(scheduleConfig) // Send the complete config object
       });
 
       const result = await response.json();
