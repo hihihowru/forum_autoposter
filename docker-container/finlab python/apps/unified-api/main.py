@@ -270,8 +270,20 @@ def check_schedules():
     try:
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-            # Find schedules where next_run <= now AND status = 'active'
+            # Get current time in Taipei timezone
+            import pytz
+            tz = pytz.timezone('Asia/Taipei')
             now = get_current_time()
+
+            # Ensure now is timezone-aware
+            if now.tzinfo is None:
+                now = tz.localize(now)
+            elif now.tzinfo != tz:
+                now = now.astimezone(tz)
+
+            logger.info(f"⏰ 檢查排程任務 - 當前時間: {now.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+
+            # Find schedules where next_run <= now AND status = 'active'
             cursor.execute("""
                 SELECT * FROM schedule_tasks
                 WHERE next_run <= %s AND status = 'active'
@@ -285,6 +297,10 @@ def check_schedules():
 
                 for task in due_tasks:
                     task_dict = dict(task)
+                    task_name = task_dict.get('schedule_name', 'Unnamed')
+                    next_run = task_dict.get('next_run')
+                    logger.info(f"  - 任務: {task_name}, next_run: {next_run}")
+
                     # Parse JSON fields
                     import json
                     for field in ['trigger_config', 'schedule_config', 'batch_info', 'generation_config']:
@@ -296,6 +312,8 @@ def check_schedules():
 
                     # Execute the schedule task
                     execute_schedule_task(task_dict)
+            else:
+                logger.debug(f"✅ 沒有待執行的排程任務")
 
         conn.commit()
 
@@ -407,21 +425,31 @@ def calculate_next_run(task):
         task: Schedule task dictionary
 
     Returns:
-        datetime: Next run time in Taipei timezone
+        datetime: Next run time in Taipei timezone (timezone-aware)
     """
     from datetime import timedelta
+    import pytz
 
     schedule_type = task.get('schedule_type', 'weekday_daily')
     schedule_config = task.get('schedule_config', {})
     weekdays_only = schedule_config.get('weekdays_only', True)
     posting_time_slots = schedule_config.get('posting_time_slots', [])
 
+    # Get current time in Taipei timezone (timezone-aware)
+    tz = pytz.timezone('Asia/Taipei')
     now = get_current_time()
+
+    # Ensure now is timezone-aware
+    if now.tzinfo is None:
+        now = tz.localize(now)
+    elif now.tzinfo != tz:
+        now = now.astimezone(tz)
+
     next_run = now
 
     if schedule_type == 'weekday_daily' or schedule_type == 'daily':
         # Get execution time from posting_time_slots
-        if posting_time_slots:
+        if posting_time_slots and len(posting_time_slots) > 0:
             time_str = posting_time_slots[0]  # e.g., "14:00"
             try:
                 time_parts = time_str.split(':')
@@ -432,20 +460,32 @@ def calculate_next_run(task):
                 next_run = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
 
                 # If today's time has passed, schedule for tomorrow
-                if next_run <= now:
+                # Add 1 minute buffer to avoid immediate re-execution
+                if next_run <= now + timedelta(minutes=1):
                     next_run = next_run + timedelta(days=1)
 
                 # Skip weekends if weekdays_only
                 if weekdays_only:
                     while next_run.weekday() >= 5:  # 5=Saturday, 6=Sunday
                         next_run = next_run + timedelta(days=1)
-            except:
+            except Exception as e:
+                logger.error(f"❌ 解析排程時間失敗 ({time_str}): {e}")
                 # Fallback: schedule for tomorrow same time
                 next_run = now + timedelta(days=1)
+        else:
+            logger.warning(f"⚠️  排程沒有設定執行時間，預設明天同一時間")
+            next_run = now + timedelta(days=1)
     else:
         # For other schedule types, default to next day
+        logger.info(f"ℹ️  排程類型 {schedule_type} 預設為明天執行")
         next_run = now + timedelta(days=1)
 
+    # Ensure next_run is in the future (at least 1 minute from now)
+    if next_run <= now:
+        logger.warning(f"⚠️  計算的 next_run ({next_run}) 不在未來，調整為明天")
+        next_run = now + timedelta(days=1)
+
+    logger.info(f"📅 下次執行時間: {next_run.strftime('%Y-%m-%d %H:%M:%S %Z')}")
     return next_run
 
 def create_schedule_tasks_table():
@@ -635,31 +675,37 @@ def startup_event():
     except Exception as e:
         logger.error(f"❌ 從 FinLab 載入公司資訊失敗: {e}")
 
-    # 🔥 Initialize APScheduler for schedule execution
-    try:
-        global scheduler
-        from apscheduler.schedulers.asyncio import AsyncIOScheduler
+    # 🔥 TEMPORARILY DISABLED: APScheduler initialization
+    # TODO: Fix time check logic before re-enabling
+    # The scheduler was executing all 33 tasks every minute instead of only at scheduled times
+    # Need to fix calculate_next_run() and check_schedules() logic
+    scheduler = None
+    logger.warning("⚠️  APScheduler 已暫時停用 - 需修復時間檢查邏輯")
 
-        logger.info("📅 初始化 APScheduler...")
-        scheduler = AsyncIOScheduler(timezone=pytz.timezone('Asia/Taipei'))
-
-        # Add job to check schedules every minute
-        scheduler.add_job(
-            check_schedules,
-            trigger='interval',
-            minutes=1,
-            id='schedule_checker',
-            replace_existing=True,
-            max_instances=1  # Prevent overlapping executions
-        )
-
-        scheduler.start()
-        logger.info("✅ APScheduler 啟動成功 - 每分鐘檢查排程任務")
-    except Exception as e:
-        logger.error(f"❌ APScheduler 初始化失敗: {e}")
-        logger.error(f"❌ 錯誤詳情: {traceback.format_exc()}")
-        # Don't crash startup if scheduler fails
-        scheduler = None
+    # try:
+    #     global scheduler
+    #     from apscheduler.schedulers.asyncio import AsyncIOScheduler
+    #
+    #     logger.info("📅 初始化 APScheduler...")
+    #     scheduler = AsyncIOScheduler(timezone=pytz.timezone('Asia/Taipei'))
+    #
+    #     # Add job to check schedules every minute
+    #     scheduler.add_job(
+    #         check_schedules,
+    #         trigger='interval',
+    #         minutes=1,
+    #         id='schedule_checker',
+    #         replace_existing=True,
+    #         max_instances=1  # Prevent overlapping executions
+    #     )
+    #
+    #     scheduler.start()
+    #     logger.info("✅ APScheduler 啟動成功 - 每分鐘檢查排程任務")
+    # except Exception as e:
+    #     logger.error(f"❌ APScheduler 初始化失敗: {e}")
+    #     logger.error(f"❌ 錯誤詳情: {traceback.format_exc()}")
+    #     # Don't crash startup if scheduler fails
+    #     scheduler = None
 
 def ensure_finlab_login():
     """確保 FinLab 已登入"""
