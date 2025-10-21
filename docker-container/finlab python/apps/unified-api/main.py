@@ -2963,6 +2963,215 @@ async def refresh_all_interactions():
         if conn:
             return_db_connection(conn)
 
+# ==================== Post Management API (Approve/Publish/Edit) ====================
+
+@app.post("/api/posts/{post_id}/approve")
+async def approve_post(post_id: str, request: Request):
+    """審核通過貼文"""
+    logger.info(f"收到 approve_post 請求 - Post ID: {post_id}")
+
+    conn = None
+    try:
+        body = await request.json()
+        reviewer_notes = body.get('reviewer_notes', '')
+        approved_by = body.get('approved_by', 'system')
+        edited_title = body.get('edited_title')
+        edited_content = body.get('edited_content')
+
+        logger.info(f"審核參數: approved_by={approved_by}, has_edits={bool(edited_title or edited_content)}")
+
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            # Build update query
+            update_fields = [
+                "status = 'approved'",
+                "reviewer_notes = %s",
+                "approved_by = %s",
+                "approved_at = %s"
+            ]
+            params = [reviewer_notes, approved_by, get_current_time()]
+
+            # Add edited title/content if provided
+            if edited_title:
+                update_fields.append("title = %s")
+                params.append(edited_title)
+            if edited_content:
+                update_fields.append("content = %s")
+                params.append(edited_content)
+
+            params.append(post_id)
+
+            query = f"""
+                UPDATE post_records
+                SET {', '.join(update_fields)}
+                WHERE post_id = %s
+            """
+
+            cursor.execute(query, params)
+            conn.commit()
+
+            if cursor.rowcount == 0:
+                raise ValueError(f"Post {post_id} not found")
+
+            logger.info(f"✅ 貼文審核成功 - Post ID: {post_id}")
+
+        return {"success": True, "message": "貼文審核通過"}
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"❌ 審核貼文失敗: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+@app.post("/api/posts/{post_id}/publish")
+async def publish_post(post_id: str):
+    """發布貼文到 CMoney"""
+    logger.info(f"收到 publish_post 請求 - Post ID: {post_id}")
+
+    conn = None
+    try:
+        # Get post from database
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute("SELECT * FROM post_records WHERE post_id = %s", (post_id,))
+            post = cursor.fetchone()
+
+            if not post:
+                raise ValueError(f"Post {post_id} not found")
+
+            # Get CMoney credentials
+            from src.clients.cmoney.cmoney_client import CMoneyClient, LoginCredentials
+
+            cmoney_client = CMoneyClient()
+            forum_credentials = get_forum_200_credentials()
+            credentials = LoginCredentials(
+                email=forum_credentials["email"],
+                password=forum_credentials["password"]
+            )
+
+            # Login
+            logger.info("🔐 登入 CMoney API...")
+            login_result = await cmoney_client.login(credentials)
+
+            if not login_result or not login_result.token:
+                raise ValueError("CMoney login failed")
+
+            # Publish post
+            logger.info(f"📤 發布貼文到 CMoney: {post['title'][:50]}...")
+
+            from src.clients.cmoney.cmoney_types import ArticleInput
+            article_input = ArticleInput(
+                StockNo=post.get('stock_code', '0000'),
+                Title=post['title'],
+                Content=post['content'],
+                TopicId=post.get('topic_id')
+            )
+
+            publish_result = await cmoney_client.publish_post(
+                token=login_result.token,
+                article=article_input
+            )
+
+            if not publish_result or not publish_result.article_id:
+                raise ValueError("Failed to publish to CMoney")
+
+            # Update database
+            cursor.execute("""
+                UPDATE post_records
+                SET status = 'published',
+                    published_at = %s,
+                    cmoney_post_id = %s,
+                    cmoney_post_url = %s
+                WHERE post_id = %s
+            """, (
+                get_current_time(),
+                str(publish_result.article_id),
+                publish_result.article_url,
+                post_id
+            ))
+            conn.commit()
+
+            logger.info(f"✅ 貼文發布成功 - Article ID: {publish_result.article_id}")
+
+        return {
+            "success": True,
+            "article_id": publish_result.article_id,
+            "article_url": publish_result.article_url
+        }
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"❌ 發布貼文失敗: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+@app.put("/api/posts/{post_id}/content")
+async def update_post_content(post_id: str, request: Request):
+    """更新貼文內容（不改變狀態）"""
+    logger.info(f"收到 update_post_content 請求 - Post ID: {post_id}")
+
+    conn = None
+    try:
+        body = await request.json()
+        title = body.get('title')
+        content = body.get('content')
+        content_md = body.get('content_md')
+
+        if not title and not content:
+            raise ValueError("Must provide at least title or content")
+
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            update_fields = []
+            params = []
+
+            if title:
+                update_fields.append("title = %s")
+                params.append(title)
+            if content:
+                update_fields.append("content = %s")
+                params.append(content)
+            if content_md:
+                update_fields.append("content_md = %s")
+                params.append(content_md)
+
+            # Always update updated_at
+            update_fields.append("updated_at = %s")
+            params.append(get_current_time())
+
+            params.append(post_id)
+
+            query = f"""
+                UPDATE post_records
+                SET {', '.join(update_fields)}
+                WHERE post_id = %s
+            """
+
+            cursor.execute(query, params)
+            conn.commit()
+
+            if cursor.rowcount == 0:
+                raise ValueError(f"Post {post_id} not found")
+
+            logger.info(f"✅ 貼文內容更新成功 - Post ID: {post_id}")
+
+        return {"success": True, "message": "貼文內容已更新"}
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"❌ 更新貼文內容失敗: {e}")
+        return {"success": False, "error": str(e)}
+    finally:
+        if conn:
+            return_db_connection(conn)
+
 # ==================== Trending API 功能 ====================
 
 @app.get("/api/trending")
@@ -5052,6 +5261,53 @@ async def create_schedule(request: Request):
         return {
             "success": False,
             "message": f"創建失敗: {str(e)}",
+            "timestamp": get_current_time().isoformat()
+        }
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+@app.post("/api/schedule/{task_id}/auto-posting")
+async def toggle_auto_posting(task_id: str, request: Request):
+    """切換排程的自動發文功能"""
+    logger.info(f"收到 toggle_auto_posting 請求 - Task ID: {task_id}")
+
+    conn = None
+    try:
+        body = await request.json()
+        enabled = body.get('enabled', False)
+
+        logger.info(f"設定自動發文: {enabled}")
+
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                UPDATE schedule_tasks
+                SET auto_posting = %s, updated_at = NOW()
+                WHERE schedule_id = %s
+            """, (enabled, task_id))
+
+            conn.commit()
+
+            if cursor.rowcount == 0:
+                raise ValueError(f"Schedule {task_id} not found")
+
+            logger.info(f"✅ 自動發文設定更新成功 - Task ID: {task_id}, enabled={enabled}")
+
+        return {
+            "success": True,
+            "task_id": task_id,
+            "message": f"自動發文已{'開啟' if enabled else '關閉'}",
+            "enabled": enabled
+        }
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"❌ 更新自動發文設定失敗: {e}")
+        return {
+            "success": False,
+            "message": f"更新失敗: {str(e)}",
             "timestamp": get_current_time().isoformat()
         }
     finally:
