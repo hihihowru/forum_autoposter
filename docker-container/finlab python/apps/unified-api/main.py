@@ -2249,6 +2249,7 @@ async def manual_posting(request: Request):
                 "kol_persona": kol_persona
             },
             "commodity_tags": commodity_tags_data,
+            "alternative_versions": alternative_versions,  # 🔥 FIX: Include alternative versions in response
             "timestamp": now.isoformat()
         }
 

@@ -418,7 +418,6 @@ const KOLManagementPage: React.FC = () => {
     try {
       setSaving(true);
       console.log('🚀 開始創建 KOL...');
-      console.log('📝 收集到的值:', values);
 
       const payload = {
         email: values.email,
@@ -434,13 +433,7 @@ const KOLManagementPage: React.FC = () => {
         prompt_skeleton: values.prompt_skeleton || ''
       };
 
-      console.log('📤 發送到後端的 payload:', {
-        ...payload,
-        password: '***'  // 隱藏密碼
-      });
-
       const response = await axios.post(`${API_BASE_URL}/api/kol/create`, payload);
-      console.log('📥 後端響應:', response.data);
 
       if (response.data.success) {
         console.log('✅ KOL 創建成功!', {

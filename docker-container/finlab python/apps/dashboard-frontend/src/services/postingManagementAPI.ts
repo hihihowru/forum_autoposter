@@ -1587,9 +1587,7 @@ export class PostingManagementAPI {
           
           // 獲取該 session 的所有貼文來推斷觸發器類型
           const sessionPosts = historyStats.all_posts?.filter((p: any) => p.session_id?.toString() === sessionId) || [];
-          console.log(`🔍 Session ${sessionId} 的貼文:`, sessionPosts.map(p => ({ trigger_type: p.trigger_type, title: p.title })));
           const triggerType = this.inferTriggerType(sessionPosts);
-          console.log(`🔍 Session ${sessionId} 推斷的觸發器類型:`, triggerType);
           
           // 獲取該 session 的最早創建時間（轉換為 UTC+8）
           const sessionCreatedAt = sessionPosts.length > 0 
