@@ -32,6 +32,12 @@ import pandas as pd
 import numpy as np
 import psycopg2
 from psycopg2.extras import RealDictCursor
+import pytz
+
+# Timezone utility - Always use Taipei time (GMT+8)
+def get_current_time():
+    """Returns current time in Asia/Taipei timezone"""
+    return datetime.now(pytz.timezone('Asia/Taipei'))
 
 # 配置日誌
 logging.basicConfig(level=logging.INFO)
@@ -406,7 +412,7 @@ async def root():
         "message": "Forum Autoposter Unified API",
         "status": "running",
         "version": "1.0.0",
-        "timestamp": datetime.now().isoformat()
+        "timestamp": get_current_time().isoformat()
     }
 
 @app.get("/health")
@@ -438,7 +444,7 @@ async def health_check():
     return {
         "status": "healthy",
         "message": "Unified API is running successfully",
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": get_current_time().isoformat(),
         "services": {
             "finlab": finlab_status,
             "database": db_status
@@ -456,7 +462,7 @@ async def debug_import_status():
     import traceback
 
     result = {
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": get_current_time().isoformat(),
         "python_version": sys.version,
         "sys_path": sys.path,
         "posting_service_path": os.path.join(os.path.dirname(__file__), 'posting-service'),
@@ -530,7 +536,7 @@ async def debug_openai_config():
     import traceback
 
     result = {
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": get_current_time().isoformat(),
         "environment": {
             "OPENAI_API_KEY_exists": os.getenv("OPENAI_API_KEY") is not None,
             "OPENAI_API_KEY_length": len(os.getenv("OPENAI_API_KEY", "")) if os.getenv("OPENAI_API_KEY") else 0,
@@ -592,7 +598,7 @@ async def test_database():
         "post_count": 0,
         "schedule_count": 0,
         "errors": [],
-        "timestamp": datetime.now().isoformat()
+        "timestamp": get_current_time().isoformat()
     }
 
     conn = None
@@ -671,7 +677,7 @@ async def migrate_trigger_type():
             return {
                 "success": False,
                 "error": "Database pool not initialized",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": get_current_time().isoformat()
             }
 
         conn = get_db_connection()
@@ -690,7 +696,7 @@ async def migrate_trigger_type():
         return {
             "success": True,
             "message": "Migration successful: trigger_type column added to post_records table",
-            "timestamp": datetime.now().isoformat()
+            "timestamp": get_current_time().isoformat()
         }
 
     except Exception as e:
@@ -701,7 +707,7 @@ async def migrate_trigger_type():
             "success": False,
             "error": str(e),
             "error_type": type(e).__name__,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": get_current_time().isoformat()
         }
     finally:
         if conn:
@@ -719,7 +725,7 @@ async def reconnect_database():
             return {
                 "success": False,
                 "error": "DATABASE_URL not found",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": get_current_time().isoformat()
             }
         
         # 關閉現有連接
@@ -759,7 +765,7 @@ async def reconnect_database():
         return {
             "success": True,
             "message": "Database reconnected successfully",
-            "timestamp": datetime.now().isoformat()
+            "timestamp": get_current_time().isoformat()
         }
         
     except Exception as e:
@@ -768,7 +774,7 @@ async def reconnect_database():
         return {
             "success": False,
             "error": str(e),
-            "timestamp": datetime.now().isoformat()
+            "timestamp": get_current_time().isoformat()
         }
 
 # ==================== OHLC API 功能 ====================
@@ -869,7 +875,7 @@ async def get_after_hours_limit_up_stocks(
             'success': True,
             'total_count': len(limit_up_stocks),
             'stocks': limit_up_stocks,
-            'timestamp': datetime.now().isoformat(),
+            'timestamp': get_current_time().isoformat(),
             'date': latest_date.strftime('%Y-%m-%d'),
             'previous_date': previous_date.strftime('%Y-%m-%d'),
             'changeThreshold': changeThreshold
@@ -975,7 +981,7 @@ async def get_after_hours_limit_down_stocks(
             'success': True,
             'total_count': len(limit_down_stocks),
             'stocks': limit_down_stocks,
-            'timestamp': datetime.now().isoformat(),
+            'timestamp': get_current_time().isoformat(),
             'date': latest_date.strftime('%Y-%m-%d'),
             'previous_date': previous_date.strftime('%Y-%m-%d'),
             'changeThreshold': changeThreshold
@@ -1071,7 +1077,7 @@ async def get_after_hours_volume_amount_high(
             'success': True,
             'total_count': len(volume_amount_stocks),
             'stocks': volume_amount_stocks,
-            'timestamp': datetime.now().isoformat(),
+            'timestamp': get_current_time().isoformat(),
             'date': latest_date.strftime('%Y-%m-%d'),
             'previous_date': previous_date.strftime('%Y-%m-%d'),
             'sort_by': 'volume_amount_high'
@@ -1167,7 +1173,7 @@ async def get_after_hours_volume_amount_low(
             'success': True,
             'total_count': len(volume_amount_stocks),
             'stocks': volume_amount_stocks,
-            'timestamp': datetime.now().isoformat(),
+            'timestamp': get_current_time().isoformat(),
             'date': latest_date.strftime('%Y-%m-%d'),
             'previous_date': previous_date.strftime('%Y-%m-%d'),
             'sort_by': 'volume_amount_low'
@@ -1283,7 +1289,7 @@ async def get_after_hours_volume_change_rate_high(
             'success': True,
             'total_count': len(volume_change_stocks),
             'stocks': volume_change_stocks,
-            'timestamp': datetime.now().isoformat(),
+            'timestamp': get_current_time().isoformat(),
             'date': latest_date.strftime('%Y-%m-%d'),
             'previous_date': previous_date.strftime('%Y-%m-%d'),
             'sort_by': 'volume_change_rate_high'
@@ -1399,7 +1405,7 @@ async def get_after_hours_volume_change_rate_low(
             'success': True,
             'total_count': len(volume_change_stocks),
             'stocks': volume_change_stocks,
-            'timestamp': datetime.now().isoformat(),
+            'timestamp': get_current_time().isoformat(),
             'date': latest_date.strftime('%Y-%m-%d'),
             'previous_date': previous_date.strftime('%Y-%m-%d'),
             'sort_by': 'volume_change_rate_low'
@@ -1419,7 +1425,7 @@ async def get_stock_mapping():
             "success": True,
             "data": stock_mapping,
             "count": len(stock_mapping),
-            "timestamp": datetime.now().isoformat()
+            "timestamp": get_current_time().isoformat()
         }
     except Exception as e:
         logger.error(f"獲取股票映射表失敗: {e}")
@@ -1442,7 +1448,7 @@ async def get_industries():
             "success": True,
             "data": industries_list,
             "count": len(industries_list),
-            "timestamp": datetime.now().isoformat()
+            "timestamp": get_current_time().isoformat()
         }
 
         logger.info(f"返回 industries 數據: {len(result['data'])} 條記錄")
@@ -1471,7 +1477,7 @@ async def get_stocks_by_industry(industry: str = Query(..., description="產業�
             "data": stocks,
             "count": len(stocks),
             "industry": industry,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": get_current_time().isoformat()
         }
 
         logger.info(f"返回 {industry} 產業股票: {len(result['data'])} 支")
@@ -1561,7 +1567,7 @@ async def get_dynamic_auth_token() -> str:
     try:
         if (_token_cache["token"] and
             _token_cache["expires_at"] and
-            datetime.now() < _token_cache["expires_at"]):
+            get_current_time() < _token_cache["expires_at"]):
             logger.info("✅ 使用快取的 CMoney API token")
             return _token_cache["token"]
 
@@ -1588,7 +1594,7 @@ async def get_dynamic_auth_token() -> str:
 
         _token_cache["token"] = login_result.token
         _token_cache["expires_at"] = login_result.expires_at
-        _token_cache["created_at"] = datetime.now()
+        _token_cache["created_at"] = get_current_time()
 
         logger.info(f"✅ forum_200 登入成功，token 有效期至: {login_result.expires_at}")
         return login_result.token
@@ -1763,7 +1769,7 @@ async def execute_cmoney_intraday_trigger(processing: list, trigger_name: str):
                 "success": True,
                 "total_count": len(stocks_with_info),
                 "stocks": stocks_with_info,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": get_current_time().isoformat(),
                 "trigger_type": trigger_name
             }
 
@@ -1899,8 +1905,8 @@ async def create_posting(request: Request):
         # 準備插入數據
         post_data = {
             'post_id': post_id,
-            'created_at': datetime.now(),
-            'updated_at': datetime.now(),
+            'created_at': get_current_time(),
+            'updated_at': get_current_time(),
             'session_id': body.get('session_id', 1),
             'kol_serial': body.get('kol_serial', 200),
             'kol_nickname': body.get('kol_nickname', 'KOL-200'),
@@ -1971,7 +1977,7 @@ async def create_posting(request: Request):
             "message": "貼文創建成功",
             "post_id": post_id,
             "data": body,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": get_current_time().isoformat()
         }
 
         logger.info("貼文創建成功")
@@ -1984,7 +1990,7 @@ async def create_posting(request: Request):
             content={
                 "success": False,
                 "message": f"貼文創建失敗: {str(e)}",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": get_current_time().isoformat()
             }
         )
 
@@ -2153,7 +2159,7 @@ async def manual_posting(request: Request):
         post_id = str(uuid.uuid4())
 
         # 準備數據庫寫入數據
-        now = datetime.now()
+        now = get_current_time()
 
         # 生成商品標籤
         commodity_tags_data = [
@@ -2266,7 +2272,7 @@ async def manual_posting(request: Request):
                 "success": False,
                 "message": f"手動貼文失敗: {str(e)}",
                 "error_type": type(e).__name__,
-                "timestamp": datetime.now().isoformat()
+                "timestamp": get_current_time().isoformat()
             }
         )
     finally:
@@ -2391,7 +2397,7 @@ async def performance_test(request: Request):
 
         import uuid
         post_id = str(uuid.uuid4())
-        now = datetime.now()
+        now = get_current_time()
 
         commodity_tags_data = [
             {"type": "Market", "key": "TWA00", "bullOrBear": 0},
@@ -2495,7 +2501,7 @@ async def performance_test(request: Request):
                 "slowest_step": max([(k, v) for k, v in timings.items() if k != 'total_time'], key=lambda x: x[1])[0],
                 "slowest_time_ms": max([v for k, v in timings.items() if k != 'total_time'])
             },
-            "timestamp": datetime.now().isoformat()
+            "timestamp": get_current_time().isoformat()
         }
 
     except Exception as e:
@@ -2509,7 +2515,7 @@ async def performance_test(request: Request):
                 "success": False,
                 "error": str(e),
                 "timings_ms": timings,
-                "timestamp": datetime.now().isoformat()
+                "timestamp": get_current_time().isoformat()
             }
         )
 
@@ -2530,7 +2536,7 @@ async def get_system_monitoring():
             "uptime": "5 days, 12 hours",
             "last_restart": "2025-10-10T08:30:00Z"
         },
-        "timestamp": datetime.now().isoformat()
+        "timestamp": get_current_time().isoformat()
     }
 
     logger.info("返回系統監控數據")
@@ -2550,7 +2556,7 @@ async def get_content_management():
             "scheduled_posts": 45,
             "failed_posts": 5
         },
-        "timestamp": datetime.now().isoformat()
+        "timestamp": get_current_time().isoformat()
     }
 
     logger.info("返回內容管理數據")
@@ -2575,7 +2581,7 @@ async def get_interaction_analysis():
                 {"post_id": "post_003", "interactions": 750}
             ]
         },
-        "timestamp": datetime.now().isoformat()
+        "timestamp": get_current_time().isoformat()
     }
 
     logger.info("返回互動分析數據")
@@ -2605,7 +2611,7 @@ async def get_posts(
                 "skip": skip,
                 "limit": limit,
                 "error": "數據庫連接不可用",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": get_current_time().isoformat()
             }
 
         # Get connection from pool
@@ -2637,7 +2643,7 @@ async def get_posts(
                     "skip": skip,
                     "limit": limit,
                     "error": "post_records 表不存在",
-                    "timestamp": datetime.now().isoformat()
+                    "timestamp": get_current_time().isoformat()
                 }
 
             # 獲取總數（在查詢前先檢查）
@@ -2684,7 +2690,7 @@ async def get_posts(
                 "count": total_count,
                 "skip": skip,
                 "limit": limit,
-                "timestamp": datetime.now().isoformat()
+                "timestamp": get_current_time().isoformat()
             }
 
     except Exception as e:
@@ -2701,7 +2707,7 @@ async def get_posts(
             "error": str(e),
             "error_type": type(e).__name__,
             "error_details": f"{type(e).__name__}: {str(e)}",
-            "timestamp": datetime.now().isoformat()
+            "timestamp": get_current_time().isoformat()
         }
     finally:
         if conn:
@@ -2716,7 +2722,7 @@ async def refresh_all_interactions():
     logger.info("收到 refresh-all 請求")
 
     if not db_pool:
-        return {"success": False, "error": "數據庫連接不可用", "timestamp": datetime.now().isoformat()}
+        return {"success": False, "error": "數據庫連接不可用", "timestamp": get_current_time().isoformat()}
 
     conn = None
     try:
@@ -2729,7 +2735,7 @@ async def refresh_all_interactions():
         password = os.getenv("FORUM_200_PASSWORD")
 
         if not email or not password:
-            return {"success": False, "error": "KOL credentials not configured", "timestamp": datetime.now().isoformat()}
+            return {"success": False, "error": "KOL credentials not configured", "timestamp": get_current_time().isoformat()}
 
         # Fetch all published posts with article_id
         with conn.cursor(cursor_factory=RealDictCursor) as cursor:
@@ -2754,14 +2760,14 @@ async def refresh_all_interactions():
             )
 
             if login_response.status_code != 200:
-                return {"success": False, "error": "CMoney login failed", "timestamp": datetime.now().isoformat()}
+                return {"success": False, "error": "CMoney login failed", "timestamp": get_current_time().isoformat()}
 
             # Extract access token
             token_data = login_response.json()
             access_token = token_data.get("Data", {}).get("access_token")
 
             if not access_token:
-                return {"success": False, "error": "Failed to get access token", "timestamp": datetime.now().isoformat()}
+                return {"success": False, "error": "Failed to get access token", "timestamp": get_current_time().isoformat()}
 
             # Refresh interaction data for each post
             updated_count = 0
@@ -2829,14 +2835,14 @@ async def refresh_all_interactions():
             "updated_count": updated_count,
             "failed_count": failed_count,
             "total_posts": len(posts),
-            "timestamp": datetime.now().isoformat()
+            "timestamp": get_current_time().isoformat()
         }
 
     except Exception as e:
         if conn:
             conn.rollback()
         logger.error(f"❌ Refresh all failed: {e}")
-        return {"success": False, "error": str(e), "timestamp": datetime.now().isoformat()}
+        return {"success": False, "error": str(e), "timestamp": get_current_time().isoformat()}
     finally:
         if conn:
             return_db_connection(conn)
@@ -2898,7 +2904,7 @@ async def get_trending_topics(limit: int = Query(10, description="返回結果�
 
         result = {
             "topics": topics,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": get_current_time().isoformat()
         }
 
         logger.info(f"✅ 返回 {len(result['topics'])} 個 CMoney 熱門話題")
@@ -2911,7 +2917,7 @@ async def get_trending_topics(limit: int = Query(10, description="返回結果�
         # Fallback: Return empty list if CMoney API fails
         result = {
             "topics": [],
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": get_current_time().isoformat(),
             "error": f"CMoney API 錯誤: {str(e)}"
         }
 
@@ -2932,7 +2938,7 @@ async def extract_keywords(text: str = Query(..., description="要提取關鍵�
             "confidence_scores": [0.95, 0.88, 0.82, 0.76, 0.65],
             "original_text": text
         },
-        "timestamp": datetime.now().isoformat()
+        "timestamp": get_current_time().isoformat()
     }
 
     logger.info(f"提取到 {len(keywords)} 個關鍵字")
@@ -2956,7 +2962,7 @@ async def search_stocks_by_keywords(keywords: str = Query(..., description="關�
             "keywords": keywords,
             "total_found": len(stocks)
         },
-        "timestamp": datetime.now().isoformat()
+        "timestamp": get_current_time().isoformat()
     }
 
     logger.info(f"找到 {len(stocks)} 支相關股票")
@@ -2980,7 +2986,7 @@ async def analyze_topic(topic: str = Query(..., description="要分析的話題"
             ],
             "related_stocks": ["2330", "2454", "2317"]
         },
-        "timestamp": datetime.now().isoformat()
+        "timestamp": get_current_time().isoformat()
     }
 
     logger.info(f"完成話題分析: {topic}")
@@ -3001,9 +3007,9 @@ async def generate_content(
             "topic": topic,
             "style": style,
             "word_count": 45,
-            "generated_at": datetime.now().isoformat()
+            "generated_at": get_current_time().isoformat()
         },
-        "timestamp": datetime.now().isoformat()
+        "timestamp": get_current_time().isoformat()
     }
 
     logger.info(f"生成內容完成: {topic}")
@@ -3117,7 +3123,7 @@ async def import_1788_posts():
                 "message": f"成功導入 {len(records_dict)} 筆記錄",
                 "total_count": count,
                 "status_stats": {status: count for status, count in status_stats},
-                "timestamp": datetime.now().isoformat()
+                "timestamp": get_current_time().isoformat()
             }
 
     except Exception as e:
@@ -3145,8 +3151,8 @@ async def insert_sample_data():
             sample_records = [
                 {
                     'post_id': 'test-001',
-                    'created_at': datetime.now(),
-                    'updated_at': datetime.now(),
+                    'created_at': get_current_time(),
+                    'updated_at': get_current_time(),
                     'session_id': 1,
                     'kol_serial': 200,
                     'kol_nickname': 'KOL-200',
@@ -3182,8 +3188,8 @@ async def insert_sample_data():
                 },
                 {
                     'post_id': 'test-002',
-                    'created_at': datetime.now(),
-                    'updated_at': datetime.now(),
+                    'created_at': get_current_time(),
+                    'updated_at': get_current_time(),
                     'session_id': 1,
                     'kol_serial': 201,
                     'kol_nickname': 'KOL-201',
@@ -3196,7 +3202,7 @@ async def insert_sample_data():
                     'status': 'approved',
                     'reviewer_notes': '內容品質良好，建議發布',
                     'approved_by': 'admin',
-                    'approved_at': datetime.now(),
+                    'approved_at': get_current_time(),
                     'scheduled_at': None,
                     'published_at': None,
                     'cmoney_post_id': None,
@@ -3260,7 +3266,7 @@ async def insert_sample_data():
                 "message": f"成功插入 {len(sample_records)} 筆樣本記錄",
                 "total_count": count,
                 "status_stats": {status: count for status, count in status_stats},
-                "timestamp": datetime.now().isoformat()
+                "timestamp": get_current_time().isoformat()
             }
 
     except Exception as e:
@@ -3283,7 +3289,7 @@ async def create_table_manually():
         return {
             "success": True,
             "message": "post_records 表創建成功",
-            "timestamp": datetime.now().isoformat()
+            "timestamp": get_current_time().isoformat()
         }
     except Exception as e:
         logger.error(f"❌ 手動創建表失敗: {e}")
@@ -3352,7 +3358,7 @@ async def drop_and_recreate_table():
         return {
             "success": True,
             "message": "post_records 表已刪除並重新創建",
-            "timestamp": datetime.now().isoformat()
+            "timestamp": get_current_time().isoformat()
         }
     except Exception as e:
         logger.error(f"❌ 刪除並重新創建表失敗: {e}")
@@ -3383,7 +3389,7 @@ async def reset_database():
         return {
             "success": True,
             "message": "數據庫已重置，表已刪除",
-            "timestamp": datetime.now().isoformat()
+            "timestamp": get_current_time().isoformat()
         }
     except Exception as e:
         logger.error(f"❌ 重置數據庫失敗: {e}")
@@ -3399,7 +3405,7 @@ async def debug_database():
     """調試數據庫連接和表狀態（管理員功能）"""
     try:
         debug_info = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": get_current_time().isoformat(),
             "database_connection": None,
             "table_exists": False,
             "table_count": 0,
@@ -3455,7 +3461,7 @@ async def debug_database():
         
     except Exception as e:
         return {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": get_current_time().isoformat(),
             "error": f"調試失敗: {str(e)}"
         }
 
@@ -3531,7 +3537,7 @@ async def fix_database():
         return {
             "success": True,
             "message": "數據庫已修復，表已重新創建",
-            "timestamp": datetime.now().isoformat()
+            "timestamp": get_current_time().isoformat()
         }
     except Exception as e:
         logger.error(f"❌ 修復數據庫失敗: {e}")
@@ -3635,7 +3641,7 @@ async def import_post_records():
                 "message": f"成功導入 {len(records_dict)} 筆記錄",
                 "total_count": count,
                 "status_stats": {status: count for status, count in status_stats},
-                "timestamp": datetime.now().isoformat()
+                "timestamp": get_current_time().isoformat()
             }
             
     except Exception as e:
@@ -3658,7 +3664,7 @@ async def get_kol_list():
                 "data": [],
                 "count": 0,
                 "error": "數據庫連接不可用",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": get_current_time().isoformat()
             }
 
         conn = get_db_connection()
@@ -3672,7 +3678,7 @@ async def get_kol_list():
                 "success": True,
                 "data": [dict(kol) for kol in kols],
                 "count": len(kols),
-                "timestamp": datetime.now().isoformat()
+                "timestamp": get_current_time().isoformat()
             }
 
     except Exception as e:
@@ -3682,7 +3688,7 @@ async def get_kol_list():
             "data": [],
             "count": 0,
             "error": str(e),
-            "timestamp": datetime.now().isoformat()
+            "timestamp": get_current_time().isoformat()
         }
     finally:
         if conn:
@@ -3714,7 +3720,7 @@ async def test_kol_login(request: Request):
             return {
                 "success": False,
                 "error": "缺少必填欄位: email, password",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": get_current_time().isoformat()
             }
 
         # 將 src 路徑加入 Python path
@@ -3735,14 +3741,14 @@ async def test_kol_login(request: Request):
                 "success": True,
                 "token": access_token.token,
                 "message": "登入成功，Bearer Token 已獲取",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": get_current_time().isoformat()
             }
         except Exception as login_error:
             logger.error(f"❌ 測試登入失敗: {login_error}")
             return {
                 "success": False,
                 "error": f"登入失敗: {str(login_error)}",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": get_current_time().isoformat()
             }
 
     except Exception as e:
@@ -3750,7 +3756,7 @@ async def test_kol_login(request: Request):
         return {
             "success": False,
             "error": f"測試登入時發生異常: {str(e)}",
-            "timestamp": datetime.now().isoformat()
+            "timestamp": get_current_time().isoformat()
         }
 
 
@@ -3781,7 +3787,7 @@ async def test_kol_nickname(request: Request):
             return {
                 "success": False,
                 "error": "缺少必填欄位: email, password, nickname",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": get_current_time().isoformat()
             }
 
         # 將 src 路徑加入 Python path
@@ -3802,7 +3808,7 @@ async def test_kol_nickname(request: Request):
             return {
                 "success": False,
                 "error": f"登入失敗: {str(login_error)}",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": get_current_time().isoformat()
             }
 
         # 嘗試更新暱稱
@@ -3815,7 +3821,7 @@ async def test_kol_nickname(request: Request):
                     "success": False,
                     "error": f"暱稱更新失敗: {nickname_result.error_message}",
                     "detail": "暱稱可能已被使用，請嘗試其他暱稱",
-                    "timestamp": datetime.now().isoformat()
+                    "timestamp": get_current_time().isoformat()
                 }
 
             logger.info(f"✅ 測試暱稱更新成功: {nickname}")
@@ -3823,7 +3829,7 @@ async def test_kol_nickname(request: Request):
                 "success": True,
                 "new_nickname": nickname_result.new_nickname or nickname,
                 "message": "暱稱更新成功",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": get_current_time().isoformat()
             }
 
         except Exception as nickname_error:
@@ -3831,7 +3837,7 @@ async def test_kol_nickname(request: Request):
             return {
                 "success": False,
                 "error": f"暱稱更新時發生異常: {str(nickname_error)}",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": get_current_time().isoformat()
             }
 
     except Exception as e:
@@ -3839,7 +3845,7 @@ async def test_kol_nickname(request: Request):
         return {
             "success": False,
             "error": f"測試暱稱時發生異常: {str(e)}",
-            "timestamp": datetime.now().isoformat()
+            "timestamp": get_current_time().isoformat()
         }
 
 
@@ -3884,7 +3890,7 @@ async def create_kol(request: Request):
             return {
                 "success": False,
                 "error": "缺少必填欄位: email, password, nickname",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": get_current_time().isoformat()
             }
 
         # 檢查數據庫連接
@@ -3892,7 +3898,7 @@ async def create_kol(request: Request):
             return {
                 "success": False,
                 "error": "數據庫連接不可用",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": get_current_time().isoformat()
             }
 
         # Phase 1: 使用 CMoney API 登入並更新暱稱
@@ -3917,7 +3923,7 @@ async def create_kol(request: Request):
                 "success": False,
                 "error": f"CMoney 登入失敗: {str(login_error)}",
                 "phase": "login",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": get_current_time().isoformat()
             }
 
         # 嘗試更新暱稱
@@ -3931,7 +3937,7 @@ async def create_kol(request: Request):
                     "error": f"暱稱更新失敗: {nickname_result.error_message}",
                     "phase": "nickname_update",
                     "detail": "可能是暱稱已被使用，請嘗試其他暱稱",
-                    "timestamp": datetime.now().isoformat()
+                    "timestamp": get_current_time().isoformat()
                 }
 
             logger.info(f"✅ 暱稱更新成功: {nickname}")
@@ -3943,7 +3949,7 @@ async def create_kol(request: Request):
                 "success": False,
                 "error": f"暱稱更新異常: {str(nickname_error)}",
                 "phase": "nickname_update",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": get_current_time().isoformat()
             }
 
         # 獲取會員資訊（獲取 member_id）
@@ -4035,7 +4041,7 @@ async def create_kol(request: Request):
                     "success": False,
                     "error": f"郵箱格式錯誤，應為 forum_XXX@cmoney.com.tw 格式（例如：forum_200@cmoney.com.tw）",
                     "phase": "validation",
-                    "timestamp": datetime.now().isoformat()
+                    "timestamp": get_current_time().isoformat()
                 }
 
             next_serial = int(match.group(1))  # Extract serial from email
@@ -4050,7 +4056,7 @@ async def create_kol(request: Request):
                     "success": False,
                     "error": f"KOL serial {next_serial} 已存在，請使用不同的郵箱",
                     "phase": "validation",
-                    "timestamp": datetime.now().isoformat()
+                    "timestamp": get_current_time().isoformat()
                 }
 
             # 合併 AI 生成的值和預設值
@@ -4122,7 +4128,7 @@ async def create_kol(request: Request):
                     "ai_generated": bool(ai_description and gpt_generator),
                     "ai_profile": ai_generated_profile if ai_generated_profile else None
                 },
-                "timestamp": datetime.now().isoformat()
+                "timestamp": get_current_time().isoformat()
             }
 
     except Exception as e:
@@ -4134,7 +4140,7 @@ async def create_kol(request: Request):
         return {
             "success": False,
             "error": f"創建 KOL 失敗: {str(e)}",
-            "timestamp": datetime.now().isoformat()
+            "timestamp": get_current_time().isoformat()
         }
     finally:
         if conn:
@@ -4164,7 +4170,7 @@ async def delete_kol(serial: str):
             return {
                 "success": False,
                 "error": "數據庫連接不可用",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": get_current_time().isoformat()
             }
 
         conn = get_db_connection()
@@ -4178,7 +4184,7 @@ async def delete_kol(serial: str):
                 return {
                     "success": False,
                     "error": f"KOL serial {serial} 不存在",
-                    "timestamp": datetime.now().isoformat()
+                    "timestamp": get_current_time().isoformat()
                 }
 
             # 執行刪除
@@ -4194,7 +4200,7 @@ async def delete_kol(serial: str):
                     "serial": existing_kol['serial'],
                     "nickname": existing_kol['nickname']
                 },
-                "timestamp": datetime.now().isoformat()
+                "timestamp": get_current_time().isoformat()
             }
 
     except Exception as e:
@@ -4204,7 +4210,7 @@ async def delete_kol(serial: str):
         return {
             "success": False,
             "error": f"刪除 KOL 失敗: {str(e)}",
-            "timestamp": datetime.now().isoformat()
+            "timestamp": get_current_time().isoformat()
         }
     finally:
         if conn:
@@ -4236,7 +4242,7 @@ async def update_kol_personalization(serial: str, request: Request):
             return {
                 "success": False,
                 "error": "數據庫連接不可用",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": get_current_time().isoformat()
             }
 
         conn = get_db_connection()
@@ -4250,7 +4256,7 @@ async def update_kol_personalization(serial: str, request: Request):
                 return {
                     "success": False,
                     "error": f"KOL serial {serial} 不存在",
-                    "timestamp": datetime.now().isoformat()
+                    "timestamp": get_current_time().isoformat()
                 }
 
             # 提取個人化設定
@@ -4281,7 +4287,7 @@ async def update_kol_personalization(serial: str, request: Request):
             return {
                 "success": True,
                 "message": f"KOL 個人化設定更新成功 (Serial: {serial}, Nickname: {existing_kol['nickname']})",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": get_current_time().isoformat()
             }
 
     except Exception as e:
@@ -4291,7 +4297,7 @@ async def update_kol_personalization(serial: str, request: Request):
         return {
             "success": False,
             "error": f"更新失敗: {str(e)}",
-            "timestamp": datetime.now().isoformat()
+            "timestamp": get_current_time().isoformat()
         }
     finally:
         if conn:
@@ -4317,7 +4323,7 @@ async def get_schedule_tasks(
                 "tasks": [],
                 "count": 0,
                 "error": "數據庫連接不可用",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": get_current_time().isoformat()
             }
 
         conn = get_db_connection()
@@ -4346,7 +4352,7 @@ async def get_schedule_tasks(
                 "success": True,
                 "tasks": [dict(task) for task in tasks],
                 "count": len(tasks),
-                "timestamp": datetime.now().isoformat()
+                "timestamp": get_current_time().isoformat()
             }
 
     except Exception as e:
@@ -4358,7 +4364,7 @@ async def get_schedule_tasks(
             "tasks": [],
             "count": 0,
             "error": str(e),
-            "timestamp": datetime.now().isoformat()
+            "timestamp": get_current_time().isoformat()
         }
     finally:
         if conn:
@@ -4377,7 +4383,7 @@ async def get_daily_stats():
                 "success": False,
                 "data": {},
                 "error": "數據庫連接不可用",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": get_current_time().isoformat()
             }
 
         conn = get_db_connection()
@@ -4385,8 +4391,8 @@ async def get_daily_stats():
 
         with conn.cursor(cursor_factory=RealDictCursor) as cursor:
             # Get today's date range
-            today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-            today_end = datetime.now().replace(hour=23, minute=59, second=59, microsecond=999999)
+            today_start = get_current_time().replace(hour=0, minute=0, second=0, microsecond=0)
+            today_end = get_current_time().replace(hour=23, minute=59, second=59, microsecond=999999)
 
             # Count total posts generated today from schedule_tasks
             cursor.execute("""
@@ -4444,7 +4450,7 @@ async def get_daily_stats():
                     "active_schedules": int(active_schedules),
                     "total_schedules": int(total_schedules)
                 },
-                "timestamp": datetime.now().isoformat()
+                "timestamp": get_current_time().isoformat()
             }
 
             logger.info(f"返回每日排程統計數據: {result['data']}")
@@ -4458,7 +4464,7 @@ async def get_daily_stats():
             "success": False,
             "data": {},
             "error": str(e),
-            "timestamp": datetime.now().isoformat()
+            "timestamp": get_current_time().isoformat()
         }
     finally:
         if conn:
@@ -4477,7 +4483,7 @@ async def get_scheduler_status():
                 "success": False,
                 "data": {},
                 "error": "數據庫連接不可用",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": get_current_time().isoformat()
             }
 
         # Get connection from pool
@@ -4530,7 +4536,7 @@ async def get_scheduler_status():
             earliest_start_row = cursor.fetchone()
             uptime = "N/A"
             if earliest_start_row['earliest_start']:
-                uptime_delta = datetime.now() - earliest_start_row['earliest_start']
+                uptime_delta = get_current_time() - earliest_start_row['earliest_start']
                 days = uptime_delta.days
                 hours = uptime_delta.seconds // 3600
                 uptime = f"{days} days, {hours} hours"
@@ -4548,7 +4554,7 @@ async def get_scheduler_status():
                     "last_run": last_run,
                     "uptime": uptime
                 },
-                "timestamp": datetime.now().isoformat()
+                "timestamp": get_current_time().isoformat()
             }
 
             conn.commit()  # Commit transaction
@@ -4563,7 +4569,7 @@ async def get_scheduler_status():
             "success": False,
             "data": {},
             "error": str(e),
-            "timestamp": datetime.now().isoformat()
+            "timestamp": get_current_time().isoformat()
         }
     finally:
         if conn:
@@ -4581,7 +4587,7 @@ async def start_scheduler():
             return {
                 "success": False,
                 "message": "數據庫連接不可用",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": get_current_time().isoformat()
             }
 
         conn = get_db_connection()
@@ -4606,7 +4612,7 @@ async def start_scheduler():
                 "message": f"全局排程器已啟動，激活了 {len(activated_tasks)} 個任務",
                 "activated_count": len(activated_tasks),
                 "activated_tasks": [dict(task) for task in activated_tasks],
-                "timestamp": datetime.now().isoformat()
+                "timestamp": get_current_time().isoformat()
             }
 
     except Exception as e:
@@ -4616,7 +4622,7 @@ async def start_scheduler():
         return {
             "success": False,
             "message": f"啟動失敗: {str(e)}",
-            "timestamp": datetime.now().isoformat()
+            "timestamp": get_current_time().isoformat()
         }
     finally:
         if conn:
@@ -4634,7 +4640,7 @@ async def stop_scheduler():
             return {
                 "success": False,
                 "message": "數據庫連接不可用",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": get_current_time().isoformat()
             }
 
         conn = get_db_connection()
@@ -4659,7 +4665,7 @@ async def stop_scheduler():
                 "message": f"全局排程器已停止，暫停了 {len(paused_tasks)} 個任務",
                 "paused_count": len(paused_tasks),
                 "paused_tasks": [dict(task) for task in paused_tasks],
-                "timestamp": datetime.now().isoformat()
+                "timestamp": get_current_time().isoformat()
             }
 
     except Exception as e:
@@ -4669,7 +4675,7 @@ async def stop_scheduler():
         return {
             "success": False,
             "message": f"停止失敗: {str(e)}",
-            "timestamp": datetime.now().isoformat()
+            "timestamp": get_current_time().isoformat()
         }
     finally:
         if conn:
@@ -4690,7 +4696,7 @@ async def create_schedule(request: Request):
             return {
                 "success": False,
                 "message": "數據庫連接不可用",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": get_current_time().isoformat()
             }
 
         conn = get_db_connection()
@@ -4822,7 +4828,7 @@ async def create_schedule(request: Request):
                 "status": result['status'],
                 "next_run": result['next_run'].isoformat() if result['next_run'] else None,
                 "created_at": result['created_at'].isoformat(),
-                "timestamp": datetime.now().isoformat()
+                "timestamp": get_current_time().isoformat()
             }
 
     except Exception as e:
@@ -4833,7 +4839,7 @@ async def create_schedule(request: Request):
         return {
             "success": False,
             "message": f"創建失敗: {str(e)}",
-            "timestamp": datetime.now().isoformat()
+            "timestamp": get_current_time().isoformat()
         }
     finally:
         if conn:
