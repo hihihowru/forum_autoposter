@@ -284,6 +284,34 @@ async def update_schedule_task(task_id: str, request: Dict[str, Any]):
             message=f"更新排程任務失敗: {str(e)}"
         )
 
+@router.delete("/tasks/{task_id}", response_model=ScheduleResponse)
+async def delete_schedule_task(task_id: str):
+    """刪除排程任務"""
+    try:
+        # 刪除資料庫中的排程任務
+        success = await schedule_service.db_service.delete_schedule_task(task_id)
+
+        if success:
+            return ScheduleResponse(
+                success=True,
+                task_id=task_id,
+                message="排程任務已刪除"
+            )
+        else:
+            return ScheduleResponse(
+                success=False,
+                task_id=task_id,
+                message="刪除排程任務失敗"
+            )
+
+    except Exception as e:
+        logger.error(f"刪除排程任務失敗: {e}")
+        return ScheduleResponse(
+            success=False,
+            task_id=task_id,
+            message=f"刪除排程任務失敗: {str(e)}"
+        )
+
 @router.post("/execute/{task_id}", response_model=ScheduleResponse)
 async def execute_schedule_now(task_id: str):
     """立即執行排程任務（測試用）"""

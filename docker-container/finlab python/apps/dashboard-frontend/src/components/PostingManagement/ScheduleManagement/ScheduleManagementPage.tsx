@@ -411,6 +411,43 @@ const ScheduleManagementPage: React.FC = () => {
     }
   };
 
+  // 刪除排程
+  const handleDeleteSchedule = async (scheduleId: string, scheduleName: string) => {
+    Modal.confirm({
+      title: '確認刪除',
+      content: `確定要刪除排程「${scheduleName}」嗎？此操作無法復原。`,
+      okText: '確認刪除',
+      cancelText: '取消',
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        try {
+          setLoading(true);
+
+          const response = await fetch(`${API_BASE_URL}/api/schedule/tasks/${scheduleId}`, {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json',
+            }
+          });
+
+          const result = await response.json();
+
+          if (result.success) {
+            message.success('排程已刪除');
+            await loadSchedules();
+          } else {
+            message.error(result.message || '刪除排程失敗');
+          }
+        } catch (error) {
+          console.error('刪除排程失敗:', error);
+          message.error('刪除排程失敗');
+        } finally {
+          setLoading(false);
+        }
+      }
+    });
+  };
+
   // 編輯排程配置
   const handleEditScheduleConfig = (schedule: ScheduleTask) => {
     setEditingSchedule(schedule);
@@ -723,6 +760,7 @@ const ScheduleManagementPage: React.FC = () => {
               type="link"
               icon={<DeleteOutlined />}
               danger
+              onClick={() => handleDeleteSchedule(record.task_id, record.name)}
             />
           </Tooltip>
         </Space>
