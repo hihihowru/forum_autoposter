@@ -67,7 +67,10 @@ class ScheduleTask(Base):
     # 生成配置
     generation_config = Column(JSON, nullable=True)
     batch_info = Column(JSON, nullable=True)
-    
+    # 🔥 FIX: Add trigger_config and schedule_config columns for schedule recreation
+    trigger_config = Column(JSON, nullable=True)
+    schedule_config = Column(JSON, nullable=True)
+
     # 錯誤處理
     error_message = Column(Text, nullable=True)
     
