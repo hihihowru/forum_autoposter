@@ -4575,6 +4575,170 @@ async def stop_scheduler():
         if conn:
             return_db_connection(conn)
 
+@app.post("/api/schedule/create")
+async def create_schedule(request: Request):
+    """創建新的排程任務"""
+    logger.info("收到 create_schedule 請求")
+
+    conn = None
+    try:
+        data = await request.json()
+        logger.info(f"接收到排程配置: {data}")
+
+        if not db_pool:
+            logger.warning("數據庫連接不可用")
+            return {
+                "success": False,
+                "message": "數據庫連接不可用",
+                "timestamp": datetime.now().isoformat()
+            }
+
+        conn = get_db_connection()
+        conn.rollback()  # Clear any failed transactions
+
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            # 生成唯一的 task_id (UUID)
+            import uuid
+            task_id = str(uuid.uuid4())
+
+            # 從請求中提取字段
+            schedule_name = data.get('schedule_name', 'Unnamed Schedule')
+            schedule_description = data.get('schedule_description', '')
+            schedule_type = data.get('schedule_type', 'weekday_daily')
+            interval_seconds = data.get('interval_seconds', 300)
+            enabled = data.get('enabled', True)
+            timezone = data.get('timezone', 'Asia/Taipei')
+            weekdays_only = data.get('weekdays_only', True)
+            auto_posting = data.get('auto_posting', False)
+            max_posts_per_hour = data.get('max_posts_per_hour', 2)
+
+            # 生成配置 (generation_config)
+            generation_config = data.get('generation_config', {})
+
+            # 觸發器配置 (trigger_config)
+            trigger_type = generation_config.get('trigger_type', 'limit_up_after_hours')
+            stock_sorting = generation_config.get('stock_sorting', {})
+            kol_assignment = generation_config.get('kol_assignment', 'random')
+            max_stocks = generation_config.get('max_stocks', 5)
+
+            trigger_config = {
+                "trigger_type": trigger_type,
+                "stock_codes": [],  # 將由排程器執行時根據觸發器動態獲取
+                "kol_assignment": kol_assignment,
+                "max_stocks": max_stocks,
+                "stock_sorting": stock_sorting
+            }
+
+            # 排程配置 (schedule_config)
+            daily_execution_time = data.get('daily_execution_time')
+            posting_time_slots = [daily_execution_time] if daily_execution_time else []
+
+            schedule_config = {
+                "enabled": enabled,
+                "posting_time_slots": posting_time_slots,
+                "timezone": timezone,
+                "weekdays_only": weekdays_only
+            }
+
+            # 批次信息 (batch_info)
+            batch_info = data.get('batch_info', {})
+            session_id = data.get('session_id')
+            if session_id:
+                batch_info['session_id'] = str(session_id)
+
+            # 計算下次執行時間 (next_run)
+            from datetime import datetime, timedelta
+            import pytz
+
+            now = datetime.now(pytz.timezone(timezone))
+            next_run = None
+
+            if daily_execution_time and enabled:
+                # 解析時間 (HH:mm 格式)
+                time_parts = daily_execution_time.split(':')
+                if len(time_parts) == 2:
+                    hour = int(time_parts[0])
+                    minute = int(time_parts[1])
+
+                    # 創建今天的執行時間
+                    next_run = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+
+                    # 如果今天的時間已過，設置為明天
+                    if next_run <= now:
+                        next_run = next_run + timedelta(days=1)
+
+                    # 如果是工作日模式，跳過週末
+                    if weekdays_only:
+                        while next_run.weekday() >= 5:  # 5=Saturday, 6=Sunday
+                            next_run = next_run + timedelta(days=1)
+
+            # 插入排程任務到資料庫
+            insert_sql = """
+                INSERT INTO schedule_tasks (
+                    task_id, name, description, status, schedule_type,
+                    interval_seconds, auto_posting, max_posts_per_hour,
+                    schedule_config, trigger_config, batch_info, generation_config,
+                    next_run, created_at, updated_at,
+                    run_count, success_count, failure_count, success_rate
+                ) VALUES (
+                    %s, %s, %s, %s, %s,
+                    %s, %s, %s,
+                    %s, %s, %s, %s,
+                    %s, NOW(), NOW(),
+                    0, 0, 0, 0.0
+                )
+                RETURNING task_id, name, status, next_run, created_at
+            """
+
+            status = 'active' if enabled else 'paused'
+
+            import json
+            cursor.execute(insert_sql, (
+                task_id,
+                schedule_name,
+                schedule_description,
+                status,
+                schedule_type,
+                interval_seconds,
+                auto_posting,
+                max_posts_per_hour,
+                json.dumps(schedule_config),
+                json.dumps(trigger_config),
+                json.dumps(batch_info),
+                json.dumps(generation_config),
+                next_run
+            ))
+
+            result = cursor.fetchone()
+            conn.commit()
+
+            logger.info(f"排程創建成功: task_id={task_id}, name={schedule_name}")
+
+            return {
+                "success": True,
+                "message": "排程創建成功",
+                "task_id": result['task_id'],
+                "task_name": result['name'],
+                "status": result['status'],
+                "next_run": result['next_run'].isoformat() if result['next_run'] else None,
+                "created_at": result['created_at'].isoformat(),
+                "timestamp": datetime.now().isoformat()
+            }
+
+    except Exception as e:
+        logger.error(f"創建排程失敗: {e}")
+        logger.error(f"錯誤詳情: {traceback.format_exc()}")
+        if conn:
+            conn.rollback()
+        return {
+            "success": False,
+            "message": f"創建失敗: {str(e)}",
+            "timestamp": datetime.now().isoformat()
+        }
+    finally:
+        if conn:
+            return_db_connection(conn)
+
 if __name__ == "__main__":
     import uvicorn
     
