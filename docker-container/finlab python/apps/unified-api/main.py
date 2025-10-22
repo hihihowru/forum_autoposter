@@ -6048,6 +6048,13 @@ async def execute_schedule_now(task_id: str, request: Request):
                 # Call manual_posting
                 result = await manual_posting(mock_request)
 
+                # 🔥 FIX: Handle JSONResponse objects (FastAPI wraps dict returns)
+                from fastapi.responses import JSONResponse
+                if isinstance(result, JSONResponse):
+                    # Extract the content from JSONResponse
+                    result = json.loads(result.body.decode('utf-8'))
+                    logger.info(f"🔧 Extracted dict from JSONResponse: success={result.get('success')}")
+
                 if isinstance(result, dict) and result.get('success'):
                     generated_posts.append({
                         "post_id": result.get('post_id'),

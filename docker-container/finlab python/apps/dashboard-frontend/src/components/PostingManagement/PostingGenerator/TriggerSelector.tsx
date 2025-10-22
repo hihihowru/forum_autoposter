@@ -1079,24 +1079,24 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
           result = await PostingManagementAPI.getAfterHoursVolumeChangeRateLow(apiParams);
           break;
 
-        // Intraday triggers
+        // Intraday triggers - 🔥 FIX: Pass full apiParams (includes stockFilterCriteria)
         case 'intraday_gainers_by_amount':
-          result = await PostingManagementAPI.getIntradayGainersByAmount(apiParams.stockCountLimit);
+          result = await PostingManagementAPI.getIntradayGainersByAmount(apiParams);
           break;
         case 'intraday_volume_leaders':
-          result = await PostingManagementAPI.getIntradayVolumeLeaders(apiParams.stockCountLimit);
+          result = await PostingManagementAPI.getIntradayVolumeLeaders(apiParams);
           break;
         case 'intraday_amount_leaders':
-          result = await PostingManagementAPI.getIntradayAmountLeaders(apiParams.stockCountLimit);
+          result = await PostingManagementAPI.getIntradayAmountLeaders(apiParams);
           break;
         case 'intraday_limit_down':
-          result = await PostingManagementAPI.getIntradayLimitDown(apiParams.stockCountLimit);
+          result = await PostingManagementAPI.getIntradayLimitDown(apiParams);
           break;
         case 'intraday_limit_up':
-          result = await PostingManagementAPI.getIntradayLimitUp(apiParams.stockCountLimit);
+          result = await PostingManagementAPI.getIntradayLimitUp(apiParams);
           break;
         case 'intraday_limit_down_by_amount':
-          result = await PostingManagementAPI.getIntradayLimitDownByAmount(apiParams.stockCountLimit);
+          result = await PostingManagementAPI.getIntradayLimitDownByAmount(apiParams);
           break;
 
         default:
