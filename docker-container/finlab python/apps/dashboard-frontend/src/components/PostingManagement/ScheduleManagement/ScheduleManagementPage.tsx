@@ -731,54 +731,39 @@ const ScheduleManagementPage: React.FC = () => {
       key: 'stock_settings',
       width: 150,
       render: (triggerConfig: any, record: ScheduleTask) => {
-        // 🔥 FIX: Use backend-provided stock_sorting_display.label first
-        let sortingDisplay = record.stock_sorting_display?.label;
+        // 🔥 FIX: Use full_triggers_config as source of truth
+        const fullTriggersConfig = record.schedule_config?.full_triggers_config;
 
-        // Fallback to manual formatting if backend label not available
-        if (!sortingDisplay) {
-          const getStockSortingDisplay = (sorting: any) => {
-            if (!sorting) return null;
+        // Get stockCountLimit (correct source)
+        const stockCount = fullTriggersConfig?.stockCountLimit
+          || triggerConfig?.max_stocks
+          || record.trigger_config?.max_stocks
+          || 'N/A';
 
-            // Handle string format (new API format)
-            if (typeof sorting === 'string') {
-              const sortingMap: Record<string, string> = {
-                'five_day_change_desc': '五日漲幅↓',
-                'five_day_change_asc': '五日漲幅↑',
-                'change_percent_desc': '漲幅↓',
-                'change_percent_asc': '漲幅↑',
-                'volume_desc': '成交量↓',
-                'volume_asc': '成交量↑',
-                'amount_desc': '成交額↓',
-                'amount_asc': '成交額↑',
-                'current_price_desc': '股價↓',
-                'current_price_asc': '股價↑',
-              };
-              return sortingMap[sorting] || sorting;
-            }
+        // Get stockFilterCriteria (correct source)
+        const stockFilterCriteria = fullTriggersConfig?.stockFilterCriteria;
 
-            // Handle object format (old API format)
-            if (typeof sorting === 'object' && sorting.primary_sort) {
-              const sortingMap: Record<string, string> = {
-                'change_percent_desc': '漲幅↓',
-                'change_percent_asc': '漲幅↑',
-                'volume_desc': '成交量↓',
-                'volume_asc': '成交量↑',
-                'current_price_desc': '股價↓',
-                'current_price_asc': '股價↑',
-              };
-              return sortingMap[sorting.primary_sort] || sorting.primary_sort;
-            }
-
-            return null;
+        // Map stockFilterCriteria to Chinese labels
+        let sortingDisplay = null;
+        if (stockFilterCriteria && Array.isArray(stockFilterCriteria) && stockFilterCriteria.length > 0) {
+          const criteriaMap: Record<string, string> = {
+            'five_day_gain': '五日漲幅',
+            'five_day_loss': '五日跌幅',
+            'daily_gain': '單日漲幅',
+            'daily_loss': '單日跌幅',
+            'volume_high': '成交量大',
+            'volume_low': '成交量小',
           };
-
-          sortingDisplay = getStockSortingDisplay(triggerConfig?.stock_sorting || record.trigger_config?.stock_sorting);
+          sortingDisplay = criteriaMap[stockFilterCriteria[0]] || stockFilterCriteria[0];
+        } else {
+          // Fallback to backend-provided stock_sorting_display.label
+          sortingDisplay = record.stock_sorting_display?.label;
         }
 
         return (
           <div>
             <Text style={{ fontSize: '11px' }}>
-              最多 {triggerConfig?.max_stocks || record.trigger_config?.max_stocks || 'N/A'} 檔
+              最多 {stockCount} 檔
             </Text>
             {sortingDisplay && (
               <div style={{ fontSize: '10px', color: '#666' }}>
