@@ -1268,6 +1268,69 @@ async def migrate_trigger_type():
         if conn:
             return_db_connection(conn)
 
+@app.post("/api/database/migrate/disable-all-schedules")
+async def migrate_disable_all_schedules():
+    """
+    Migration: Disable all existing schedules and turn off auto_posting
+
+    This is a clean slate migration to:
+    1. Set all schedules to status='cancelled'
+    2. Disable auto_posting for all schedules
+    3. Start fresh with new test schedules
+    """
+    logger.info("🔧 開始數據庫遷移: 禁用所有現有排程")
+
+    conn = None
+    try:
+        if not db_pool:
+            return {
+                "success": False,
+                "error": "Database pool not initialized",
+                "timestamp": get_current_time().isoformat()
+            }
+
+        conn = get_db_connection()
+        conn.rollback()  # Clear any failed transactions
+
+        with conn.cursor() as cursor:
+            # Count existing schedules
+            cursor.execute("SELECT COUNT(*) FROM schedule_tasks WHERE status != 'cancelled'")
+            count_before = cursor.fetchone()[0]
+
+            # Disable all schedules and turn off auto_posting
+            cursor.execute("""
+                UPDATE schedule_tasks
+                SET status = 'cancelled',
+                    auto_posting = FALSE,
+                    updated_at = NOW()
+                WHERE status != 'cancelled'
+            """)
+
+            rows_updated = cursor.rowcount
+            conn.commit()
+
+        logger.info(f"✅ 數據庫遷移成功: {rows_updated} 個排程已禁用")
+        return {
+            "success": True,
+            "message": f"Migration successful: Disabled {rows_updated} schedules and turned off auto_posting",
+            "schedules_before": count_before,
+            "schedules_updated": rows_updated,
+            "timestamp": get_current_time().isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"❌ 數據庫遷移失敗: {e}")
+        if conn:
+            conn.rollback()
+        return {
+            "success": False,
+            "error": str(e),
+            "timestamp": get_current_time().isoformat()
+        }
+    finally:
+        if conn:
+            return_db_connection(conn)
+
 @app.post("/api/admin/reconnect-database")
 async def reconnect_database():
     """重新連接數據庫（管理員功能）"""
