@@ -928,12 +928,18 @@ async def migrate_trigger_type():
                 ADD COLUMN IF NOT EXISTS trigger_type VARCHAR(100);
             """)
 
+            # Add generation_mode column if it doesn't exist
+            cursor.execute("""
+                ALTER TABLE post_records
+                ADD COLUMN IF NOT EXISTS generation_mode VARCHAR(50) DEFAULT 'manual';
+            """)
+
             conn.commit()
 
-        logger.info("✅ 數據庫遷移成功: trigger_type 列已添加")
+        logger.info("✅ 數據庫遷移成功: trigger_type 和 generation_mode 列已添加")
         return {
             "success": True,
-            "message": "Migration successful: trigger_type column added to post_records table",
+            "message": "Migration successful: trigger_type and generation_mode columns added to post_records table",
             "timestamp": get_current_time().isoformat()
         }
 
