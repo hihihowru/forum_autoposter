@@ -191,27 +191,30 @@ const ScheduleExecutionModal: React.FC<ScheduleExecutionModalProps> = ({
     console.log('🔄 選擇版本:', version);
 
     try {
-      // Update post with selected version
-      await PostingManagementAPI.updatePost(selectedPostForVersions.post_id, {
+      // Update post with selected version using updatePostContent API
+      const result = await PostingManagementAPI.updatePostContent(selectedPostForVersions.post_id, {
         title: version.title,
-        content: version.content,
-        version_number: version.version_number
+        content: version.content
       });
 
-      message.success('版本已更新成功');
+      if (result.success) {
+        message.success(`版本 ${version.version_number} 已套用成功`);
 
-      // Update local state
-      if (executionResult && executionResult.posts) {
-        executionResult.posts = executionResult.posts.map(p =>
-          p.post_id === selectedPostForVersions.post_id
-            ? { ...p, title: version.title, content: version.content }
-            : p
-        );
+        // Update local state
+        if (executionResult && executionResult.posts) {
+          executionResult.posts = executionResult.posts.map(p =>
+            p.post_id === selectedPostForVersions.post_id
+              ? { ...p, title: version.title, content: version.content }
+              : p
+          );
+        }
+
+        setVersionModalVisible(false);
+        setSelectedPostForVersions(null);
+        setAlternativeVersions([]);
+      } else {
+        message.error(`版本更新失敗: ${result.error}`);
       }
-
-      setVersionModalVisible(false);
-      setSelectedPostForVersions(null);
-      setAlternativeVersions([]);
     } catch (error) {
       console.error('版本更新失敗:', error);
       message.error('版本更新失敗');

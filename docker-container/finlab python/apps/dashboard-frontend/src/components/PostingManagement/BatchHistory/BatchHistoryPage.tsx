@@ -322,6 +322,21 @@ const BatchHistoryPage: React.FC = () => {
       },
     },
     {
+      title: '生成模式',
+      dataIndex: 'generation_mode',
+      key: 'generation_mode',
+      width: 100,
+      render: (generationMode: string) => {
+        const modeMap: Record<string, { text: string; color: string }> = {
+          'manual': { text: '手動生成', color: 'blue' },
+          'scheduled': { text: '排程生成', color: 'green' },
+          'self_learning': { text: '自我學習', color: 'purple' },
+        };
+        const mapped = modeMap[generationMode] || { text: generationMode || '手動生成', color: 'default' };
+        return <Tag color={mapped.color}>{mapped.text}</Tag>;
+      },
+    },
+    {
       title: 'KOL分配',
       dataIndex: 'kol_assignment',
       key: 'kol_assignment',

@@ -1010,7 +1010,7 @@ export class PostingManagementAPI {
 
   static async getPostVersions(postId: string): Promise<any[]> {
     try {
-      const response = await apiClient.get(`/api/posting-management/api/posts/${postId}/versions`);
+      const response = await axios.get(`${POSTING_SERVICE_URL}/api/posts/${postId}/versions`);
       return response.data.versions || [];
     } catch (error) {
       console.error('獲取貼文版本失敗:', error);

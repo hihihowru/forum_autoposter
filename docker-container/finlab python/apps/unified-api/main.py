@@ -3353,16 +3353,16 @@ async def update_post_content(post_id: str, request: Request):
 
 @app.get("/api/posts/{post_id}/versions")
 async def get_post_versions(post_id: str):
-    """獲取貼文的其他生成版本"""
+    """獲取貼文的其他生成版本（從 alternative_versions JSON 欄位）"""
     logger.info(f"收到 get_post_versions 請求 - Post ID: {post_id}")
 
     conn = None
     try:
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-            # First get the post to find its session_id and stock_code
+            # Get the post and its alternative_versions JSON field
             cursor.execute("""
-                SELECT session_id, stock_codes, kol_serial
+                SELECT alternative_versions
                 FROM post_records
                 WHERE post_id = %s
             """, (post_id,))
@@ -3372,52 +3372,36 @@ async def get_post_versions(post_id: str):
                 logger.warning(f"⚠️ 貼文不存在 - Post ID: {post_id}")
                 return {"success": False, "versions": [], "error": "Post not found"}
 
-            session_id = post['session_id']
-            stock_codes = post['stock_codes']
-            kol_serial = post['kol_serial']
+            # Parse alternative_versions JSON
+            alternative_versions = post.get('alternative_versions')
 
-            logger.info(f"🔍 查找版本 - Session: {session_id}, Stock: {stock_codes}, KOL: {kol_serial}")
+            if not alternative_versions:
+                logger.info(f"📦 貼文沒有其他版本 - Post ID: {post_id}")
+                return {
+                    "success": True,
+                    "versions": [],
+                    "total": 0
+                }
 
-            # Get alternative versions from the same session, stock, and KOL
-            cursor.execute("""
-                SELECT
-                    post_id,
-                    title,
-                    content,
-                    version_number,
-                    angle,
-                    quality_score,
-                    ai_detection_score,
-                    risk_level,
-                    created_at
-                FROM post_records
-                WHERE session_id = %s
-                  AND stock_codes = %s
-                  AND kol_serial = %s
-                  AND post_id != %s
-                  AND status != 'deleted'
-                ORDER BY version_number ASC, created_at DESC
-                LIMIT 10
-            """, (session_id, stock_codes, kol_serial, post_id))
+            # alternative_versions is already a dict/list if psycopg2 parsed it, or string if not
+            if isinstance(alternative_versions, str):
+                import json
+                alternative_versions = json.loads(alternative_versions)
 
-            versions = cursor.fetchall()
-
-            logger.info(f"✅ 找到 {len(versions)} 個版本")
-
-            # Convert to list of dicts
+            # alternative_versions is a list of dicts with title, content, angle, etc.
             versions_list = []
-            for v in versions:
+            for idx, version in enumerate(alternative_versions):
                 versions_list.append({
-                    'post_id': v['post_id'],
-                    'title': v['title'],
-                    'content': v['content'],
-                    'version_number': v['version_number'] or 0,
-                    'angle': v['angle'] or '標準分析',
-                    'quality_score': v['quality_score'],
-                    'ai_detection_score': v['ai_detection_score'],
-                    'risk_level': v['risk_level'],
-                    'created_at': v['created_at'].isoformat() if v['created_at'] else None
+                    'version_number': idx + 2,  # Main post is version 1, alternatives are 2, 3, 4...
+                    'title': version.get('title', ''),
+                    'content': version.get('content', ''),
+                    'angle': version.get('angle', '標準分析'),
+                    'quality_score': version.get('quality_score'),
+                    'ai_detection_score': version.get('ai_detection_score'),
+                    'risk_level': version.get('risk_level')
                 })
+
+            logger.info(f"✅ 找到 {len(versions_list)} 個替代版本")
 
             return {
                 "success": True,
