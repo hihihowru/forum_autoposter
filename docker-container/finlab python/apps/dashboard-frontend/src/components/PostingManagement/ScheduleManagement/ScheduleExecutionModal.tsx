@@ -1,6 +1,16 @@
 import React, { useState } from 'react';
-import { Modal, Card, Tag, Space, Typography, Row, Col, Button, Spin, Empty, Divider } from 'antd';
-import { CheckCircleOutlined, ExclamationCircleOutlined, EyeOutlined, CloseOutlined } from '@ant-design/icons';
+import { Modal, Card, Tag, Space, Typography, Row, Col, Button, Spin, Empty, Divider, message } from 'antd';
+import {
+  CheckCircleOutlined,
+  ExclamationCircleOutlined,
+  EyeOutlined,
+  CloseOutlined,
+  EditOutlined,
+  CloseCircleOutlined,
+  SendOutlined,
+  SwapOutlined
+} from '@ant-design/icons';
+import PostingManagementAPI from '../../../services/postingManagementAPI';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -41,11 +51,73 @@ const ScheduleExecutionModal: React.FC<ScheduleExecutionModalProps> = ({
 }) => {
   const [previewPost, setPreviewPost] = useState<any>(null);
   const [previewVisible, setPreviewVisible] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Handle post preview
   const handlePreview = (post: any) => {
     setPreviewPost(post);
     setPreviewVisible(true);
+  };
+
+  // Handle post actions
+  const handleApprove = async (postId: string) => {
+    try {
+      await PostingManagementAPI.approvePost(postId);
+      message.success('發文已審核通過');
+      setRefreshing(true);
+      // Optionally reload data
+    } catch (error) {
+      console.error('審核失敗:', error);
+      message.error('審核失敗');
+    }
+  };
+
+  const handleReject = async (postId: string) => {
+    try {
+      await PostingManagementAPI.rejectPost(postId);
+      message.success('發文已拒絕');
+      setRefreshing(true);
+    } catch (error) {
+      console.error('拒絕失敗:', error);
+      message.error('拒絕失敗');
+    }
+  };
+
+  const handlePublish = async (postId: string) => {
+    try {
+      const result = await PostingManagementAPI.publishPost(postId);
+      if (result.success) {
+        message.success('發文發布成功');
+      } else {
+        message.error('發布失敗');
+      }
+      setRefreshing(true);
+    } catch (error) {
+      console.error('發布失敗:', error);
+      message.error('發布失敗');
+    }
+  };
+
+  const handleViewBody = (post: any) => {
+    Modal.info({
+      title: '完整內容',
+      width: 700,
+      content: (
+        <div>
+          <Title level={5}>標題</Title>
+          <Paragraph>{post.title}</Paragraph>
+          <Divider />
+          <Title level={5}>內容</Title>
+          <Paragraph style={{ whiteSpace: 'pre-wrap' }}>
+            {post.content}
+          </Paragraph>
+        </div>
+      ),
+    });
+  };
+
+  const handleVersions = (post: any) => {
+    message.info('版本管理功能開發中...');
   };
 
   return (
@@ -103,12 +175,17 @@ const ScheduleExecutionModal: React.FC<ScheduleExecutionModalProps> = ({
               </Col>
             </Row>
 
+            {/* Header Message */}
+            <div style={{ marginBottom: 16, padding: '12px', background: '#e6f7ff', border: '1px solid #91d5ff', borderRadius: '4px' }}>
+              <Text type="secondary">會一次回傳生成的貼文，請稍微耐心等候，謝謝！</Text>
+            </div>
+
             {/* Success Message */}
             {executionResult.success && executionResult.generated_count > 0 && (
               <div style={{ marginBottom: 24, padding: '12px', background: '#f6ffed', border: '1px solid #b7eb8f', borderRadius: '4px' }}>
                 <Space>
                   <CheckCircleOutlined style={{ color: '#52c41a' }} />
-                  <Text>排程執行成功！已生成 {executionResult.generated_count} 篇貼文，請前往「發文審核」頁面查看。</Text>
+                  <Text>排程執行成功！已生成 {executionResult.generated_count} 篇貼文。</Text>
                 </Space>
               </div>
             )}
@@ -123,15 +200,6 @@ const ScheduleExecutionModal: React.FC<ScheduleExecutionModalProps> = ({
                     key={post.post_id}
                     size="small"
                     style={{ marginBottom: 12 }}
-                    extra={
-                      <Button
-                        type="link"
-                        icon={<EyeOutlined />}
-                        onClick={() => handlePreview(post)}
-                      >
-                        預覽
-                      </Button>
-                    }
                   >
                     <Row gutter={16}>
                       <Col span={4}>
@@ -146,10 +214,61 @@ const ScheduleExecutionModal: React.FC<ScheduleExecutionModalProps> = ({
                         </Text>
                       </Col>
                     </Row>
-                    <div style={{ marginTop: 8 }}>
+                    <div style={{ marginTop: 8, marginBottom: 12 }}>
                       <Text type="secondary" ellipsis={{ tooltip: post.content, rows: 2 }}>
                         {post.content?.substring(0, 100)}...
                       </Text>
+                    </div>
+                    {/* Action Buttons */}
+                    <div style={{ marginTop: 12, borderTop: '1px solid #f0f0f0', paddingTop: 8 }}>
+                      <Space wrap>
+                        <Button
+                          size="small"
+                          icon={<EyeOutlined />}
+                          onClick={() => handlePreview(post)}
+                        >
+                          預覽
+                        </Button>
+                        <Button
+                          size="small"
+                          icon={<EditOutlined />}
+                          onClick={() => handleViewBody(post)}
+                        >
+                          查看內容
+                        </Button>
+                        <Button
+                          size="small"
+                          type="primary"
+                          icon={<CheckCircleOutlined />}
+                          onClick={() => handleApprove(post.post_id)}
+                          style={{ backgroundColor: '#52c41a', borderColor: '#52c41a' }}
+                        >
+                          審核
+                        </Button>
+                        <Button
+                          size="small"
+                          danger
+                          icon={<CloseCircleOutlined />}
+                          onClick={() => handleReject(post.post_id)}
+                        >
+                          拒絕
+                        </Button>
+                        <Button
+                          size="small"
+                          type="primary"
+                          icon={<SendOutlined />}
+                          onClick={() => handlePublish(post.post_id)}
+                        >
+                          發布
+                        </Button>
+                        <Button
+                          size="small"
+                          icon={<SwapOutlined />}
+                          onClick={() => handleVersions(post)}
+                        >
+                          版本
+                        </Button>
+                      </Space>
                     </div>
                   </Card>
                 ))}
