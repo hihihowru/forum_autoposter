@@ -5260,71 +5260,55 @@ async def execute_schedule_now(task_id: str):
 
             stock_codes = []
 
-            # 根據觸發器類型調用對應的 API
+            # 根據觸發器類型調用對應的 API（直接調用函數而非 HTTP）
             if trigger_type == 'limit_up_after_hours':
                 # 盤後漲停股
-                logger.info("📡 調用盤後漲停股 API...")
-                # 從配置中獲取高量/低量設定
-                is_high_volume = full_triggers_config.get('limit_up_after_hours_high_volume', False)
-                is_low_volume = full_triggers_config.get('limit_up_after_hours_low_volume', False)
+                logger.info("📡 調用盤後漲停股函數...")
+                try:
+                    # 從配置中獲取高量/低量設定
+                    is_high_volume = full_triggers_config.get('limit_up_after_hours_high_volume', False)
+                    is_low_volume = full_triggers_config.get('limit_up_after_hours_low_volume', False)
 
-                # 調用 /api/after_hours_limit_up endpoint
-                import httpx
-                async with httpx.AsyncClient() as client:
-                    params = {'limit': max_stocks}
+                    volume_type = None
                     if is_high_volume:
-                        params['volume_type'] = 'high'
+                        volume_type = 'high'
                     elif is_low_volume:
-                        params['volume_type'] = 'low'
+                        volume_type = 'low'
 
-                    response = await client.get(f"http://localhost:8080/api/after_hours_limit_up", params=params)
-                    if response.status_code == 200:
-                        data = response.json()
-                        stock_codes = data.get('stock_codes', [])
-                        logger.info(f"✅ 獲取到 {len(stock_codes)} 支盤後漲停股票")
-                    else:
-                        logger.error(f"❌ 盤後漲停股 API 失敗: {response.status_code}")
+                    # 直接調用 get_after_hours_limit_up 函數
+                    result = await get_after_hours_limit_up(limit=max_stocks, volume_type=volume_type)
+                    stock_codes = result.get('stock_codes', [])
+                    logger.info(f"✅ 獲取到 {len(stock_codes)} 支盤後漲停股票")
+                except Exception as e:
+                    logger.error(f"❌ 盤後漲停股函數失敗: {e}")
 
             elif trigger_type == 'intraday_gainers_by_amount':
                 # 盤中漲幅排序+成交額
-                logger.info("📡 調用盤中漲幅排序+成交額 API...")
-
-                # 調用 /api/intraday/gainers-by-amount endpoint
-                import httpx
-                async with httpx.AsyncClient() as client:
-                    params = {
-                        'limit': max_stocks,
-                        'sort_by': sort_by or 'five_day_gain'
-                    }
-
-                    response = await client.get(f"http://localhost:8080/api/intraday/gainers-by-amount", params=params)
-                    if response.status_code == 200:
-                        data = response.json()
-                        stock_codes = data.get('stock_codes', [])
-                        logger.info(f"✅ 獲取到 {len(stock_codes)} 支盤中漲幅股票")
-                    else:
-                        logger.error(f"❌ 盤中漲幅 API 失敗: {response.status_code}")
+                logger.info("📡 調用盤中漲幅排序+成交額函數...")
+                try:
+                    # 直接調用 get_intraday_gainers_by_amount 函數
+                    result = await get_intraday_gainers_by_amount(limit=max_stocks)
+                    stock_codes = result.get('stocks', [])  # 注意：這個 API 返回 'stocks' 而非 'stock_codes'
+                    logger.info(f"✅ 獲取到 {len(stock_codes)} 支盤中漲幅股票")
+                except Exception as e:
+                    logger.error(f"❌ 盤中漲幅函數失敗: {e}")
+                    logger.error(f"錯誤詳情: {traceback.format_exc()}")
 
             elif trigger_type == 'trending_topics':
                 # 熱門話題
-                logger.info("📡 調用熱門話題 API...")
-
-                import httpx
-                async with httpx.AsyncClient() as client:
-                    params = {'limit': max_stocks}
-
-                    response = await client.get(f"http://localhost:8080/api/trending", params=params)
-                    if response.status_code == 200:
-                        data = response.json()
-                        topics = data.get('topics', [])
-                        # 從話題中提取股票代碼
-                        stock_codes = []
-                        for topic in topics[:max_stocks]:
-                            if 'stock_code' in topic:
-                                stock_codes.append(topic['stock_code'])
-                        logger.info(f"✅ 從 {len(topics)} 個熱門話題獲取到 {len(stock_codes)} 支股票")
-                    else:
-                        logger.error(f"❌ 熱門話題 API 失敗: {response.status_code}")
+                logger.info("📡 調用熱門話題函數...")
+                try:
+                    # 直接調用 get_trending_topics 函數
+                    result = await get_trending_topics(limit=max_stocks)
+                    topics = result.get('topics', [])
+                    # 從話題中提取股票代碼
+                    stock_codes = []
+                    for topic in topics[:max_stocks]:
+                        if 'stock_code' in topic:
+                            stock_codes.append(topic['stock_code'])
+                    logger.info(f"✅ 從 {len(topics)} 個熱門話題獲取到 {len(stock_codes)} 支股票")
+                except Exception as e:
+                    logger.error(f"❌ 熱門話題函數失敗: {e}")
 
             elif trigger_type == 'custom_stocks':
                 # 自訂股票列表
