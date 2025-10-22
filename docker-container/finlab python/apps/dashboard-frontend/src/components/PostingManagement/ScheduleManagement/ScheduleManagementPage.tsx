@@ -304,6 +304,19 @@ const ScheduleManagementPage: React.FC = () => {
   const transformApiTask = (apiTask: any): ScheduleTask => {
     //  Backend already provides schedule_config and trigger_config
     // Just use them directly instead of extracting from generation_config
+
+    // 🔥 FIX: Ensure daily_execution_time is properly merged into schedule_config
+    const scheduleConfig = apiTask.schedule_config || {
+      enabled: apiTask.status === 'active',
+      posting_time_slots: apiTask.daily_execution_time ? [apiTask.daily_execution_time] : [],
+      timezone: apiTask.timezone || 'Asia/Taipei'
+    };
+
+    // Merge daily_execution_time into schedule_config if it exists at root level
+    if (apiTask.daily_execution_time && !scheduleConfig.daily_execution_time) {
+      scheduleConfig.daily_execution_time = apiTask.daily_execution_time;
+    }
+
     return {
       task_id: apiTask.schedule_id || apiTask.task_id,
       name: apiTask.schedule_name || apiTask.name || '未命名排程',
@@ -321,12 +334,8 @@ const ScheduleManagementPage: React.FC = () => {
       interval_seconds: apiTask.interval_seconds || 300,
       schedule_type: apiTask.schedule_type || 'weekday_daily',
       auto_posting: apiTask.auto_posting || false,
-      schedule_config: apiTask.schedule_config || {
-        enabled: apiTask.status === 'active',
-        posting_time_slots: apiTask.daily_execution_time ? [apiTask.daily_execution_time] : [],
-        timezone: apiTask.timezone || 'Asia/Taipei',
-        daily_execution_time: apiTask.daily_execution_time
-      },
+      daily_execution_time: apiTask.daily_execution_time,  // 🔥 FIX: Add at root level
+      schedule_config: scheduleConfig,
       trigger_config: apiTask.trigger_config || {
         trigger_type: 'custom_stocks',
         stock_codes: [],
@@ -334,6 +343,7 @@ const ScheduleManagementPage: React.FC = () => {
         max_stocks: 10,
         stock_sorting: {}
       },
+      stock_sorting_display: apiTask.stock_sorting_display,  // 🔥 FIX: Pass through stock_sorting_display
       batch_info: apiTask.batch_info ?
         (typeof apiTask.batch_info === 'string' ? JSON.parse(apiTask.batch_info) : apiTask.batch_info)
         : {
