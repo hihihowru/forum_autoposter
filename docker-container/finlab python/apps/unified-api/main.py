@@ -5965,6 +5965,61 @@ async def execute_schedule_now(task_id: str, request: Request):
                     logger.error(f"❌ 盤中觸發器失敗: {e}")
                     import traceback
                     logger.error(traceback.format_exc())
+            elif trigger_key == 'intraday_volume_leaders':
+                logger.info("📡 執行盤中成交量排序觸發器...")
+                try:
+                    trigger_result = await get_intraday_volume_leaders(limit=max_stocks)
+                    if 'stocks' in trigger_result:
+                        stock_codes = trigger_result['stocks']
+                        logger.info(f"✅ 盤中成交量觸發器返回 {len(stock_codes)} 檔股票")
+                except Exception as e:
+                    logger.error(f"❌ 盤中成交量觸發器失敗: {e}")
+                    import traceback
+                    logger.error(traceback.format_exc())
+            elif trigger_key == 'intraday_amount_leaders':
+                logger.info("📡 執行盤中成交額排序觸發器...")
+                try:
+                    trigger_result = await get_intraday_amount_leaders(limit=max_stocks)
+                    if 'stocks' in trigger_result:
+                        stock_codes = trigger_result['stocks']
+                        logger.info(f"✅ 盤中成交額觸發器返回 {len(stock_codes)} 檔股票")
+                except Exception as e:
+                    logger.error(f"❌ 盤中成交額觸發器失敗: {e}")
+                    import traceback
+                    logger.error(traceback.format_exc())
+            elif trigger_key == 'intraday_limit_down':
+                logger.info("📡 執行盤中跌停篩選觸發器...")
+                try:
+                    trigger_result = await get_intraday_limit_down(limit=max_stocks)
+                    if 'stocks' in trigger_result:
+                        stock_codes = trigger_result['stocks']
+                        logger.info(f"✅ 盤中跌停觸發器返回 {len(stock_codes)} 檔股票")
+                except Exception as e:
+                    logger.error(f"❌ 盤中跌停觸發器失敗: {e}")
+                    import traceback
+                    logger.error(traceback.format_exc())
+            elif trigger_key == 'intraday_limit_up':
+                logger.info("📡 執行盤中漲停篩選觸發器...")
+                try:
+                    trigger_result = await get_intraday_limit_up(limit=max_stocks)
+                    if 'stocks' in trigger_result:
+                        stock_codes = trigger_result['stocks']
+                        logger.info(f"✅ 盤中漲停觸發器返回 {len(stock_codes)} 檔股票")
+                except Exception as e:
+                    logger.error(f"❌ 盤中漲停觸發器失敗: {e}")
+                    import traceback
+                    logger.error(traceback.format_exc())
+            elif trigger_key == 'intraday_limit_down_by_amount':
+                logger.info("📡 執行盤中跌停篩選+成交額觸發器...")
+                try:
+                    trigger_result = await get_intraday_limit_down_by_amount(limit=max_stocks)
+                    if 'stocks' in trigger_result:
+                        stock_codes = trigger_result['stocks']
+                        logger.info(f"✅ 盤中跌停+成交額觸發器返回 {len(stock_codes)} 檔股票")
+                except Exception as e:
+                    logger.error(f"❌ 盤中跌停+成交額觸發器失敗: {e}")
+                    import traceback
+                    logger.error(traceback.format_exc())
             elif trigger_key == 'trending_topics':
                 logger.info("📡 執行熱門話題觸發器...")
                 try:
