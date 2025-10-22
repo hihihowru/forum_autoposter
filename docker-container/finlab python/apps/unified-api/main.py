@@ -5478,7 +5478,7 @@ async def start_scheduler():
                 UPDATE schedule_tasks
                 SET status = 'active', updated_at = NOW()
                 WHERE status = 'paused'
-                RETURNING id, kol_nickname, schedule_type
+                RETURNING schedule_id, schedule_name, schedule_type
             """)
             activated_tasks = cursor.fetchall()
 
@@ -5531,7 +5531,7 @@ async def stop_scheduler():
                 UPDATE schedule_tasks
                 SET status = 'paused', updated_at = NOW()
                 WHERE status = 'active'
-                RETURNING id, kol_nickname, schedule_type
+                RETURNING schedule_id, schedule_name, schedule_type
             """)
             paused_tasks = cursor.fetchall()
 
