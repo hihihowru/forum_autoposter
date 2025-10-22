@@ -5189,12 +5189,23 @@ async def get_schedule_tasks(
                 # Extract stock_sorting for easier display
                 if task_dict.get('generation_config'):
                     gen_config = task_dict['generation_config']
-                    stock_sorting = gen_config.get('stock_sorting', {})
-                    task_dict['stock_sorting_display'] = {
-                        'method': stock_sorting.get('method', 'none'),
-                        'direction': stock_sorting.get('direction', 'desc'),
-                        'label': _get_sorting_label(stock_sorting)
-                    }
+                    # Ensure gen_config is a dict
+                    if isinstance(gen_config, dict):
+                        stock_sorting = gen_config.get('stock_sorting', {})
+                        # Ensure stock_sorting is a dict before accessing .get()
+                        if isinstance(stock_sorting, dict):
+                            task_dict['stock_sorting_display'] = {
+                                'method': stock_sorting.get('method', 'none'),
+                                'direction': stock_sorting.get('direction', 'desc'),
+                                'label': _get_sorting_label(stock_sorting)
+                            }
+                        else:
+                            # Fallback for non-dict stock_sorting
+                            task_dict['stock_sorting_display'] = {
+                                'method': 'none',
+                                'direction': 'desc',
+                                'label': '隨機排序'
+                            }
 
                 # Ensure daily_execution_time is present (for frontend compatibility)
                 if not task_dict.get('daily_execution_time') and task_dict.get('schedule_config'):
