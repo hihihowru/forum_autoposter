@@ -3343,6 +3343,89 @@ async def update_post_content(post_id: str, request: Request):
         if conn:
             return_db_connection(conn)
 
+@app.get("/api/posts/{post_id}/versions")
+async def get_post_versions(post_id: str):
+    """獲取貼文的其他生成版本"""
+    logger.info(f"收到 get_post_versions 請求 - Post ID: {post_id}")
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            # First get the post to find its session_id and stock_code
+            cursor.execute("""
+                SELECT session_id, stock_codes, kol_serial
+                FROM post_records
+                WHERE post_id = %s
+            """, (post_id,))
+
+            post = cursor.fetchone()
+            if not post:
+                logger.warning(f"⚠️ 貼文不存在 - Post ID: {post_id}")
+                return {"success": False, "versions": [], "error": "Post not found"}
+
+            session_id = post['session_id']
+            stock_codes = post['stock_codes']
+            kol_serial = post['kol_serial']
+
+            logger.info(f"🔍 查找版本 - Session: {session_id}, Stock: {stock_codes}, KOL: {kol_serial}")
+
+            # Get alternative versions from the same session, stock, and KOL
+            cursor.execute("""
+                SELECT
+                    post_id,
+                    title,
+                    content,
+                    version_number,
+                    angle,
+                    quality_score,
+                    ai_detection_score,
+                    risk_level,
+                    created_at
+                FROM post_records
+                WHERE session_id = %s
+                  AND stock_codes = %s
+                  AND kol_serial = %s
+                  AND post_id != %s
+                  AND status != 'deleted'
+                ORDER BY version_number ASC, created_at DESC
+                LIMIT 10
+            """, (session_id, stock_codes, kol_serial, post_id))
+
+            versions = cursor.fetchall()
+
+            logger.info(f"✅ 找到 {len(versions)} 個版本")
+
+            # Convert to list of dicts
+            versions_list = []
+            for v in versions:
+                versions_list.append({
+                    'post_id': v['post_id'],
+                    'title': v['title'],
+                    'content': v['content'],
+                    'version_number': v['version_number'] or 0,
+                    'angle': v['angle'] or '標準分析',
+                    'quality_score': v['quality_score'],
+                    'ai_detection_score': v['ai_detection_score'],
+                    'risk_level': v['risk_level'],
+                    'created_at': v['created_at'].isoformat() if v['created_at'] else None
+                })
+
+            return {
+                "success": True,
+                "versions": versions_list,
+                "total": len(versions_list)
+            }
+
+    except Exception as e:
+        logger.error(f"❌ 獲取貼文版本失敗: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {"success": False, "versions": [], "error": str(e)}
+    finally:
+        if conn:
+            return_db_connection(conn)
+
 @app.delete("/api/posts/{post_id}")
 async def delete_post(post_id: str):
     """刪除貼文（軟刪除）"""

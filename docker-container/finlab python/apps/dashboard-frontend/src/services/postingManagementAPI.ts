@@ -1007,7 +1007,17 @@ export class PostingManagementAPI {
     const response = await apiClient.put(`/api/posting-management/api/posts/${postId}`, post);
     return response.data;
   }
-  
+
+  static async getPostVersions(postId: string): Promise<any[]> {
+    try {
+      const response = await apiClient.get(`/api/posting-management/api/posts/${postId}/versions`);
+      return response.data.versions || [];
+    } catch (error) {
+      console.error('獲取貼文版本失敗:', error);
+      return [];
+    }
+  }
+
   static async approvePost(postId: string, reviewerNotes?: string, approvedBy = 'system', editedTitle?: string, editedContent?: string): Promise<void> {
     await axios.post(`${POSTING_SERVICE_URL}/api/posts/${postId}/approve`, {
       reviewer_notes: reviewerNotes,
