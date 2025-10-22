@@ -1003,8 +1003,12 @@ export class PostingManagementAPI {
   }
   
   static async updatePost(postId: string, post: Partial<Post>): Promise<Post> {
-    // 暫時使用現有API，後續可以擴展
-    const response = await apiClient.put(`/api/posting-management/api/posts/${postId}`, post);
+    // Use correct POSTING_SERVICE_URL
+    const response = await axios.put(`${POSTING_SERVICE_URL}/api/posts/${postId}/content`, {
+      title: post.title,
+      content: post.content,
+      content_md: post.content_md
+    });
     return response.data;
   }
 
@@ -1597,6 +1601,7 @@ export class PostingManagementAPI {
       created_at: string;
       status: string | null;
       trigger_type: string;
+      generation_mode: string;  // 🔥 NEW: Add generation_mode type
       kol_assignment: string;
       total_posts: number;
       published_posts: number;
@@ -1620,21 +1625,27 @@ export class PostingManagementAPI {
           // 獲取該 session 的所有貼文來推斷觸發器類型
           const sessionPosts = historyStats.all_posts?.filter((p: any) => p.session_id?.toString() === sessionId) || [];
           const triggerType = this.inferTriggerType(sessionPosts);
-          
+
+          // 🔥 NEW: Get generation_mode from first post in session
+          const generationMode = sessionPosts.length > 0 && sessionPosts[0].generation_mode
+            ? sessionPosts[0].generation_mode
+            : 'manual';  // Default to manual if not set
+
           // 獲取該 session 的最早創建時間（轉換為 UTC+8）
-          const sessionCreatedAt = sessionPosts.length > 0 
+          const sessionCreatedAt = sessionPosts.length > 0
             ? this.convertToUTC8(sessionPosts.reduce((earliest, post) => {
                 const postTime = new Date(post.created_at);
                 const earliestTime = new Date(earliest);
                 return postTime < earliestTime ? post.created_at : earliest;
               }, sessionPosts[0].created_at))
             : this.convertToUTC8(new Date().toISOString());
-          
+
           return {
                   session_id: sessionId.toString(),
             created_at: sessionCreatedAt,
             status: publishedPosts > 0 ? 'completed' : 'pending',
             trigger_type: triggerType,
+            generation_mode: generationMode,  // 🔥 NEW: Add generation_mode
             kol_assignment: stats.kols ? stats.kols.join(', ') : 'N/A',
             total_posts: totalPosts,
             published_posts: publishedPosts,
