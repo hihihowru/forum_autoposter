@@ -102,6 +102,29 @@ def convert_post_datetimes_to_taipei(post_dict):
 
     return result
 
+def _get_sorting_label(stock_sorting: dict) -> str:
+    """Generate display label for stock sorting"""
+    if not stock_sorting or not stock_sorting.get('method') or stock_sorting.get('method') == 'none':
+        return "隨機排序"
+
+    method_labels = {
+        'price_change_pct': '漲跌幅',
+        'volume': '成交量',
+        'five_day_return': '五日漲幅',
+        'ten_day_return': '十日漲幅',
+        'twenty_day_return': '二十日漲幅',
+        'market_cap': '市值',
+        'turnover_rate': '周轉率'
+    }
+
+    method = stock_sorting.get('method', 'none')
+    direction = stock_sorting.get('direction', 'desc')
+
+    label = method_labels.get(method, method)
+    arrow = '↓' if direction == 'desc' else '↑'
+
+    return f"{label}{arrow}"
+
 # 配置日誌
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -5161,6 +5184,26 @@ async def get_schedule_tasks(
                             except (json.JSONDecodeError, TypeError) as e:
                                 logger.warning(f"Failed to parse {field} for task {task_dict.get('schedule_id')}: {e}")
                                 task_dict[field] = None
+
+                # 🔥 FIX: Add display-friendly fields to help frontend
+                # Extract stock_sorting for easier display
+                if task_dict.get('generation_config'):
+                    gen_config = task_dict['generation_config']
+                    stock_sorting = gen_config.get('stock_sorting', {})
+                    task_dict['stock_sorting_display'] = {
+                        'method': stock_sorting.get('method', 'none'),
+                        'direction': stock_sorting.get('direction', 'desc'),
+                        'label': _get_sorting_label(stock_sorting)
+                    }
+
+                # Ensure daily_execution_time is present (for frontend compatibility)
+                if not task_dict.get('daily_execution_time') and task_dict.get('schedule_config'):
+                    # Try to extract from schedule_config.posting_time_slots
+                    schedule_config = task_dict['schedule_config']
+                    if isinstance(schedule_config, dict):
+                        posting_time_slots = schedule_config.get('posting_time_slots', [])
+                        if posting_time_slots and len(posting_time_slots) > 0:
+                            task_dict['daily_execution_time'] = posting_time_slots[0]
 
                 parsed_tasks.append(task_dict)
 

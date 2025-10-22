@@ -57,10 +57,12 @@ interface ScheduleTask {
   interval_seconds?: number;
   schedule_type?: string;
   auto_posting?: boolean;
+  daily_execution_time?: string;  // 🔥 ADD: Root-level execution time
   schedule_config: {
     enabled: boolean;
     posting_time_slots: string[];
     timezone: string;
+    daily_execution_time?: string;  // 🔥 ADD: Nested execution time
   };
   trigger_config: {
     trigger_type: string;
@@ -72,6 +74,11 @@ interface ScheduleTask {
       secondary_sort?: string;
       tertiary_sort?: string;
     };
+  };
+  stock_sorting_display?: {  // 🔥 ADD: Backend-provided display helper
+    method: string;
+    direction: string;
+    label: string;
   };
   batch_info?: {
     session_id: string;
@@ -203,9 +210,15 @@ const ScheduleManagementPage: React.FC = () => {
   // 計算倒計時
   const getCountdown = (nextRun: string | null | undefined, scheduleType: string = '', scheduleConfig: any = null) => {
     if (!nextRun) return '';
-    
+
+    // 🔥 FIX: Properly handle UTC time conversion
+    let dateStr = nextRun;
+    if (!dateStr.endsWith('Z') && !dateStr.includes('+') && !dateStr.includes('T00:00:00')) {
+      dateStr = dateStr + 'Z'; // Mark as UTC if not already marked
+    }
+
     const now = new Date();
-    const target = new Date(nextRun);
+    const target = new Date(dateStr);
     const diff = target.getTime() - now.getTime();
     
     // 對於工作日每日排程，需要特別處理
@@ -625,7 +638,10 @@ const ScheduleManagementPage: React.FC = () => {
       key: 'posting_time',
       width: 140,
       render: (_: any, record: ScheduleTask) => {
-        const startTime = record.schedule_config?.daily_execution_time;
+        // 🔥 FIX: Check multiple sources for daily_execution_time
+        const startTime = record.daily_execution_time
+          || record.schedule_config?.daily_execution_time
+          || record.schedule_config?.posting_time_slots?.[0];
         const intervalSec = record.interval_seconds || 300;
 
         return (
@@ -715,44 +731,49 @@ const ScheduleManagementPage: React.FC = () => {
       key: 'stock_settings',
       width: 150,
       render: (triggerConfig: any, record: ScheduleTask) => {
-        // Helper function to get stock sorting display name
-        const getStockSortingDisplay = (sorting: any) => {
-          if (!sorting) return null;
+        // 🔥 FIX: Use backend-provided stock_sorting_display.label first
+        let sortingDisplay = record.stock_sorting_display?.label;
 
-          // Handle string format (new API format)
-          if (typeof sorting === 'string') {
-            const sortingMap: Record<string, string> = {
-              'five_day_change_desc': '五日漲幅↓',
-              'five_day_change_asc': '五日漲幅↑',
-              'change_percent_desc': '漲幅↓',
-              'change_percent_asc': '漲幅↑',
-              'volume_desc': '成交量↓',
-              'volume_asc': '成交量↑',
-              'amount_desc': '成交額↓',
-              'amount_asc': '成交額↑',
-              'current_price_desc': '股價↓',
-              'current_price_asc': '股價↑',
-            };
-            return sortingMap[sorting] || sorting;
-          }
+        // Fallback to manual formatting if backend label not available
+        if (!sortingDisplay) {
+          const getStockSortingDisplay = (sorting: any) => {
+            if (!sorting) return null;
 
-          // Handle object format (old API format)
-          if (typeof sorting === 'object' && sorting.primary_sort) {
-            const sortingMap: Record<string, string> = {
-              'change_percent_desc': '漲幅↓',
-              'change_percent_asc': '漲幅↑',
-              'volume_desc': '成交量↓',
-              'volume_asc': '成交量↑',
-              'current_price_desc': '股價↓',
-              'current_price_asc': '股價↑',
-            };
-            return sortingMap[sorting.primary_sort] || sorting.primary_sort;
-          }
+            // Handle string format (new API format)
+            if (typeof sorting === 'string') {
+              const sortingMap: Record<string, string> = {
+                'five_day_change_desc': '五日漲幅↓',
+                'five_day_change_asc': '五日漲幅↑',
+                'change_percent_desc': '漲幅↓',
+                'change_percent_asc': '漲幅↑',
+                'volume_desc': '成交量↓',
+                'volume_asc': '成交量↑',
+                'amount_desc': '成交額↓',
+                'amount_asc': '成交額↑',
+                'current_price_desc': '股價↓',
+                'current_price_asc': '股價↑',
+              };
+              return sortingMap[sorting] || sorting;
+            }
 
-          return null;
-        };
+            // Handle object format (old API format)
+            if (typeof sorting === 'object' && sorting.primary_sort) {
+              const sortingMap: Record<string, string> = {
+                'change_percent_desc': '漲幅↓',
+                'change_percent_asc': '漲幅↑',
+                'volume_desc': '成交量↓',
+                'volume_asc': '成交量↑',
+                'current_price_desc': '股價↓',
+                'current_price_asc': '股價↑',
+              };
+              return sortingMap[sorting.primary_sort] || sorting.primary_sort;
+            }
 
-        const sortingDisplay = getStockSortingDisplay(triggerConfig?.stock_sorting || record.trigger_config?.stock_sorting);
+            return null;
+          };
+
+          sortingDisplay = getStockSortingDisplay(triggerConfig?.stock_sorting || record.trigger_config?.stock_sorting);
+        }
 
         return (
           <div>
