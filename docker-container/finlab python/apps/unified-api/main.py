@@ -467,7 +467,8 @@ async def check_schedules():
 
                             # If auto_posting is enabled, publish posts with intervals
                             if auto_posting and result.get('success'):
-                                posts = result.get('data', {}).get('posts', [])
+                                # 🔥 FIX: posts is at root level, not in 'data'
+                                posts = result.get('posts', [])
                                 if posts:
                                     logger.info(f"📤 [APScheduler] Auto-posting enabled - Publishing {len(posts)} posts with {interval_seconds}s intervals")
                                     await publish_posts_with_queue(posts, interval_seconds)
@@ -560,11 +561,15 @@ async def update_next_run(schedule_id: str, schedule: Dict, is_post_execution: b
         if not daily_execution_time:
             schedule_config = schedule.get('schedule_config', {})
             if isinstance(schedule_config, str):
-                schedule_config = json.loads(schedule_config)
+                try:
+                    schedule_config = json.loads(schedule_config)
+                except:
+                    schedule_config = {}
             if isinstance(schedule_config, dict):
                 posting_time_slots = schedule_config.get('posting_time_slots', [])
                 if posting_time_slots and len(posting_time_slots) > 0:
                     daily_execution_time = posting_time_slots[0]
+                    logger.info(f"🔍 [APScheduler] Extracted daily_execution_time from schedule_config: {daily_execution_time}")
 
         tz = pytz.timezone(timezone_str)
         now = datetime.now(tz)
@@ -593,12 +598,32 @@ async def update_next_run(schedule_id: str, schedule: Dict, is_post_execution: b
                 logger.info(f"{log_prefix} [APScheduler] Next run for schedule {schedule_id}: {next_run.isoformat()}")
 
             except Exception as parse_error:
-                logger.error(f"❌ [APScheduler] Failed to parse daily_execution_time: {parse_error}")
-                return
+                logger.error(f"❌ [APScheduler] Failed to parse daily_execution_time '{daily_execution_time}': {parse_error}")
+                # 🔥 FIX: Set default next_run to avoid infinite stale loop
+                next_run = now + timedelta(days=1)
+                next_run = next_run.replace(hour=9, minute=30, second=0, microsecond=0)
+                logger.warning(f"⚠️ [APScheduler] Set default next_run to tomorrow 09:30: {next_run.isoformat()}")
+        elif schedule_type in ['daily', 'weekday_daily']:
+            # Missing daily_execution_time but valid schedule_type
+            logger.error(f"❌ [APScheduler] Schedule {schedule_id} has schedule_type='{schedule_type}' but no daily_execution_time")
+            logger.error(f"❌ [APScheduler] schedule_config: {schedule.get('schedule_config', 'None')}")
+            # 🔥 FIX: Set default next_run to avoid infinite stale loop
+            next_run = now + timedelta(days=1)
+            next_run = next_run.replace(hour=9, minute=30, second=0, microsecond=0)
+            if schedule_type == 'weekday_daily':
+                while next_run.weekday() >= 5:
+                    next_run = next_run + timedelta(days=1)
+            logger.warning(f"⚠️ [APScheduler] Set default next_run to tomorrow 09:30: {next_run.isoformat()}")
         else:
-            # For other schedule types, log warning
-            logger.warning(f"⚠️ [APScheduler] Schedule type '{schedule_type}' not fully supported for auto-update")
-            return
+            # For other schedule types or empty schedule_type
+            if not schedule_type:
+                logger.error(f"❌ [APScheduler] Schedule {schedule_id} has EMPTY schedule_type!")
+            else:
+                logger.warning(f"⚠️ [APScheduler] Schedule type '{schedule_type}' not supported for auto-update")
+            # 🔥 FIX: Set default next_run to avoid infinite stale loop
+            next_run = now + timedelta(days=1)
+            next_run = next_run.replace(hour=9, minute=30, second=0, microsecond=0)
+            logger.warning(f"⚠️ [APScheduler] Set default next_run to tomorrow 09:30: {next_run.isoformat()}")
 
         # Update next_run in database
         conn = get_db_connection()
