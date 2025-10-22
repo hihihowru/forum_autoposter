@@ -394,16 +394,40 @@ async def check_schedules():
             return
 
         with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-            # Find active schedules where next_run <= NOW()
+            # 🔥 FIX: Only execute schedules due NOW (within current minute window)
+            # If next_run is in the past, update it instead of executing
             now = get_current_time()
+
+            # Define "now" window: current minute (e.g., 18:07:00 to 18:07:59)
+            current_minute_start = now.replace(second=0, microsecond=0)
+            current_minute_end = current_minute_start + timedelta(minutes=1)
+
+            # First, find and update stale schedules (next_run in the past)
             cursor.execute("""
                 SELECT *
                 FROM schedule_tasks
                 WHERE status = 'active'
                   AND next_run IS NOT NULL
-                  AND next_run <= %s
+                  AND next_run < %s
+            """, (current_minute_start,))
+
+            stale_schedules = cursor.fetchall()
+
+            if stale_schedules:
+                logger.info(f"⚠️ [APScheduler] Found {len(stale_schedules)} schedule(s) with stale next_run, updating...")
+                for stale_schedule in stale_schedules:
+                    await update_next_run(stale_schedule['schedule_id'], stale_schedule, is_post_execution=False)
+
+            # Now find schedules due within current minute
+            cursor.execute("""
+                SELECT *
+                FROM schedule_tasks
+                WHERE status = 'active'
+                  AND next_run IS NOT NULL
+                  AND next_run >= %s
+                  AND next_run < %s
                 ORDER BY next_run ASC
-            """, (now,))
+            """, (current_minute_start, current_minute_end))
 
             ready_schedules = cursor.fetchall()
 
@@ -411,7 +435,7 @@ async def check_schedules():
                 logger.info("✅ [APScheduler] No schedules ready to execute")
                 return
 
-            logger.info(f"🚀 [APScheduler] Found {len(ready_schedules)} schedule(s) ready to execute")
+            logger.info(f"🚀 [APScheduler] Found {len(ready_schedules)} schedule(s) ready to execute NOW")
 
             # Execute each schedule
             for schedule in ready_schedules:
@@ -451,7 +475,7 @@ async def check_schedules():
                                     logger.warning(f"⚠️ [APScheduler] No posts to publish for schedule: {schedule_name}")
 
                             # Calculate next_run for the next execution
-                            await update_next_run(schedule_id, schedule)
+                            await update_next_run(schedule_id, schedule, is_post_execution=True)
                         else:
                             logger.error(f"❌ [APScheduler] Schedule execution failed: {schedule_name}, status={response.status_code}")
 
@@ -516,13 +540,14 @@ async def publish_posts_with_queue(posts: List[Dict], interval_seconds: int):
         logger.error(f"❌ [Auto-Posting] Error in publish_posts_with_queue: {e}")
         logger.error(traceback.format_exc())
 
-async def update_next_run(schedule_id: str, schedule: Dict):
+async def update_next_run(schedule_id: str, schedule: Dict, is_post_execution: bool = True):
     """
     Calculate and update next_run time for a schedule based on its schedule_type.
 
     Args:
         schedule_id: Schedule ID
         schedule: Schedule dictionary from database
+        is_post_execution: True if updating after execution, False if updating stale schedule
     """
     conn = None
     try:
@@ -531,31 +556,47 @@ async def update_next_run(schedule_id: str, schedule: Dict):
         weekdays_only = schedule.get('weekdays_only', True)
         timezone_str = schedule.get('timezone', 'Asia/Taipei')
 
+        # 🔥 FIX: Extract daily_execution_time from schedule_config if not at root level
+        if not daily_execution_time:
+            schedule_config = schedule.get('schedule_config', {})
+            if isinstance(schedule_config, str):
+                schedule_config = json.loads(schedule_config)
+            if isinstance(schedule_config, dict):
+                posting_time_slots = schedule_config.get('posting_time_slots', [])
+                if posting_time_slots and len(posting_time_slots) > 0:
+                    daily_execution_time = posting_time_slots[0]
+
         tz = pytz.timezone(timezone_str)
         now = datetime.now(tz)
         next_run = None
 
-        if schedule_type == 'daily' and daily_execution_time:
+        # 🔥 FIX: Support both 'daily' and 'weekday_daily' schedule types
+        if schedule_type in ['daily', 'weekday_daily'] and daily_execution_time:
             # Parse execution time (format: "HH:MM")
             try:
                 hour, minute = map(int, daily_execution_time.split(':'))
 
-                # Calculate next execution time (tomorrow at the same time)
+                # Calculate next execution time
                 next_run = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
-                next_run = next_run + timedelta(days=1)
 
-                # Skip weekends if weekdays_only
-                if weekdays_only:
+                # If execution time already passed today, move to tomorrow
+                if next_run <= now:
+                    next_run = next_run + timedelta(days=1)
+
+                # 🔥 FIX: For weekday_daily or weekdays_only, skip weekends
+                # Skip to next Monday if next_run falls on weekend
+                if schedule_type == 'weekday_daily' or weekdays_only:
                     while next_run.weekday() >= 5:  # 5=Saturday, 6=Sunday
                         next_run = next_run + timedelta(days=1)
 
-                logger.info(f"📅 [APScheduler] Next run for schedule {schedule_id}: {next_run.isoformat()}")
+                log_prefix = "🔄" if not is_post_execution else "📅"
+                logger.info(f"{log_prefix} [APScheduler] Next run for schedule {schedule_id}: {next_run.isoformat()}")
 
             except Exception as parse_error:
                 logger.error(f"❌ [APScheduler] Failed to parse daily_execution_time: {parse_error}")
                 return
         else:
-            # For other schedule types or if no daily_execution_time, set to null
+            # For other schedule types, log warning
             logger.warning(f"⚠️ [APScheduler] Schedule type '{schedule_type}' not fully supported for auto-update")
             return
 
