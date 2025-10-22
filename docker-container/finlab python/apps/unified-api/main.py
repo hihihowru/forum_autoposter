@@ -6142,6 +6142,76 @@ async def cancel_schedule(task_id: str):
             return_db_connection(conn)
 
 
+@app.post("/api/schedule/start/{task_id}")
+async def start_schedule(task_id: str):
+    """
+    啟動/恢復排程
+    Start or resume a schedule
+    """
+    logger.info(f"收到啟動排程請求 - Task ID: {task_id}")
+
+    conn = None
+    try:
+        if not db_pool:
+            return {
+                "success": False,
+                "error": "數據庫連接不可用"
+            }
+
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            # Check if schedule exists
+            cursor.execute("""
+                SELECT schedule_id, status
+                FROM schedule_tasks
+                WHERE schedule_id = %s
+            """, (task_id,))
+
+            existing = cursor.fetchone()
+            if not existing:
+                return {
+                    "success": False,
+                    "error": f"找不到排程: {task_id}"
+                }
+
+            # Update status to active
+            cursor.execute("""
+                UPDATE schedule_tasks
+                SET status = 'active',
+                    updated_at = NOW()
+                WHERE schedule_id = %s
+                RETURNING *
+            """, (task_id,))
+
+            updated_schedule = cursor.fetchone()
+            conn.commit()
+
+            logger.info(f"✅ 排程已啟動: {task_id}")
+
+            return {
+                "success": True,
+                "message": "排程已啟動",
+                "task_id": task_id,
+                "previous_status": existing['status'],
+                "new_status": "active"
+            }
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"❌ 啟動排程失敗: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {
+            "success": False,
+            "error": str(e),
+            "task_id": task_id
+        }
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+
 if __name__ == "__main__":
     import uvicorn
     
