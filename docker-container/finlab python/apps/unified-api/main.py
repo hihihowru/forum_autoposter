@@ -5983,8 +5983,9 @@ async def execute_schedule_now(task_id: str, request: Request):
                 kol_serial = kol_serials[0]  # Default to first KOL
 
             try:
-                # 🔥 FIX: Get actual stock name from stock_mapping
-                stock_name = stock_mapping.get(stock_code, stock_code)  # Fallback to code if not found
+                # 🔥 FIX: Get actual stock name from stock_mapping (extract company_name from dict)
+                stock_info = stock_mapping.get(stock_code, {})
+                stock_name = stock_info.get('company_name', stock_code) if isinstance(stock_info, dict) else stock_code
                 logger.info(f"📊 Stock: {stock_code} → {stock_name}")
 
                 # 🔥 FIX: Map content_style to kol_persona
