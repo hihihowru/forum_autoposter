@@ -2260,6 +2260,7 @@ async def manual_posting(request: Request):
         kol_persona = body.get('kol_persona', 'technical')
         session_id = body.get('session_id')
         trigger_type = body.get('trigger_type', 'custom_stocks')
+        generation_mode = body.get('generation_mode', 'manual')  # 🔥 NEW: Extract generation_mode (manual/scheduled/self_learning)
         posting_type = body.get('posting_type', 'analysis')
         max_words = body.get('max_words', 200)
 
@@ -2458,13 +2459,13 @@ async def manual_posting(request: Request):
                     kol_serial, kol_nickname, kol_persona,
                     stock_code, stock_name,
                     title, content, content_md,
-                    status, commodity_tags, generation_params, alternative_versions, trigger_type
+                    status, commodity_tags, generation_params, alternative_versions, trigger_type, generation_mode
                 ) VALUES (
                     %s, %s, %s, %s,
                     %s, %s, %s,
                     %s, %s,
                     %s, %s, %s,
-                    %s, %s, %s, %s, %s
+                    %s, %s, %s, %s, %s, %s
                 )
             """
 
@@ -2480,7 +2481,8 @@ async def manual_posting(request: Request):
                 json.dumps(commodity_tags_data, ensure_ascii=False),
                 json.dumps(generation_params, ensure_ascii=False),
                 alternative_versions_json,  # 添加替代版本
-                trigger_type  # 添加 trigger_type
+                trigger_type,  # 添加 trigger_type
+                generation_mode  # 🔥 NEW: 添加 generation_mode
             ))
 
             conn.commit()
@@ -6190,11 +6192,12 @@ async def execute_schedule_now(task_id: str, request: Request):
                     "kol_serial": kol_serial,
                     "kol_persona": kol_persona,  # 🔥 FIX: Use mapped kol_persona
                     "session_id": session_id,
-                    "trigger_type": trigger_config.get('trigger_type', 'custom_stocks'),
+                    "trigger_type": trigger_key or 'custom_stocks',  # 🔥 FIX: Use actual trigger_key that was executed
+                    "generation_mode": "scheduled",  # 🔥 NEW: Mark as scheduled generation
                     "posting_type": generation_config.get('posting_type', 'analysis'),
                     "max_words": generation_config.get('max_words', 200),
                     "full_triggers_config": {
-                        "trigger_type": trigger_config.get('trigger_type'),
+                        "trigger_type": trigger_key,  # 🔥 FIX: Use actual trigger_key
                         "stock_codes": stock_codes,
                         "kol_assignment": kol_assignment,
                         "max_stocks": max_stocks
