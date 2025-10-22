@@ -5200,6 +5200,194 @@ async def create_schedule(request: Request):
         if conn:
             return_db_connection(conn)
 
+@app.post("/api/schedule/execute/{task_id}")
+async def execute_schedule_now(task_id: str):
+    """立即執行指定的排程任務"""
+    logger.info(f"收到立即執行排程請求 - Task ID: {task_id}")
+
+    conn = None
+    try:
+        conn = get_db_connection()
+
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            # 獲取排程任務配置
+            cursor.execute("""
+                SELECT task_id, name, trigger_config, schedule_config, generation_config
+                FROM schedule_tasks
+                WHERE task_id = %s
+            """, (task_id,))
+
+            schedule = cursor.fetchone()
+
+            if not schedule:
+                logger.error(f"排程任務不存在: {task_id}")
+                return {
+                    "success": False,
+                    "error": "排程任務不存在"
+                }
+
+            logger.info(f"📋 排程資訊: {schedule['name']}")
+
+            # 解析 JSON 配置
+            trigger_config = json.loads(schedule['trigger_config']) if isinstance(schedule['trigger_config'], str) else schedule['trigger_config']
+            schedule_config = json.loads(schedule['schedule_config']) if isinstance(schedule['schedule_config'], str) else schedule['schedule_config']
+            generation_config = json.loads(schedule['generation_config']) if isinstance(schedule['generation_config'], str) else schedule['generation_config']
+
+            logger.info(f"🔍 trigger_config: {json.dumps(trigger_config, ensure_ascii=False)[:200]}...")
+            logger.info(f"🔍 schedule_config: {json.dumps(schedule_config, ensure_ascii=False)[:200]}...")
+
+            # 從 schedule_config 的 full_triggers_config 獲取配置
+            full_triggers_config = schedule_config.get('full_triggers_config', {})
+            trigger_type = full_triggers_config.get('trigger_type') or generation_config.get('trigger_type', 'custom_stocks')
+
+            # 獲取最大股票數
+            max_stocks = full_triggers_config.get('stockCountLimit') or trigger_config.get('max_stocks', 5)
+            logger.info(f"🔧 Using max_stocks={max_stocks} from full_triggers_config.stockCountLimit")
+
+            # 獲取股票篩選標準
+            stock_filter_criteria = full_triggers_config.get('stockFilterCriteria', [])
+            logger.info(f"🔧 Using stockFilterCriteria={stock_filter_criteria} from full_triggers_config")
+
+            # 執行觸發器獲取股票列表
+            logger.info(f"🎯 執行觸發器: {trigger_type}")
+
+            # 從 stockFilterCriteria 推斷排序方式
+            sort_by = None
+            if stock_filter_criteria:
+                if 'five_day_gain' in stock_filter_criteria:
+                    sort_by = 'five_day_gain'
+                    logger.info(f"🔧 Mapped stockFilterCriteria[0]={stock_filter_criteria[0]} → sortBy={sort_by}")
+
+            stock_codes = []
+
+            # 根據觸發器類型調用對應的 API
+            if trigger_type == 'limit_up_after_hours':
+                # 盤後漲停股
+                logger.info("📡 調用盤後漲停股 API...")
+                # 從配置中獲取高量/低量設定
+                is_high_volume = full_triggers_config.get('limit_up_after_hours_high_volume', False)
+                is_low_volume = full_triggers_config.get('limit_up_after_hours_low_volume', False)
+
+                # 調用 /api/after_hours_limit_up endpoint
+                import httpx
+                async with httpx.AsyncClient() as client:
+                    params = {'limit': max_stocks}
+                    if is_high_volume:
+                        params['volume_type'] = 'high'
+                    elif is_low_volume:
+                        params['volume_type'] = 'low'
+
+                    response = await client.get(f"http://localhost:8080/api/after_hours_limit_up", params=params)
+                    if response.status_code == 200:
+                        data = response.json()
+                        stock_codes = data.get('stock_codes', [])
+                        logger.info(f"✅ 獲取到 {len(stock_codes)} 支盤後漲停股票")
+                    else:
+                        logger.error(f"❌ 盤後漲停股 API 失敗: {response.status_code}")
+
+            elif trigger_type == 'intraday_gainers_by_amount':
+                # 盤中漲幅排序+成交額
+                logger.info("📡 調用盤中漲幅排序+成交額 API...")
+
+                # 調用 /api/intraday/gainers-by-amount endpoint
+                import httpx
+                async with httpx.AsyncClient() as client:
+                    params = {
+                        'limit': max_stocks,
+                        'sort_by': sort_by or 'five_day_gain'
+                    }
+
+                    response = await client.get(f"http://localhost:8080/api/intraday/gainers-by-amount", params=params)
+                    if response.status_code == 200:
+                        data = response.json()
+                        stock_codes = data.get('stock_codes', [])
+                        logger.info(f"✅ 獲取到 {len(stock_codes)} 支盤中漲幅股票")
+                    else:
+                        logger.error(f"❌ 盤中漲幅 API 失敗: {response.status_code}")
+
+            elif trigger_type == 'trending_topics':
+                # 熱門話題
+                logger.info("📡 調用熱門話題 API...")
+
+                import httpx
+                async with httpx.AsyncClient() as client:
+                    params = {'limit': max_stocks}
+
+                    response = await client.get(f"http://localhost:8080/api/trending", params=params)
+                    if response.status_code == 200:
+                        data = response.json()
+                        topics = data.get('topics', [])
+                        # 從話題中提取股票代碼
+                        stock_codes = []
+                        for topic in topics[:max_stocks]:
+                            if 'stock_code' in topic:
+                                stock_codes.append(topic['stock_code'])
+                        logger.info(f"✅ 從 {len(topics)} 個熱門話題獲取到 {len(stock_codes)} 支股票")
+                    else:
+                        logger.error(f"❌ 熱門話題 API 失敗: {response.status_code}")
+
+            elif trigger_type == 'custom_stocks':
+                # 自訂股票列表
+                stock_codes = schedule_config.get('stock_codes', []) or full_triggers_config.get('stock_codes', [])
+                logger.info(f"✅ 使用自訂股票列表: {len(stock_codes)} 支股票")
+
+            else:
+                # 未支持的觸發器類型 - 嘗試從 schedule_config 獲取
+                stock_codes = schedule_config.get('stock_codes', []) or full_triggers_config.get('stock_codes', [])
+                if stock_codes:
+                    logger.warning(f"⚠️  觸發器 {trigger_type} 未完全支持，使用配置中的股票列表: {len(stock_codes)} 支")
+                else:
+                    logger.error(f"❌ 觸發器 {trigger_type} 未支持且無股票配置")
+                    return {
+                        "success": False,
+                        "error": f"無法獲取股票列表：排程未配置股票且觸發器未返回結果"
+                    }
+
+            if not stock_codes:
+                logger.error("❌ 未能獲取任何股票")
+                return {
+                    "success": False,
+                    "error": "無法獲取股票列表：排程未配置股票且觸發器未返回結果"
+                }
+
+            logger.info(f"📊 最終股票列表: {stock_codes}")
+
+            # TODO: 調用內容生成 API 生成貼文
+            # 這裡應該調用 /api/generate-posts 或 /api/manual-posting
+
+            # 更新排程任務的執行記錄
+            cursor.execute("""
+                UPDATE schedule_tasks
+                SET last_run = %s,
+                    run_count = run_count + 1,
+                    success_count = success_count + 1,
+                    updated_at = %s
+                WHERE task_id = %s
+            """, (get_current_time(), get_current_time(), task_id))
+
+            conn.commit()
+
+            return {
+                "success": True,
+                "trigger_type": trigger_type,
+                "stock_count": len(stock_codes),
+                "stock_codes": stock_codes,
+                "message": f"成功獲取 {len(stock_codes)} 支股票"
+            }
+
+    except Exception as e:
+        logger.error(f"❌ 執行排程失敗: {e}")
+        logger.error(f"錯誤詳情: {traceback.format_exc()}")
+        if conn:
+            conn.rollback()
+        return {
+            "success": False,
+            "error": str(e)
+        }
+    finally:
+        if conn:
+            return_db_connection(conn)
+
 if __name__ == "__main__":
     import uvicorn
     
