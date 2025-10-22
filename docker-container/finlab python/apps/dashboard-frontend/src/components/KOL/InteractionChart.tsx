@@ -53,15 +53,24 @@ const InteractionChart: React.FC<InteractionChartProps> = ({
   // 準備圖表數據
   const prepareChartData = () => {
     if (!interactionData?.interaction_trend) return [];
-    
-    return interactionData.interaction_trend.map((item: InteractionTrend) => ({
-      date: item.date,
-      interactions: item.total_interactions,
-      likes: item.likes,
-      comments: item.comments,
-      engagement_rate: item.avg_engagement_rate * 100, // 轉換為百分比
-      posts_count: item.posts_count
-    }));
+
+    return interactionData.interaction_trend.map((item: InteractionTrend) => {
+      // Calculate total interactions from likes, comments, and shares
+      const totalInteractions = (item.total_likes || 0) + (item.total_comments || 0) + (item.total_shares || 0);
+      // Calculate engagement rate based on posts count
+      const engagementRate = item.post_count > 0
+        ? ((totalInteractions / item.post_count) * 100)
+        : 0;
+
+      return {
+        date: item.date,
+        interactions: totalInteractions,
+        likes: item.total_likes || 0,
+        comments: item.total_comments || 0,
+        engagement_rate: engagementRate,
+        posts_count: item.post_count || 0
+      };
+    });
   };
 
   // 圖表配置

@@ -67,7 +67,10 @@ class ScheduleTask(Base):
     # 生成配置
     generation_config = Column(JSON, nullable=True)
     batch_info = Column(JSON, nullable=True)
-    
+    # 🔥 FIX: Add trigger_config and schedule_config columns for schedule recreation
+    trigger_config = Column(JSON, nullable=True)
+    schedule_config = Column(JSON, nullable=True)
+
     # 錯誤處理
     error_message = Column(Text, nullable=True)
     
@@ -100,6 +103,8 @@ class ScheduleDatabaseService:
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
         # 🔥 自動創建資料表
         self.create_tables()
+        # 🔥 執行資料庫遷移
+        self.run_migrations()
     
     def get_db_session(self) -> Session:
         """獲取資料庫會話"""
@@ -113,8 +118,50 @@ class ScheduleDatabaseService:
         except Exception as e:
             logger.error(f"❌ 創建排程資料表失敗: {e}")
             raise
+
+    def run_migrations(self):
+        """執行資料庫遷移 - 添加缺失的列"""
+        try:
+            conn = self.engine.raw_connection()
+            cursor = conn.cursor()
+
+            # 檢查 trigger_config 列是否存在
+            cursor.execute("""
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name='schedule_tasks'
+                AND column_name='trigger_config'
+            """)
+
+            if not cursor.fetchone():
+                logger.info("🔄 添加 trigger_config 列...")
+                cursor.execute("ALTER TABLE schedule_tasks ADD COLUMN trigger_config JSONB")
+                conn.commit()
+                logger.info("✅ trigger_config 列添加成功")
+
+            # 檢查 schedule_config 列是否存在
+            cursor.execute("""
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name='schedule_tasks'
+                AND column_name='schedule_config'
+            """)
+
+            if not cursor.fetchone():
+                logger.info("🔄 添加 schedule_config 列...")
+                cursor.execute("ALTER TABLE schedule_tasks ADD COLUMN schedule_config JSONB")
+                conn.commit()
+                logger.info("✅ schedule_config 列添加成功")
+
+            cursor.close()
+            conn.close()
+            logger.info("✅ 資料庫遷移完成")
+
+        except Exception as e:
+            logger.error(f"❌ 資料庫遷移失敗: {e}")
+            # Don't raise - allow app to continue even if migration fails
     
-    async def create_schedule_task(self, 
+    async def create_schedule_task(self,
                                  schedule_name: str,
                                  schedule_description: Optional[str] = None,
                                  session_id: Optional[int] = None,
@@ -127,6 +174,9 @@ class ScheduleDatabaseService:
                                  timezone: str = 'Asia/Taipei',
                                  generation_config: Optional[Dict[str, Any]] = None,
                                  batch_info: Optional[Dict[str, Any]] = None,
+                                 # 🔥 FIX: Add trigger_config and schedule_config parameters
+                                 trigger_config: Optional[Dict[str, Any]] = None,
+                                 schedule_config: Optional[Dict[str, Any]] = None,
                                  auto_posting: bool = False,
                                  # 來源追蹤參數
                                  source_type: Optional[str] = None,
@@ -136,7 +186,7 @@ class ScheduleDatabaseService:
                                  created_by: str = 'system') -> str:
         """創建排程任務"""
         schedule_id = str(uuid.uuid4())
-        
+
         db = self.get_db_session()
         try:
             schedule_task = ScheduleTask(
@@ -153,6 +203,9 @@ class ScheduleDatabaseService:
                 timezone=timezone,
                 generation_config=generation_config or {},
                 batch_info=batch_info or {},
+                # 🔥 FIX: Store trigger_config and schedule_config to database
+                trigger_config=trigger_config or {},
+                schedule_config=schedule_config or {},
                 auto_posting=auto_posting,
                 # 來源追蹤
                 source_type=source_type,

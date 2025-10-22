@@ -29,6 +29,9 @@ class CreateScheduleRequest(BaseModel):
     timezone: str = 'Asia/Taipei'
     generation_config: Optional[Dict[str, Any]] = None
     batch_info: Optional[Dict[str, Any]] = None
+    # 🔥 FIX: Add trigger_config and schedule_config
+    trigger_config: Optional[Dict[str, Any]] = None
+    schedule_config: Optional[Dict[str, Any]] = None
     auto_posting: bool = False
     # 來源追蹤參數
     source_type: Optional[str] = None  # 'batch_history' | 'self_learning'
@@ -76,6 +79,9 @@ async def create_schedule_task(request: CreateScheduleRequest):
             timezone=request.timezone,
             generation_config=request.generation_config,
             batch_info=request.batch_info,
+            # 🔥 FIX: Add trigger_config and schedule_config
+            trigger_config=request.trigger_config,
+            schedule_config=request.schedule_config,
             auto_posting=request.auto_posting,
             # 來源追蹤參數
             source_type=request.source_type,
@@ -282,6 +288,34 @@ async def update_schedule_task(task_id: str, request: Dict[str, Any]):
             success=False,
             task_id=task_id,
             message=f"更新排程任務失敗: {str(e)}"
+        )
+
+@router.delete("/tasks/{task_id}", response_model=ScheduleResponse)
+async def delete_schedule_task(task_id: str):
+    """刪除排程任務"""
+    try:
+        # 刪除資料庫中的排程任務
+        success = await schedule_service.db_service.delete_schedule_task(task_id)
+
+        if success:
+            return ScheduleResponse(
+                success=True,
+                task_id=task_id,
+                message="排程任務已刪除"
+            )
+        else:
+            return ScheduleResponse(
+                success=False,
+                task_id=task_id,
+                message="刪除排程任務失敗"
+            )
+
+    except Exception as e:
+        logger.error(f"刪除排程任務失敗: {e}")
+        return ScheduleResponse(
+            success=False,
+            task_id=task_id,
+            message=f"刪除排程任務失敗: {str(e)}"
         )
 
 @router.post("/execute/{task_id}", response_model=ScheduleResponse)

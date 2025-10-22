@@ -233,7 +233,7 @@ class KOLDatabaseService:
             db.close()
     
     def get_kol_list_for_selection(self) -> List[Dict[str, Any]]:
-        """獲取用於選擇的 KOL 列表"""
+        """獲取用於選擇的 KOL 列表（包含統計數據）"""
         try:
             kols = self.get_all_kols()
             return [
@@ -244,7 +244,12 @@ class KOLDatabaseService:
                     "persona": kol.persona,
                     "status": kol.status,
                     "email": kol.email,
-                    "owner": kol.owner
+                    "owner": kol.owner,
+                    # 統計數據
+                    "total_posts": kol.total_posts or 0,
+                    "published_posts": kol.published_posts or 0,
+                    "avg_interaction_rate": kol.avg_interaction_rate or 0.0,
+                    "best_performing_post": kol.best_performing_post
                 }
                 for kol in kols
             ]

@@ -150,6 +150,7 @@ export interface GeneratePostsRequest {
   session_id: number;
   max_posts?: number;
   force_regenerate?: boolean;
+  full_triggers_config?: any;
 }
 
 export interface GeneratePostsResponse {
@@ -260,6 +261,7 @@ export class PostingManagementAPI {
     post_mode?: string;
     max_stocks_per_post?: number;
     max_words?: number;
+    full_triggers_config?: any;  // 🔥 Add full_triggers_config to interface
   }): Promise<GeneratePostsResponse> {
     try {
       console.log('🚀 開始批量生成貼文:', {
@@ -313,6 +315,10 @@ export class PostingManagementAPI {
           console.log('  - topic_title:', (post as any).topic_title || batch_config.topic_title);
           
           const startTime = Date.now();
+
+          // 🔍 DEBUG: Log what's actually being sent in the request
+          console.log('🔍 DEBUG - full_triggers_config in request:', JSON.stringify((batchConfig as any).full_triggers_config, null, 2));
+
           // 調用單個貼文生成 API
           const response = await axios.post(`${POSTING_SERVICE_URL}/api/manual-posting`, {
             stock_code: post.stock_code,
@@ -358,9 +364,11 @@ export class PostingManagementAPI {
             has_topic_tags: batchConfig.has_topic_tags,
             trigger_type: batchConfig.trigger_type,
             trigger_data: batchConfig.trigger_data,
-            generation_config: batchConfig.generation_config
+            generation_config: batchConfig.generation_config,
+            // 🔥 FIX: Pass full triggers config for schedule recreation
+            full_triggers_config: batchConfig.full_triggers_config
           });
-          
+
           const endTime = Date.now();
           console.log(`✅ 貼文生成完成 ${i + 1}/${posts.length} ${post.stock_code}-${post.kol_serial}:`, {
             duration: `${endTime - startTime}ms`,
@@ -621,6 +629,21 @@ export class PostingManagementAPI {
     
     // 轉換後端數據格式為前端期望的格式
     console.log('🔍 後端響應數據:', response.data);
+
+    // 🔍 DEBUG: Log first post's generation_config
+    if (response.data.posts && response.data.posts.length > 0) {
+      const firstPost = response.data.posts[0];
+      console.log('🔍 DEBUG - First post generation_config type:', typeof firstPost.generation_config);
+      console.log('🔍 DEBUG - First post generation_config value:', JSON.stringify(firstPost.generation_config).substring(0, 200));
+      if (firstPost.generation_config) {
+        console.log('🔍 DEBUG - generation_config keys:', Object.keys(firstPost.generation_config));
+        console.log('🔍 DEBUG - has full_triggers_config:', 'full_triggers_config' in firstPost.generation_config);
+        if ('full_triggers_config' in firstPost.generation_config) {
+          console.log('🔍 DEBUG - full_triggers_config value:', JSON.stringify(firstPost.generation_config.full_triggers_config).substring(0, 200));
+        }
+      }
+    }
+
     const posts = (response.data.posts || []).map((post: any) => ({
       id: post.post_id, // 直接使用UUID作為ID
       session_id: post.session_id,
@@ -633,11 +656,11 @@ export class PostingManagementAPI {
       stock_codes: [post.stock_code], // 轉換為數組
       stock_names: [post.stock_name], // 轉換為數組
       stock_data: null,
-      generation_config: post.generation_params,
+      generation_config: post.generation_config,  // 🔥 FIX: Backend returns generation_config, not generation_params
       trigger_type: post.trigger_type, // ✅ 添加 trigger_type 欄位
       commodity_tags: post.commodity_tags || [],
       prompt_template: undefined,
-      technical_indicators: post.generation_params?.technical_indicators || [],
+      technical_indicators: post.generation_config?.technical_indicators || [],  // 🔥 FIX: Use generation_config
       quality_score: post.quality_score,
       ai_detection_score: post.ai_detection_score,
       risk_level: post.risk_level,
@@ -1551,7 +1574,6 @@ export class PostingManagementAPI {
     }
 
     // 如果都沒有，返回 unknown
-    console.log(`⚠️ Session 沒有找到 trigger_type 信息，返回 unknown`);
     return 'unknown';
   }
   

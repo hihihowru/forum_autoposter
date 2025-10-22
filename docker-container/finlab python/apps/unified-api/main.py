@@ -43,6 +43,7 @@ def get_current_time():
 def convert_post_datetimes_to_taipei(post_dict):
     """
     Convert naive UTC datetime fields in post dictionary to Taipei timezone strings.
+    Also parse JSON fields from TEXT to dict/list.
 
     This fixes the issue where database TIMESTAMP columns (without timezone) are returned
     as naive datetime objects, which get serialized as UTC but displayed incorrectly.
@@ -52,6 +53,7 @@ def convert_post_datetimes_to_taipei(post_dict):
 
     Returns:
         Dictionary with datetime fields converted to Taipei timezone ISO strings
+        and JSON fields parsed from TEXT to dict/list
     """
     taipei_tz = pytz.timezone('Asia/Taipei')
     utc_tz = pytz.utc
@@ -61,6 +63,7 @@ def convert_post_datetimes_to_taipei(post_dict):
 
     result = dict(post_dict)
 
+    # Convert datetime fields
     for field in datetime_fields:
         if field in result and result[field] is not None:
             dt = result[field]
@@ -78,7 +81,49 @@ def convert_post_datetimes_to_taipei(post_dict):
                 dt_taipei = dt.astimezone(taipei_tz)
                 result[field] = dt_taipei.isoformat()
 
+    # 🔥 FIX: Parse JSON fields from TEXT to dict/list
+    json_fields = ['technical_analysis', 'serper_data', 'generation_params', 'commodity_tags', 'alternative_versions']
+
+    for field in json_fields:
+        if field in result and result[field] is not None:
+            if isinstance(result[field], str):
+                try:
+                    parsed = json.loads(result[field])
+                    result[field] = parsed
+                    # Removed excessive debug logging (was causing 500 logs/sec Railway limit)
+                except Exception as e:
+                    logger.error(f"❌ Failed to parse {field}: {e}")
+                    result[field] = None
+
+    # 🔥 FIX: Rename generation_params to generation_config for frontend compatibility
+    if 'generation_params' in result:
+        result['generation_config'] = result.pop('generation_params')
+        # Removed excessive debug logging (was causing 500 logs/sec Railway limit)
+
     return result
+
+def _get_sorting_label(stock_sorting: dict) -> str:
+    """Generate display label for stock sorting"""
+    if not stock_sorting or not stock_sorting.get('method') or stock_sorting.get('method') == 'none':
+        return "隨機排序"
+
+    method_labels = {
+        'price_change_pct': '漲跌幅',
+        'volume': '成交量',
+        'five_day_return': '五日漲幅',
+        'ten_day_return': '十日漲幅',
+        'twenty_day_return': '二十日漲幅',
+        'market_cap': '市值',
+        'turnover_rate': '周轉率'
+    }
+
+    method = stock_sorting.get('method', 'none')
+    direction = stock_sorting.get('direction', 'desc')
+
+    label = method_labels.get(method, method)
+    arrow = '↓' if direction == 'desc' else '↑'
+
+    return f"{label}{arrow}"
 
 # 配置日誌
 logging.basicConfig(level=logging.INFO)
@@ -163,7 +208,6 @@ except Exception as e:
 
 stock_mapping = {}
 db_pool = None  # Connection pool instead of single connection
-scheduler = None  # APScheduler instance for schedule execution
 
 def get_db_connection():
     """Get a connection from the pool"""
@@ -257,200 +301,6 @@ def create_post_records_table():
         if conn:
             return_db_connection(conn)
 
-def check_schedules():
-    """
-    Check for due schedules and execute them.
-    Called every minute by APScheduler.
-    """
-    if not db_pool:
-        logger.warning("⚠️  數據庫連接池不存在，跳過排程檢查")
-        return
-
-    conn = None
-    try:
-        conn = get_db_connection()
-        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-            # Find schedules where next_run <= now AND status = 'active'
-            now = get_current_time()
-            cursor.execute("""
-                SELECT * FROM schedule_tasks
-                WHERE next_run <= %s AND status = 'active'
-                ORDER BY next_run ASC
-            """, (now,))
-
-            due_tasks = cursor.fetchall()
-
-            if due_tasks:
-                logger.info(f"📅 找到 {len(due_tasks)} 個待執行的排程任務")
-
-                for task in due_tasks:
-                    task_dict = dict(task)
-                    # Parse JSON fields
-                    import json
-                    for field in ['trigger_config', 'schedule_config', 'batch_info', 'generation_config']:
-                        if task_dict.get(field) and isinstance(task_dict[field], str):
-                            try:
-                                task_dict[field] = json.loads(task_dict[field])
-                            except:
-                                pass
-
-                    # Execute the schedule task
-                    execute_schedule_task(task_dict)
-
-        conn.commit()
-
-    except Exception as e:
-        logger.error(f"❌ 排程檢查失敗: {e}")
-        logger.error(f"❌ 錯誤詳情: {traceback.format_exc()}")
-        if conn:
-            conn.rollback()
-    finally:
-        if conn:
-            return_db_connection(conn)
-
-def execute_schedule_task(task):
-    """
-    Execute a single schedule task by generating batch posts.
-
-    Args:
-        task: Schedule task dictionary with parsed JSON fields
-    """
-    task_id = task.get('task_id')
-    task_name = task.get('name', 'Unnamed Task')
-
-    logger.info(f"🚀 開始執行排程任務: {task_name} (ID: {task_id})")
-
-    conn = None
-    try:
-        # Extract configuration
-        trigger_config = task.get('trigger_config', {})
-        generation_config = task.get('generation_config', {})
-        schedule_config = task.get('schedule_config', {})
-
-        trigger_type = trigger_config.get('trigger_type', 'custom_stocks')
-        max_stocks = trigger_config.get('max_stocks', 5)
-        kol_assignment = trigger_config.get('kol_assignment', 'random')
-
-        posting_type = generation_config.get('posting_type', 'analysis')
-        max_words = generation_config.get('max_words', 150)
-
-        logger.info(f"  觸發器: {trigger_type}, 最多股票: {max_stocks}, KOL分配: {kol_assignment}")
-        logger.info(f"  貼文類型: {posting_type}, 最大字數: {max_words}")
-
-        # TODO: Implement batch generation logic here
-        # This should call the same logic as /api/generate-posts endpoint
-        # For now, just log success and update counters
-
-        success = True  # Placeholder - will be actual result
-
-        # Update schedule task status
-        conn = get_db_connection()
-        with conn.cursor() as cursor:
-            # Calculate next_run based on schedule_type
-            next_run = calculate_next_run(task)
-
-            if success:
-                cursor.execute("""
-                    UPDATE schedule_tasks
-                    SET last_run = %s,
-                        next_run = %s,
-                        run_count = run_count + 1,
-                        success_count = success_count + 1,
-                        success_rate = (success_count + 1.0) / (run_count + 1.0) * 100,
-                        updated_at = %s
-                    WHERE task_id = %s
-                """, (get_current_time(), next_run, get_current_time(), task_id))
-                logger.info(f"✅ 排程任務執行成功: {task_name}")
-            else:
-                cursor.execute("""
-                    UPDATE schedule_tasks
-                    SET last_run = %s,
-                        next_run = %s,
-                        run_count = run_count + 1,
-                        failure_count = failure_count + 1,
-                        success_rate = (success_count * 1.0) / (run_count + 1.0) * 100,
-                        updated_at = %s,
-                        last_error = %s
-                    WHERE task_id = %s
-                """, (get_current_time(), next_run, get_current_time(), "執行失敗 (placeholder)", task_id))
-                logger.warning(f"⚠️  排程任務執行失敗: {task_name}")
-
-        conn.commit()
-
-    except Exception as e:
-        logger.error(f"❌ 執行排程任務失敗: {task_name} - {e}")
-        logger.error(f"❌ 錯誤詳情: {traceback.format_exc()}")
-
-        # Update failure count
-        try:
-            if conn is None:
-                conn = get_db_connection()
-            with conn.cursor() as cursor:
-                cursor.execute("""
-                    UPDATE schedule_tasks
-                    SET run_count = run_count + 1,
-                        failure_count = failure_count + 1,
-                        success_rate = (success_count * 1.0) / (run_count + 1.0) * 100,
-                        last_error = %s,
-                        updated_at = %s
-                    WHERE task_id = %s
-                """, (str(e), get_current_time(), task_id))
-            conn.commit()
-        except:
-            pass
-    finally:
-        if conn:
-            return_db_connection(conn)
-
-def calculate_next_run(task):
-    """
-    Calculate the next run time for a schedule task.
-
-    Args:
-        task: Schedule task dictionary
-
-    Returns:
-        datetime: Next run time in Taipei timezone
-    """
-    from datetime import timedelta
-
-    schedule_type = task.get('schedule_type', 'weekday_daily')
-    schedule_config = task.get('schedule_config', {})
-    weekdays_only = schedule_config.get('weekdays_only', True)
-    posting_time_slots = schedule_config.get('posting_time_slots', [])
-
-    now = get_current_time()
-    next_run = now
-
-    if schedule_type == 'weekday_daily' or schedule_type == 'daily':
-        # Get execution time from posting_time_slots
-        if posting_time_slots:
-            time_str = posting_time_slots[0]  # e.g., "14:00"
-            try:
-                time_parts = time_str.split(':')
-                hour = int(time_parts[0])
-                minute = int(time_parts[1])
-
-                # Create next execution time for today
-                next_run = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
-
-                # If today's time has passed, schedule for tomorrow
-                if next_run <= now:
-                    next_run = next_run + timedelta(days=1)
-
-                # Skip weekends if weekdays_only
-                if weekdays_only:
-                    while next_run.weekday() >= 5:  # 5=Saturday, 6=Sunday
-                        next_run = next_run + timedelta(days=1)
-            except:
-                # Fallback: schedule for tomorrow same time
-                next_run = now + timedelta(days=1)
-    else:
-        # For other schedule types, default to next day
-        next_run = now + timedelta(days=1)
-
-    return next_run
-
 def create_schedule_tasks_table():
     """創建 schedule_tasks 表（如果不存在）"""
     conn = None
@@ -478,9 +328,9 @@ def create_schedule_tasks_table():
                 logger.info("📋 開始創建 schedule_tasks 表...")
                 cursor.execute("""
                     CREATE TABLE schedule_tasks (
-                        task_id VARCHAR PRIMARY KEY,
-                        name VARCHAR NOT NULL,
-                        description TEXT,
+                        schedule_id VARCHAR PRIMARY KEY,
+                        schedule_name VARCHAR NOT NULL,
+                        schedule_description TEXT,
                         status VARCHAR DEFAULT 'active',
                         schedule_type VARCHAR NOT NULL,
                         interval_seconds INTEGER DEFAULT 300,
@@ -637,32 +487,6 @@ def startup_event():
                 logger.warning("⚠️ 無法從 FinLab 取得公司資訊")
     except Exception as e:
         logger.error(f"❌ 從 FinLab 載入公司資訊失敗: {e}")
-
-    # 🔥 Initialize APScheduler for schedule execution
-    try:
-        global scheduler
-        from apscheduler.schedulers.asyncio import AsyncIOScheduler
-
-        logger.info("📅 初始化 APScheduler...")
-        scheduler = AsyncIOScheduler(timezone=pytz.timezone('Asia/Taipei'))
-
-        # Add job to check schedules every minute
-        scheduler.add_job(
-            check_schedules,
-            trigger='interval',
-            minutes=1,
-            id='schedule_checker',
-            replace_existing=True,
-            max_instances=1  # Prevent overlapping executions
-        )
-
-        scheduler.start()
-        logger.info("✅ APScheduler 啟動成功 - 每分鐘檢查排程任務")
-    except Exception as e:
-        logger.error(f"❌ APScheduler 初始化失敗: {e}")
-        logger.error(f"❌ 錯誤詳情: {traceback.format_exc()}")
-        # Don't crash startup if scheduler fails
-        scheduler = None
 
 def ensure_finlab_login():
     """確保 FinLab 已登入"""
@@ -918,6 +742,87 @@ async def debug_openai_config():
 
     return result
 
+@app.post("/api/database/migrate/add-schedule-columns")
+async def migrate_add_schedule_columns():
+    """
+    Migration: Add trigger_config and schedule_config columns to schedule_tasks table
+    This is a one-time migration endpoint
+    """
+    logger.info("收到數據庫遷移請求: add-schedule-columns")
+
+    conn = None
+    try:
+        if not db_pool:
+            return {
+                "success": False,
+                "error": "Database connection not available"
+            }
+
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            # Check if columns already exist
+            cursor.execute("""
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = 'schedule_tasks'
+                  AND column_name IN ('trigger_config', 'schedule_config')
+            """)
+            existing_columns = [row['column_name'] for row in cursor.fetchall()]
+
+            if 'trigger_config' in existing_columns and 'schedule_config' in existing_columns:
+                logger.info("✅ Columns already exist, no migration needed")
+                return {
+                    "success": True,
+                    "message": "Columns already exist, no migration needed",
+                    "existing_columns": existing_columns
+                }
+
+            logger.info(f"📝 Existing columns: {existing_columns}")
+            logger.info("🔄 Adding missing columns...")
+
+            # Add columns
+            cursor.execute("""
+                ALTER TABLE schedule_tasks
+                ADD COLUMN IF NOT EXISTS trigger_config JSONB DEFAULT '{}',
+                ADD COLUMN IF NOT EXISTS schedule_config JSONB DEFAULT '{}'
+            """)
+
+            conn.commit()
+            logger.info("✅ Columns added successfully")
+
+            # Verify columns were added
+            cursor.execute("""
+                SELECT column_name, data_type
+                FROM information_schema.columns
+                WHERE table_name = 'schedule_tasks'
+                  AND column_name IN ('trigger_config', 'schedule_config')
+            """)
+
+            result = cursor.fetchall()
+            logger.info(f"📊 Verification: {result}")
+
+            return {
+                "success": True,
+                "message": "Migration completed successfully",
+                "columns_added": [dict(row) for row in result]
+            }
+
+    except Exception as e:
+        logger.error(f"❌ Migration failed: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        if conn:
+            conn.rollback()
+        return {
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+
 @app.get("/api/database/test")
 async def test_database():
     """測試數據庫連接並執行查詢"""
@@ -1116,7 +1021,8 @@ async def reconnect_database():
 async def get_after_hours_limit_up_stocks(
     limit: int = Query(1000, description="股票數量限制"),
     changeThreshold: float = Query(9.5, description="漲跌幅閾值百分比"),
-    industries: str = Query("", description="產業類別篩選")
+    industries: str = Query("", description="產業類別篩選"),
+    sortBy: str = Query(None, description="排序方式: five_day_loss, five_day_gain, volume_desc, etc.")
 ):
     """獲取盤後漲停股票列表 - 支持動態漲跌幅設定"""
     try:
@@ -1222,7 +1128,8 @@ async def get_after_hours_limit_up_stocks(
 async def get_after_hours_limit_down_stocks(
     limit: int = Query(1000, description="股票數量限制"),
     changeThreshold: float = Query(-9.5, description="跌幅閾值百分比"),
-    industries: str = Query("", description="產業類別篩選")
+    industries: str = Query("", description="產業類別篩選"),
+    sortBy: str = Query(None, description="排序方式: five_day_loss, five_day_gain, volume_desc, etc.")
 ):
     """獲取盤後跌停股票列表"""
     try:
@@ -1898,11 +1805,20 @@ _token_cache = {
 async def get_dynamic_auth_token() -> str:
     """使用 forum_200 KOL 憑證動態取得 CMoney API token"""
     try:
-        if (_token_cache["token"] and
-            _token_cache["expires_at"] and
-            get_current_time() < _token_cache["expires_at"]):
-            logger.info("✅ 使用快取的 CMoney API token")
-            return _token_cache["token"]
+        # Check token cache validity
+        if _token_cache["token"] and _token_cache["expires_at"]:
+            current_time = get_current_time()
+            expires_at = _token_cache["expires_at"]
+
+            # Handle timezone-naive datetime from cmoney_client
+            if expires_at.tzinfo is None:
+                # Assume naive datetime is in local timezone (Taipei)
+                taipei_tz = pytz.timezone('Asia/Taipei')
+                expires_at = taipei_tz.localize(expires_at)
+
+            if current_time < expires_at:
+                logger.info("✅ 使用快取的 CMoney API token")
+                return _token_cache["token"]
 
         logger.info("🔐 開始使用 forum_200 憑證登入 CMoney...")
 
@@ -2471,7 +2387,8 @@ async def manual_posting(request: Request):
                     trigger_type=trigger_type,
                     real_time_price_data={},
                     posting_type=posting_type,
-                    max_words=max_words
+                    max_words=max_words,
+                    kol_persona_override=kol_persona  # 🔥 FIX: Pass persona override to respect user's content_style choice
                 )
 
                 # 更新為選中的版本內容
@@ -2501,6 +2418,9 @@ async def manual_posting(request: Request):
         ]
 
         # 生成參數記錄
+        full_triggers_config_from_request = body.get('full_triggers_config', {})
+        logger.info(f"🔍 DEBUG: Received full_triggers_config from request: {json.dumps(full_triggers_config_from_request, ensure_ascii=False)[:200]}...")
+
         generation_params = {
             "method": "manual",
             "kol_persona": kol_persona,
@@ -2508,8 +2428,12 @@ async def manual_posting(request: Request):
             "target_audience": body.get('target_audience', 'active_traders'),
             "trigger_type": trigger_type,
             "posting_type": posting_type,
-            "created_at": now.isoformat()
+            "created_at": now.isoformat(),
+            # 🔥 FIX: Store full triggers config for schedule recreation
+            "full_triggers_config": full_triggers_config_from_request
         }
+
+        logger.info(f"🔍 DEBUG: generation_params to store: {json.dumps(generation_params, ensure_ascii=False)[:200]}...")
 
         # 確認數據庫連接可用
         if not db_pool:
@@ -2713,7 +2637,8 @@ async def performance_test(request: Request):
                     trigger_type=trigger_type,
                     real_time_price_data={},
                     posting_type=posting_type,
-                    max_words=max_words
+                    max_words=max_words,
+                    kol_persona_override=kol_persona  # 🔥 FIX: Pass persona override to respect user's content_style choice
                 )
 
                 title = personalized_title
@@ -3021,6 +2946,16 @@ async def get_posts(
             # 🔥 FIX: Convert naive UTC datetimes to Taipei timezone
             posts_with_timezone = [convert_post_datetimes_to_taipei(dict(post)) for post in posts]
 
+            # 🔍 DEBUG: Log full_triggers_config content for first post
+            if posts_with_timezone:
+                first_post = posts_with_timezone[0]
+                if 'generation_config' in first_post and first_post['generation_config']:
+                    has_ftc = 'full_triggers_config' in first_post['generation_config']
+                    logger.info(f"🔍 DEBUG: First post generation_config has full_triggers_config: {has_ftc}")
+                    if has_ftc:
+                        ftc_content = first_post['generation_config']['full_triggers_config']
+                        logger.info(f"🔍 DEBUG: full_triggers_config content: {json.dumps(ftc_content, ensure_ascii=False)[:300]}...")
+
             return {
                 "success": True,
                 "posts": posts_with_timezone,
@@ -3180,6 +3115,275 @@ async def refresh_all_interactions():
             conn.rollback()
         logger.error(f"❌ Refresh all failed: {e}")
         return {"success": False, "error": str(e), "timestamp": get_current_time().isoformat()}
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+# ==================== Post Management API (Approve/Publish/Edit) ====================
+
+@app.post("/api/posts/{post_id}/approve")
+async def approve_post(post_id: str, request: Request):
+    """審核通過貼文"""
+    logger.info(f"收到 approve_post 請求 - Post ID: {post_id}")
+
+    conn = None
+    try:
+        body = await request.json()
+        reviewer_notes = body.get('reviewer_notes', '')
+        approved_by = body.get('approved_by', 'system')
+        edited_title = body.get('edited_title')
+        edited_content = body.get('edited_content')
+
+        logger.info(f"審核參數: approved_by={approved_by}, has_edits={bool(edited_title or edited_content)}")
+
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            # Build update query
+            update_fields = [
+                "status = 'approved'",
+                "reviewer_notes = %s",
+                "approved_by = %s",
+                "approved_at = %s"
+            ]
+            params = [reviewer_notes, approved_by, get_current_time()]
+
+            # Add edited title/content if provided
+            if edited_title:
+                update_fields.append("title = %s")
+                params.append(edited_title)
+            if edited_content:
+                update_fields.append("content = %s")
+                params.append(edited_content)
+
+            params.append(post_id)
+
+            query = f"""
+                UPDATE post_records
+                SET {', '.join(update_fields)}
+                WHERE post_id = %s
+            """
+
+            cursor.execute(query, params)
+            conn.commit()
+
+            if cursor.rowcount == 0:
+                raise ValueError(f"Post {post_id} not found")
+
+            logger.info(f"✅ 貼文審核成功 - Post ID: {post_id}")
+
+        return {"success": True, "message": "貼文審核通過"}
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"❌ 審核貼文失敗: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+@app.post("/api/posts/{post_id}/publish")
+async def publish_post(post_id: str):
+    """發布貼文到 CMoney"""
+    logger.info(f"收到 publish_post 請求 - Post ID: {post_id}")
+
+    conn = None
+    try:
+        # Get post from database
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute("SELECT * FROM post_records WHERE post_id = %s", (post_id,))
+            post = cursor.fetchone()
+
+            if not post:
+                raise ValueError(f"Post {post_id} not found")
+
+            # Get CMoney credentials
+            from src.clients.cmoney.cmoney_client import CMoneyClient, LoginCredentials
+
+            cmoney_client = CMoneyClient()
+            forum_credentials = get_forum_200_credentials()
+            credentials = LoginCredentials(
+                email=forum_credentials["email"],
+                password=forum_credentials["password"]
+            )
+
+            # Login
+            logger.info("🔐 登入 CMoney API...")
+            login_result = await cmoney_client.login(credentials)
+
+            if not login_result or not login_result.token:
+                raise ValueError("CMoney login failed")
+
+            # Publish post
+            logger.info(f"📤 發布貼文到 CMoney: {post['title'][:50]}...")
+
+            from src.clients.cmoney.cmoney_client import ArticleData
+
+            # Prepare article data with commodity tags and community topic
+            article_data = ArticleData(
+                title=post['title'],
+                text=post['content']
+            )
+
+            # Add community topic if exists
+            if post.get('topic_id'):
+                article_data.communityTopic = {"id": post['topic_id']}
+
+            # Add commodity tags (stock tags) if exists
+            if post.get('stock_code') and post['stock_code'] != '0000':
+                article_data.commodity_tags = [
+                    {
+                        "type": "Stock",
+                        "key": post['stock_code'],
+                        "bullOrBear": 0  # 0 = neutral, can be set based on trigger type
+                    }
+                ]
+
+            publish_result = await cmoney_client.publish_article(
+                access_token=login_result.token,
+                article=article_data
+            )
+
+            if not publish_result or not publish_result.success:
+                error_msg = publish_result.error_message if publish_result else "Unknown error"
+                raise ValueError(f"Failed to publish to CMoney: {error_msg}")
+
+            # Update database
+            cursor.execute("""
+                UPDATE post_records
+                SET status = 'published',
+                    published_at = %s,
+                    cmoney_post_id = %s,
+                    cmoney_post_url = %s
+                WHERE post_id = %s
+            """, (
+                get_current_time(),
+                publish_result.post_id,
+                publish_result.post_url,
+                post_id
+            ))
+            conn.commit()
+
+            logger.info(f"✅ 貼文發布成功 - Article ID: {publish_result.post_id}")
+
+        return {
+            "success": True,
+            "post_id": publish_result.post_id,
+            "post_url": publish_result.post_url
+        }
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"❌ 發布貼文失敗: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+@app.put("/api/posts/{post_id}/content")
+async def update_post_content(post_id: str, request: Request):
+    """更新貼文內容（不改變狀態）"""
+    logger.info(f"收到 update_post_content 請求 - Post ID: {post_id}")
+
+    conn = None
+    try:
+        body = await request.json()
+        title = body.get('title')
+        content = body.get('content')
+        content_md = body.get('content_md')
+
+        if not title and not content:
+            raise ValueError("Must provide at least title or content")
+
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            update_fields = []
+            params = []
+
+            if title:
+                update_fields.append("title = %s")
+                params.append(title)
+            if content:
+                update_fields.append("content = %s")
+                params.append(content)
+            if content_md:
+                update_fields.append("content_md = %s")
+                params.append(content_md)
+
+            # Always update updated_at
+            update_fields.append("updated_at = %s")
+            params.append(get_current_time())
+
+            params.append(post_id)
+
+            query = f"""
+                UPDATE post_records
+                SET {', '.join(update_fields)}
+                WHERE post_id = %s
+            """
+
+            cursor.execute(query, params)
+            conn.commit()
+
+            if cursor.rowcount == 0:
+                raise ValueError(f"Post {post_id} not found")
+
+            logger.info(f"✅ 貼文內容更新成功 - Post ID: {post_id}")
+
+        return {"success": True, "message": "貼文內容已更新"}
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"❌ 更新貼文內容失敗: {e}")
+        return {"success": False, "error": str(e)}
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+@app.delete("/api/posts/{post_id}")
+async def delete_post(post_id: str):
+    """刪除貼文（軟刪除）"""
+    logger.info(f"🗑️ 開始刪除貼文 - Post ID: {post_id}")
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            # 檢查貼文是否存在
+            cursor.execute("""
+                SELECT post_id, status, cmoney_post_id, kol_serial
+                FROM post_records
+                WHERE post_id = %s
+            """, (post_id,))
+
+            existing_post = cursor.fetchone()
+            if not existing_post:
+                logger.error(f"❌ 貼文不存在 - Post ID: {post_id}")
+                raise HTTPException(status_code=404, detail=f"貼文不存在: {post_id}")
+
+            # 軟刪除：更新狀態為 'deleted'
+            cursor.execute("""
+                UPDATE post_records
+                SET status = 'deleted',
+                    updated_at = %s
+                WHERE post_id = %s
+            """, (get_current_time(), post_id))
+
+            conn.commit()
+
+            logger.info(f"✅ 貼文軟刪除成功 - Post ID: {post_id}")
+            return {"success": True, "message": "貼文已刪除"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"❌ 刪除貼文失敗: {e}")
+        raise HTTPException(status_code=500, detail=f"刪除貼文失敗: {str(e)}")
     finally:
         if conn:
             return_db_connection(conn)
@@ -3989,7 +4193,7 @@ async def import_post_records():
 
 @app.get("/api/kol/list")
 async def get_kol_list():
-    """獲取 KOL 列表"""
+    """獲取 KOL 列表（含真實統計數據）"""
     logger.info("收到 get_kol_list 請求")
 
     conn = None
@@ -4006,10 +4210,39 @@ async def get_kol_list():
 
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-            cursor.execute("SELECT * FROM kol_profiles ORDER BY serial")
+            # 使用 LEFT JOIN 計算每個 KOL 的真實統計數據
+            query = """
+                SELECT
+                    k.*,
+                    COALESCE(COUNT(p.post_id), 0) as total_posts,
+                    COALESCE(COUNT(CASE WHEN p.status = 'published' THEN 1 END), 0) as published_posts,
+                    COALESCE(AVG(CASE
+                        WHEN p.status = 'published' AND (p.likes + p.comments + p.shares) > 0
+                        THEN (p.likes + p.comments + p.shares) * 1.0
+                        ELSE NULL
+                    END), 0) as avg_interaction_rate
+                FROM kol_profiles k
+                LEFT JOIN post_records p ON k.serial::integer = p.kol_serial
+                GROUP BY k.id, k.serial, k.nickname, k.member_id, k.persona, k.status, k.owner,
+                         k.email, k.password, k.whitelist, k.notes, k.post_times, k.target_audience,
+                         k.interaction_threshold, k.content_types, k.common_terms, k.colloquial_terms,
+                         k.tone_style, k.typing_habit, k.backstory, k.expertise, k.data_source,
+                         k.prompt_persona, k.prompt_style, k.prompt_guardrails, k.prompt_skeleton,
+                         k.prompt_cta, k.prompt_hashtags, k.signature, k.emoji_pack, k.model_id,
+                         k.template_variant, k.model_temp, k.max_tokens, k.title_openers,
+                         k.title_signature_patterns, k.title_tail_word, k.title_banned_words,
+                         k.title_style_examples, k.title_retry_max, k.tone_formal, k.tone_emotion,
+                         k.tone_confidence, k.tone_urgency, k.tone_interaction, k.question_ratio,
+                         k.content_length, k.interaction_starters, k.require_finlab_api, k.allow_hashtags,
+                         k.created_time, k.last_updated, k.best_performing_post, k.humor_probability,
+                         k.humor_enabled, k.content_style_probabilities, k.analysis_depth_probabilities,
+                         k.content_length_probabilities
+                ORDER BY k.serial
+            """
+            cursor.execute(query)
             kols = cursor.fetchall()
 
-            logger.info(f"查詢到 {len(kols)} 個 KOL 配置")
+            logger.info(f"查詢到 {len(kols)} 個 KOL 配置（含統計數據）")
 
             return {
                 "success": True,
@@ -4026,6 +4259,262 @@ async def get_kol_list():
             "count": 0,
             "error": str(e),
             "timestamp": get_current_time().isoformat()
+        }
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+
+@app.get("/api/kol/{serial}")
+async def get_kol_detail(serial: str):
+    """獲取單個 KOL 的詳細資料（含統計數據）"""
+    logger.info(f"收到 get_kol_detail 請求 - Serial: {serial}")
+
+    conn = None
+    try:
+        if not db_pool:
+            logger.warning("數據庫連接不可用")
+            return {
+                "success": False,
+                "error": "數據庫連接不可用"
+            }
+
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            # 查詢單個 KOL 的資料，包含統計數據
+            query = """
+                SELECT
+                    k.*,
+                    COALESCE(COUNT(p.post_id), 0) as total_posts,
+                    COALESCE(COUNT(CASE WHEN p.status = 'published' THEN 1 END), 0) as published_posts,
+                    COALESCE(AVG(CASE
+                        WHEN p.status = 'published' AND (p.likes + p.comments + p.shares) > 0
+                        THEN (p.likes + p.comments + p.shares) * 1.0
+                        ELSE NULL
+                    END), 0) as avg_interaction_rate
+                FROM kol_profiles k
+                LEFT JOIN post_records p ON k.serial::integer = p.kol_serial
+                WHERE k.serial = %s
+                GROUP BY k.id, k.serial, k.nickname, k.member_id, k.persona, k.status, k.owner,
+                         k.email, k.password, k.whitelist, k.notes, k.post_times, k.target_audience,
+                         k.interaction_threshold, k.content_types, k.common_terms, k.colloquial_terms,
+                         k.tone_style, k.typing_habit, k.backstory, k.expertise, k.data_source,
+                         k.prompt_persona, k.prompt_style, k.prompt_guardrails, k.prompt_skeleton,
+                         k.prompt_cta, k.prompt_hashtags, k.signature, k.emoji_pack, k.model_id,
+                         k.template_variant, k.model_temp, k.max_tokens, k.title_openers,
+                         k.title_signature_patterns, k.title_tail_word, k.title_banned_words,
+                         k.title_style_examples, k.title_retry_max, k.tone_formal, k.tone_emotion,
+                         k.tone_confidence, k.tone_urgency, k.tone_interaction, k.question_ratio,
+                         k.content_length, k.interaction_starters, k.require_finlab_api, k.allow_hashtags,
+                         k.created_time, k.last_updated, k.best_performing_post, k.humor_probability,
+                         k.humor_enabled, k.content_style_probabilities, k.analysis_depth_probabilities,
+                         k.content_length_probabilities
+            """
+            cursor.execute(query, (serial,))
+            kol = cursor.fetchone()
+
+            if not kol:
+                logger.warning(f"找不到 serial 為 {serial} 的 KOL")
+                return {
+                    "success": False,
+                    "error": f"找不到 serial 為 {serial} 的 KOL"
+                }
+
+            logger.info(f"查詢到 KOL: {kol['nickname']}")
+            return dict(kol)
+
+    except Exception as e:
+        logger.error(f"查詢 KOL 詳情失敗: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+
+@app.get("/api/kol/weekly-posts")
+async def get_weekly_posts():
+    """獲取本週發文總數"""
+    logger.info("收到 get_weekly_posts 請求")
+
+    conn = None
+    try:
+        if not db_pool:
+            logger.warning("數據庫連接不可用，返回空數據")
+            return {
+                "success": False,
+                "weekly_posts": 0,
+                "error": "數據庫連接不可用",
+                "timestamp": get_current_time().isoformat()
+            }
+
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            # 計算本週發文數（從週一開始）
+            query = """
+                SELECT COUNT(*) as weekly_posts
+                FROM post_records
+                WHERE created_at >= date_trunc('week', CURRENT_DATE)
+                  AND status = 'published'
+            """
+            cursor.execute(query)
+            result = cursor.fetchone()
+            weekly_posts = result[0] if result else 0
+
+            logger.info(f"本週發文數: {weekly_posts}")
+
+            return {
+                "success": True,
+                "weekly_posts": weekly_posts,
+                "timestamp": get_current_time().isoformat()
+            }
+
+    except Exception as e:
+        logger.error(f"查詢本週發文數失敗: {e}")
+        return {
+            "success": False,
+            "weekly_posts": 0,
+            "error": str(e),
+            "timestamp": get_current_time().isoformat()
+        }
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+
+@app.get("/api/dashboard/kols/{serial}/posts")
+async def get_kol_posts(serial: str, page: int = 1, page_size: int = 10):
+    """獲取 KOL 的發文歷史"""
+    logger.info(f"收到 get_kol_posts 請求 - Serial: {serial}, Page: {page}, PageSize: {page_size}")
+
+    conn = None
+    try:
+        if not db_pool:
+            logger.warning("數據庫連接不可用")
+            return {
+                "success": False,
+                "error": "數據庫連接不可用"
+            }
+
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            # Calculate offset
+            offset = (page - 1) * page_size
+
+            # Count total posts for this KOL
+            count_query = """
+                SELECT COUNT(*) as count
+                FROM post_records
+                WHERE kol_serial = %s
+            """
+            cursor.execute(count_query, (int(serial),))
+            total = cursor.fetchone()['count']
+
+            # Get paginated posts
+            query = """
+                SELECT
+                    post_id,
+                    title,
+                    content,
+                    status,
+                    stock_code,
+                    created_at,
+                    published_at,
+                    likes,
+                    comments,
+                    shares,
+                    cmoney_post_url
+                FROM post_records
+                WHERE kol_serial = %s
+                ORDER BY created_at DESC
+                LIMIT %s OFFSET %s
+            """
+            cursor.execute(query, (int(serial), page_size, offset))
+            posts = cursor.fetchall()
+
+            logger.info(f"查詢到 {len(posts)} 篇貼文，總數: {total}")
+
+            return {
+                "success": True,
+                "data": {
+                    "posts": [dict(post) for post in posts],
+                    "pagination": {
+                        "current_page": page,
+                        "page_size": page_size,
+                        "total_items": total,
+                        "total_pages": (total + page_size - 1) // page_size
+                    }
+                }
+            }
+
+    except Exception as e:
+        logger.error(f"查詢 KOL 發文歷史失敗: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {
+            "success": False,
+            "error": str(e)
+        }
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+
+@app.get("/api/dashboard/kols/{serial}/interactions")
+async def get_kol_interactions(serial: str):
+    """獲取 KOL 的互動數據和趨勢"""
+    logger.info(f"收到 get_kol_interactions 請求 - Serial: {serial}")
+
+    conn = None
+    try:
+        if not db_pool:
+            logger.warning("數據庫連接不可用")
+            return {
+                "success": False,
+                "error": "數據庫連接不可用"
+            }
+
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            # Get interaction trend data (daily aggregation for last 30 days)
+            query = """
+                SELECT
+                    DATE(created_at) as date,
+                    COUNT(*) as post_count,
+                    COALESCE(SUM(likes), 0) as total_likes,
+                    COALESCE(SUM(comments), 0) as total_comments,
+                    COALESCE(SUM(shares), 0) as total_shares,
+                    COALESCE(AVG(likes), 0) as avg_likes,
+                    COALESCE(AVG(comments), 0) as avg_comments,
+                    COALESCE(AVG(shares), 0) as avg_shares
+                FROM post_records
+                WHERE kol_serial = %s
+                  AND status = 'published'
+                  AND created_at >= CURRENT_DATE - INTERVAL '30 days'
+                GROUP BY DATE(created_at)
+                ORDER BY DATE(created_at) DESC
+            """
+            cursor.execute(query, (int(serial),))
+            trend_data = cursor.fetchall()
+
+            logger.info(f"查詢到 {len(trend_data)} 天的互動數據")
+
+            return {
+                "success": True,
+                "data": {
+                    "interaction_trend": [dict(row) for row in trend_data]
+                }
+            }
+
+    except Exception as e:
+        logger.error(f"查詢 KOL 互動數據失敗: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {
+            "success": False,
+            "error": str(e)
         }
     finally:
         if conn:
@@ -4685,21 +5174,58 @@ async def get_schedule_tasks(
 
             conn.commit()
 
-            # 🔥 FIX: Parse JSON fields from TEXT to objects
+            # 🔥 FIX: Handle JSON fields (JSONB or TEXT types)
             import json
             parsed_tasks = []
             for task in tasks:
                 task_dict = dict(task)
 
-                # Parse JSON fields (stored as TEXT in database)
+                # Parse JSON fields - handle both JSONB (already dict) and TEXT (needs parsing)
                 json_fields = ['trigger_config', 'schedule_config', 'batch_info', 'generation_config']
                 for field in json_fields:
-                    if task_dict.get(field):
-                        try:
-                            task_dict[field] = json.loads(task_dict[field])
-                        except (json.JSONDecodeError, TypeError):
-                            logger.warning(f"Failed to parse {field} for task {task_dict.get('task_id')}")
-                            task_dict[field] = None
+                    field_value = task_dict.get(field)
+                    if field_value:
+                        # If already a dict (JSONB type from PostgreSQL), keep as is
+                        if isinstance(field_value, dict):
+                            continue
+                        # If string (TEXT type), parse it
+                        elif isinstance(field_value, str):
+                            try:
+                                task_dict[field] = json.loads(field_value)
+                            except (json.JSONDecodeError, TypeError) as e:
+                                logger.warning(f"Failed to parse {field} for task {task_dict.get('schedule_id')}: {e}")
+                                task_dict[field] = None
+
+                # 🔥 FIX: Add display-friendly fields to help frontend
+                # Extract stock_sorting for easier display
+                if task_dict.get('generation_config'):
+                    gen_config = task_dict['generation_config']
+                    # Ensure gen_config is a dict
+                    if isinstance(gen_config, dict):
+                        stock_sorting = gen_config.get('stock_sorting', {})
+                        # Ensure stock_sorting is a dict before accessing .get()
+                        if isinstance(stock_sorting, dict):
+                            task_dict['stock_sorting_display'] = {
+                                'method': stock_sorting.get('method', 'none'),
+                                'direction': stock_sorting.get('direction', 'desc'),
+                                'label': _get_sorting_label(stock_sorting)
+                            }
+                        else:
+                            # Fallback for non-dict stock_sorting
+                            task_dict['stock_sorting_display'] = {
+                                'method': 'none',
+                                'direction': 'desc',
+                                'label': '隨機排序'
+                            }
+
+                # Ensure daily_execution_time is present (for frontend compatibility)
+                if not task_dict.get('daily_execution_time') and task_dict.get('schedule_config'):
+                    # Try to extract from schedule_config.posting_time_slots
+                    schedule_config = task_dict['schedule_config']
+                    if isinstance(schedule_config, dict):
+                        posting_time_slots = schedule_config.get('posting_time_slots', [])
+                        if posting_time_slots and len(posting_time_slots) > 0:
+                            task_dict['daily_execution_time'] = posting_time_slots[0]
 
                 parsed_tasks.append(task_dict)
 
@@ -4891,7 +5417,14 @@ async def get_scheduler_status():
             earliest_start_row = cursor.fetchone()
             uptime = "N/A"
             if earliest_start_row['earliest_start']:
-                uptime_delta = get_current_time() - earliest_start_row['earliest_start']
+                # Ensure both datetimes are timezone-aware to avoid subtraction error
+                earliest_start = earliest_start_row['earliest_start']
+                if earliest_start.tzinfo is None:
+                    # Database returns naive datetime, assume it's UTC and convert to Taipei
+                    tz = pytz.timezone('Asia/Taipei')
+                    earliest_start = pytz.utc.localize(earliest_start).astimezone(tz)
+
+                uptime_delta = get_current_time() - earliest_start
                 days = uptime_delta.days
                 hours = uptime_delta.seconds // 3600
                 uptime = f"{days} days, {hours} hours"
@@ -4954,7 +5487,7 @@ async def start_scheduler():
                 UPDATE schedule_tasks
                 SET status = 'active', updated_at = NOW()
                 WHERE status = 'paused'
-                RETURNING id, kol_nickname, schedule_type
+                RETURNING schedule_id, schedule_name, schedule_type
             """)
             activated_tasks = cursor.fetchall()
 
@@ -5007,7 +5540,7 @@ async def stop_scheduler():
                 UPDATE schedule_tasks
                 SET status = 'paused', updated_at = NOW()
                 WHERE status = 'active'
-                RETURNING id, kol_nickname, schedule_type
+                RETURNING schedule_id, schedule_name, schedule_type
             """)
             paused_tasks = cursor.fetchall()
 
@@ -5076,30 +5609,81 @@ async def create_schedule(request: Request):
             # 生成配置 (generation_config)
             generation_config = data.get('generation_config', {})
 
-            # 觸發器配置 (trigger_config)
-            trigger_type = generation_config.get('trigger_type', 'limit_up_after_hours')
-            stock_sorting = generation_config.get('stock_sorting', {})
-            kol_assignment = generation_config.get('kol_assignment', 'random')
-            max_stocks = generation_config.get('max_stocks', 5)
+            # 🔥 FIX: Extract correct parameters from full_triggers_config
+            schedule_config_data = data.get('schedule_config', {})
+            full_triggers_config = schedule_config_data.get('full_triggers_config', {})
 
-            trigger_config = {
-                "trigger_type": trigger_type,
-                "stock_codes": [],  # 將由排程器執行時根據觸發器動態獲取
-                "kol_assignment": kol_assignment,
-                "max_stocks": max_stocks,
-                "stock_sorting": stock_sorting
-            }
+            # Map stockCountLimit → max_stocks
+            if 'stockCountLimit' in full_triggers_config:
+                generation_config['max_stocks'] = full_triggers_config['stockCountLimit']
+                logger.info(f"🔧 Mapped stockCountLimit={full_triggers_config['stockCountLimit']} → max_stocks")
 
-            # 排程配置 (schedule_config)
+            # Map stockFilterCriteria → stock_sorting
+            if 'stockFilterCriteria' in full_triggers_config and full_triggers_config['stockFilterCriteria']:
+                criteria_list = full_triggers_config['stockFilterCriteria']
+                if isinstance(criteria_list, list) and len(criteria_list) > 0:
+                    # Map the first criteria to stock_sorting
+                    criteria_map = {
+                        'five_day_gain': 'five_day_change_desc',
+                        'five_day_loss': 'five_day_loss_desc',
+                        'daily_gain': 'daily_change_desc',
+                        'daily_loss': 'daily_change_asc',
+                        'volume_high': 'volume_desc',
+                        'volume_low': 'volume_asc'
+                    }
+                    first_criteria = criteria_list[0]
+                    stock_sorting = criteria_map.get(first_criteria, first_criteria)
+                    generation_config['stock_sorting'] = stock_sorting
+                    logger.info(f"🔧 Mapped stockFilterCriteria={first_criteria} → stock_sorting={stock_sorting}")
+
+            # Extract daily_execution_time first (needed for next_run calculation later)
             daily_execution_time = data.get('daily_execution_time')
-            posting_time_slots = [daily_execution_time] if daily_execution_time else []
 
-            schedule_config = {
-                "enabled": enabled,
-                "posting_time_slots": posting_time_slots,
-                "timezone": timezone,
-                "weekdays_only": weekdays_only
-            }
+            # 🔥 DEBUG: Log what frontend sent
+            logger.info(f"🔍 Frontend sent trigger_config type: {type(data.get('trigger_config'))}")
+            logger.info(f"🔍 Frontend sent trigger_config: {data.get('trigger_config')}")
+            logger.info(f"🔍 Frontend sent schedule_config type: {type(data.get('schedule_config'))}")
+            logger.info(f"🔍 Frontend sent schedule_config: {str(data.get('schedule_config'))[:500]}")
+
+            # 🔥 FIX: Use trigger_config from frontend if provided AND not empty
+            trigger_config = data.get('trigger_config')
+            # Check if trigger_config is None or empty dict (both should use fallback)
+            if not trigger_config or (isinstance(trigger_config, dict) and len(trigger_config) == 0):
+                # Fallback: Build from generation_config for backward compatibility
+                trigger_type = generation_config.get('trigger_type', 'limit_up_after_hours')
+                stock_sorting = generation_config.get('stock_sorting', {})
+                kol_assignment = generation_config.get('kol_assignment', 'random')
+                max_stocks = generation_config.get('max_stocks', 5)
+
+                trigger_config = {
+                    "trigger_type": trigger_type,
+                    "stock_codes": [],  # 將由排程器執行時根據觸發器動態獲取
+                    "kol_assignment": kol_assignment,
+                    "max_stocks": max_stocks,
+                    "stock_sorting": stock_sorting
+                }
+            else:
+                # 🔥 FIX: Ensure trigger_config uses the correct max_stocks from stockCountLimit
+                if 'stockCountLimit' in full_triggers_config:
+                    trigger_config['max_stocks'] = full_triggers_config['stockCountLimit']
+                    logger.info(f"🔧 Updated trigger_config.max_stocks={full_triggers_config['stockCountLimit']}")
+
+            # 🔥 FIX: Use schedule_config from frontend if provided, otherwise build from data
+            schedule_config = data.get('schedule_config')
+            if not schedule_config:
+                # Fallback: Build from daily_execution_time for backward compatibility
+                posting_time_slots = [daily_execution_time] if daily_execution_time else []
+
+                schedule_config = {
+                    "enabled": enabled,
+                    "posting_time_slots": posting_time_slots,
+                    "timezone": timezone,
+                    "weekdays_only": weekdays_only
+                }
+
+            # Log what we're storing
+            logger.info(f"📝 Storing trigger_config: {str(trigger_config)[:200]}...")
+            logger.info(f"📝 Storing schedule_config: {str(schedule_config)[:200]}...")
 
             # 批次信息 (batch_info)
             batch_info = data.get('batch_info', {})
@@ -5136,26 +5720,28 @@ async def create_schedule(request: Request):
             # 插入排程任務到資料庫
             insert_sql = """
                 INSERT INTO schedule_tasks (
-                    task_id, name, description, status, schedule_type,
+                    schedule_id, schedule_name, schedule_description, status, schedule_type,
                     interval_seconds, auto_posting, max_posts_per_hour,
-                    schedule_config, trigger_config, batch_info, generation_config,
+                    timezone, weekdays_only, daily_execution_time, batch_info, generation_config,
+                    trigger_config, schedule_config,
                     next_run, created_at, updated_at,
-                    run_count, success_count, failure_count, success_rate
+                    run_count, success_count, failure_count
                 ) VALUES (
                     %s, %s, %s, %s, %s,
                     %s, %s, %s,
-                    %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s,
+                    %s, %s,
                     %s, NOW(), NOW(),
-                    0, 0, 0, 0.0
+                    0, 0, 0
                 )
-                RETURNING task_id, name, status, next_run, created_at
+                RETURNING schedule_id, schedule_name, status, next_run, created_at
             """
 
             status = 'active' if enabled else 'paused'
 
             import json
             cursor.execute(insert_sql, (
-                task_id,
+                task_id,  # This maps to schedule_id column
                 schedule_name,
                 schedule_description,
                 status,
@@ -5163,23 +5749,26 @@ async def create_schedule(request: Request):
                 interval_seconds,
                 auto_posting,
                 max_posts_per_hour,
-                json.dumps(schedule_config),
-                json.dumps(trigger_config),
+                timezone,
+                weekdays_only,
+                daily_execution_time,  # 🔥 FIX: Add daily_execution_time
                 json.dumps(batch_info),
                 json.dumps(generation_config),
+                json.dumps(trigger_config),  # 🔥 FIX: Add trigger_config
+                json.dumps(schedule_config),  # 🔥 FIX: Add schedule_config
                 next_run
             ))
 
             result = cursor.fetchone()
             conn.commit()
 
-            logger.info(f"排程創建成功: task_id={task_id}, name={schedule_name}")
+            logger.info(f"排程創建成功: schedule_id={task_id}, name={schedule_name}")
 
             return {
                 "success": True,
                 "message": "排程創建成功",
-                "task_id": result['task_id'],
-                "task_name": result['name'],
+                "task_id": result['schedule_id'],  # Return as task_id for backwards compatibility
+                "task_name": result['schedule_name'],
                 "status": result['status'],
                 "next_run": result['next_run'].isoformat() if result['next_run'] else None,
                 "created_at": result['created_at'].isoformat(),
@@ -5200,177 +5789,616 @@ async def create_schedule(request: Request):
         if conn:
             return_db_connection(conn)
 
+@app.post("/api/schedule/{task_id}/auto-posting")
+async def toggle_auto_posting(task_id: str, request: Request):
+    """切換排程的自動發文功能"""
+    logger.info(f"收到 toggle_auto_posting 請求 - Task ID: {task_id}")
+
+    conn = None
+    try:
+        body = await request.json()
+        enabled = body.get('enabled', False)
+
+        logger.info(f"設定自動發文: {enabled}")
+
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                UPDATE schedule_tasks
+                SET auto_posting = %s, updated_at = NOW()
+                WHERE schedule_id = %s
+            """, (enabled, task_id))
+
+            conn.commit()
+
+            if cursor.rowcount == 0:
+                raise ValueError(f"Schedule {task_id} not found")
+
+            logger.info(f"✅ 自動發文設定更新成功 - Task ID: {task_id}, enabled={enabled}")
+
+        return {
+            "success": True,
+            "task_id": task_id,
+            "message": f"自動發文已{'開啟' if enabled else '關閉'}",
+            "enabled": enabled
+        }
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"❌ 更新自動發文設定失敗: {e}")
+        return {
+            "success": False,
+            "message": f"更新失敗: {str(e)}",
+            "timestamp": get_current_time().isoformat()
+        }
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+
 @app.post("/api/schedule/execute/{task_id}")
-async def execute_schedule_now(task_id: str):
-    """立即執行指定的排程任務"""
+async def execute_schedule_now(task_id: str, request: Request):
+    """
+    立即執行排程 (手動觸發)
+    Execute a schedule immediately without waiting for scheduled time
+    """
     logger.info(f"收到立即執行排程請求 - Task ID: {task_id}")
 
     conn = None
     try:
-        conn = get_db_connection()
+        if not db_pool:
+            return {
+                "success": False,
+                "error": "數據庫連接不可用"
+            }
 
+        # Get schedule details from database
+        conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-            # 獲取排程任務配置
             cursor.execute("""
-                SELECT task_id, name, trigger_config, schedule_config, generation_config
+                SELECT *
                 FROM schedule_tasks
-                WHERE task_id = %s
+                WHERE schedule_id = %s
             """, (task_id,))
 
             schedule = cursor.fetchone()
 
             if not schedule:
-                logger.error(f"排程任務不存在: {task_id}")
                 return {
                     "success": False,
-                    "error": "排程任務不存在"
+                    "error": f"找不到排程: {task_id}"
                 }
 
-            logger.info(f"📋 排程資訊: {schedule['name']}")
+        logger.info(f"📋 排程資訊: {schedule['schedule_name']}")
 
-            # 解析 JSON 配置
-            trigger_config = json.loads(schedule['trigger_config']) if isinstance(schedule['trigger_config'], str) else schedule['trigger_config']
-            schedule_config = json.loads(schedule['schedule_config']) if isinstance(schedule['schedule_config'], str) else schedule['schedule_config']
-            generation_config = json.loads(schedule['generation_config']) if isinstance(schedule['generation_config'], str) else schedule['generation_config']
+        # Extract configuration
+        trigger_config = schedule.get('trigger_config', {})
+        schedule_config = schedule.get('schedule_config', {})
+        generation_config = schedule.get('generation_config', {})
 
-            logger.info(f"🔍 trigger_config: {json.dumps(trigger_config, ensure_ascii=False)[:200]}...")
-            logger.info(f"🔍 schedule_config: {json.dumps(schedule_config, ensure_ascii=False)[:200]}...")
+        # Parse JSON fields if they're strings
+        if isinstance(trigger_config, str):
+            trigger_config = json.loads(trigger_config)
+        if isinstance(schedule_config, str):
+            schedule_config = json.loads(schedule_config)
+        if isinstance(generation_config, str):
+            generation_config = json.loads(generation_config)
 
-            # 從 schedule_config 的 full_triggers_config 獲取配置
-            full_triggers_config = schedule_config.get('full_triggers_config', {})
-            trigger_type = full_triggers_config.get('trigger_type') or generation_config.get('trigger_type', 'custom_stocks')
+        logger.info(f"🔍 trigger_config: {json.dumps(trigger_config, ensure_ascii=False)[:200]}")
+        logger.info(f"🔍 schedule_config: {json.dumps(schedule_config, ensure_ascii=False)[:200]}")
 
-            # 獲取最大股票數
-            max_stocks = full_triggers_config.get('stockCountLimit') or trigger_config.get('max_stocks', 5)
+        # 🔥 FIX: Prioritize values from full_triggers_config if available
+        full_triggers_config = schedule_config.get('full_triggers_config', {})
+
+        # Extract KOL assignment and max stocks
+        kol_assignment = trigger_config.get('kol_assignment', 'random')
+
+        # Use stockCountLimit from full_triggers_config if available, otherwise fallback to trigger_config
+        if 'stockCountLimit' in full_triggers_config:
+            max_stocks = full_triggers_config['stockCountLimit']
             logger.info(f"🔧 Using max_stocks={max_stocks} from full_triggers_config.stockCountLimit")
+        else:
+            max_stocks = trigger_config.get('max_stocks', 5)
+            logger.info(f"🔧 Using max_stocks={max_stocks} from trigger_config (fallback)")
 
-            # 獲取股票篩選標準
-            stock_filter_criteria = full_triggers_config.get('stockFilterCriteria', [])
+        # Extract stock_sorting criteria from full_triggers_config if available
+        stock_filter_criteria = full_triggers_config.get('stockFilterCriteria', [])
+        if stock_filter_criteria:
             logger.info(f"🔧 Using stockFilterCriteria={stock_filter_criteria} from full_triggers_config")
 
-            # 執行觸發器獲取股票列表
-            logger.info(f"🎯 執行觸發器: {trigger_type}")
+        # 🔥 FIX: Support both old format (stock_codes) and new format (triggerKey)
+        stock_codes = trigger_config.get('stock_codes', [])
+        trigger_key = trigger_config.get('triggerKey') or trigger_config.get('trigger_type')
 
-            # 從 stockFilterCriteria 推斷排序方式
-            sort_by = None
-            if stock_filter_criteria:
-                if 'five_day_gain' in stock_filter_criteria:
-                    sort_by = 'five_day_gain'
-                    logger.info(f"🔧 Mapped stockFilterCriteria[0]={stock_filter_criteria[0]} → sortBy={sort_by}")
+        # If no pre-configured stock codes, execute trigger to get stocks
+        if not stock_codes and trigger_key:
+            logger.info(f"🎯 執行觸發器: {trigger_key}")
 
-            stock_codes = []
+            # Get threshold and filters from trigger_config
+            threshold = trigger_config.get('threshold', 20)
+            filters = trigger_config.get('filters', {})
 
-            # 根據觸發器類型調用對應的 API（直接調用函數而非 HTTP）
-            if trigger_type == 'limit_up_after_hours':
-                # 盤後漲停股
-                logger.info("📡 調用盤後漲停股函數...")
-                try:
-                    # 從配置中獲取高量/低量設定
-                    is_high_volume = full_triggers_config.get('limit_up_after_hours_high_volume', False)
-                    is_low_volume = full_triggers_config.get('limit_up_after_hours_low_volume', False)
-
-                    volume_type = None
-                    if is_high_volume:
-                        volume_type = 'high'
-                    elif is_low_volume:
-                        volume_type = 'low'
-
-                    # 直接調用 get_after_hours_limit_up 函數
-                    result = await get_after_hours_limit_up(limit=max_stocks, volume_type=volume_type)
-                    stock_codes = result.get('stock_codes', [])
-                    logger.info(f"✅ 獲取到 {len(stock_codes)} 支盤後漲停股票")
-                except Exception as e:
-                    logger.error(f"❌ 盤後漲停股函數失敗: {e}")
-
-            elif trigger_type == 'intraday_gainers_by_amount':
-                # 盤中漲幅排序+成交額
-                logger.info("📡 調用盤中漲幅排序+成交額函數...")
-                try:
-                    # 直接調用 get_intraday_gainers_by_amount 函數
-                    result = await get_intraday_gainers_by_amount(limit=max_stocks)
-                    stock_codes = result.get('stocks', [])  # 注意：這個 API 返回 'stocks' 而非 'stock_codes'
-                    logger.info(f"✅ 獲取到 {len(stock_codes)} 支盤中漲幅股票")
-                except Exception as e:
-                    logger.error(f"❌ 盤中漲幅函數失敗: {e}")
-                    logger.error(f"錯誤詳情: {traceback.format_exc()}")
-
-            elif trigger_type == 'trending_topics':
-                # 熱門話題
-                logger.info("📡 調用熱門話題函數...")
-                try:
-                    # 直接調用 get_trending_topics 函數
-                    result = await get_trending_topics(limit=max_stocks)
-                    topics = result.get('topics', [])
-                    # 從話題中提取股票代碼
-                    stock_codes = []
-                    for topic in topics[:max_stocks]:
-                        if 'stock_code' in topic:
-                            stock_codes.append(topic['stock_code'])
-                    logger.info(f"✅ 從 {len(topics)} 個熱門話題獲取到 {len(stock_codes)} 支股票")
-                except Exception as e:
-                    logger.error(f"❌ 熱門話題函數失敗: {e}")
-
-            elif trigger_type == 'custom_stocks':
-                # 自訂股票列表
-                stock_codes = schedule_config.get('stock_codes', []) or full_triggers_config.get('stock_codes', [])
-                logger.info(f"✅ 使用自訂股票列表: {len(stock_codes)} 支股票")
-
-            else:
-                # 未支持的觸發器類型 - 嘗試從 schedule_config 獲取
-                stock_codes = schedule_config.get('stock_codes', []) or full_triggers_config.get('stock_codes', [])
-                if stock_codes:
-                    logger.warning(f"⚠️  觸發器 {trigger_type} 未完全支持，使用配置中的股票列表: {len(stock_codes)} 支")
-                else:
-                    logger.error(f"❌ 觸發器 {trigger_type} 未支持且無股票配置")
-                    return {
-                        "success": False,
-                        "error": f"無法獲取股票列表：排程未配置股票且觸發器未返回結果"
-                    }
-
-            if not stock_codes:
-                logger.error("❌ 未能獲取任何股票")
-                return {
-                    "success": False,
-                    "error": "無法獲取股票列表：排程未配置股票且觸發器未返回結果"
+            # 🔥 FIX: Map stock_filter_criteria to sortBy parameter
+            sortBy = None
+            if stock_filter_criteria and len(stock_filter_criteria) > 0:
+                criteria_to_sortBy = {
+                    'five_day_gain': 'five_day_gain',
+                    'five_day_loss': 'five_day_loss',
+                    'daily_gain': 'change_percent_desc',
+                    'daily_loss': 'change_percent_asc',
+                    'volume_high': 'volume_desc',
+                    'volume_low': 'volume_asc'
                 }
+                sortBy = criteria_to_sortBy.get(stock_filter_criteria[0])
+                logger.info(f"🔧 Mapped stockFilterCriteria[0]={stock_filter_criteria[0]} → sortBy={sortBy}")
 
-            logger.info(f"📊 最終股票列表: {stock_codes}")
+            # Execute trigger based on type
+            if trigger_key == 'limit_up_after_hours':
+                trigger_result = await get_after_hours_limit_up_stocks(
+                    limit=max_stocks * 2,  # Fetch more than needed for filtering
+                    changeThreshold=9.5,
+                    industries="",
+                    sortBy=sortBy
+                )
+                if 'stocks' in trigger_result:
+                    stock_codes = [stock['stock_code'] for stock in trigger_result['stocks']]
+                    logger.info(f"✅ 觸發器返回 {len(stock_codes)} 檔股票 (sortBy={sortBy})")
+            elif trigger_key == 'limit_down_after_hours':
+                trigger_result = await get_after_hours_limit_down_stocks(
+                    limit=max_stocks * 2,  # Fetch more than needed for filtering
+                    changeThreshold=9.5,
+                    industries="",
+                    sortBy=sortBy
+                )
+                if 'stocks' in trigger_result:
+                    stock_codes = [stock['stock_code'] for stock in trigger_result['stocks']]
+                    logger.info(f"✅ 觸發器返回 {len(stock_codes)} 檔股票 (sortBy={sortBy})")
+            elif trigger_key == 'intraday_gainers_by_amount':
+                logger.info("📡 執行盤中漲幅排序+成交額觸發器...")
+                try:
+                    trigger_result = await get_intraday_gainers_by_amount(limit=max_stocks)
+                    if 'stocks' in trigger_result:
+                        stock_codes = trigger_result['stocks']
+                        logger.info(f"✅ 盤中觸發器返回 {len(stock_codes)} 檔股票")
+                except Exception as e:
+                    logger.error(f"❌ 盤中觸發器失敗: {e}")
+                    import traceback
+                    logger.error(traceback.format_exc())
+            elif trigger_key == 'trending_topics':
+                logger.info("📡 執行熱門話題觸發器...")
+                try:
+                    trigger_result = await get_trending_topics(limit=max_stocks)
+                    if 'topics' in trigger_result:
+                        topics = trigger_result['topics']
+                        stock_codes = []
+                        for topic in topics[:max_stocks]:
+                            if 'stock_code' in topic:
+                                stock_codes.append(topic['stock_code'])
+                        logger.info(f"✅ 熱門話題觸發器從 {len(topics)} 個話題提取 {len(stock_codes)} 檔股票")
+                except Exception as e:
+                    logger.error(f"❌ 熱門話題觸發器失敗: {e}")
+                    import traceback
+                    logger.error(traceback.format_exc())
+            else:
+                logger.warning(f"⚠️ 未支持的觸發器類型: {trigger_key}")
 
-            # TODO: 調用內容生成 API 生成貼文
-            # 這裡應該調用 /api/generate-posts 或 /api/manual-posting
-
-            # 更新排程任務的執行記錄
-            cursor.execute("""
-                UPDATE schedule_tasks
-                SET last_run = %s,
-                    run_count = run_count + 1,
-                    success_count = success_count + 1,
-                    updated_at = %s
-                WHERE task_id = %s
-            """, (get_current_time(), get_current_time(), task_id))
-
-            conn.commit()
-
+        if not stock_codes:
             return {
-                "success": True,
-                "trigger_type": trigger_type,
-                "stock_count": len(stock_codes),
-                "stock_codes": stock_codes,
-                "message": f"成功獲取 {len(stock_codes)} 支股票"
+                "success": False,
+                "error": "無法獲取股票列表：排程未配置股票且觸發器未返回結果"
             }
 
+        # Apply max_stocks limit
+        stock_codes = stock_codes[:max_stocks]
+        logger.info(f"📊 最終選定 {len(stock_codes)} 檔股票: {stock_codes}")
+
+        # Generate unique session ID for this execution
+        import time
+        session_id = int(time.time() * 1000)  # Milliseconds timestamp
+
+        logger.info(f"🚀 開始執行排程: session_id={session_id}, stocks={stock_codes}, kol_assignment={kol_assignment}")
+
+        # TODO: Implement stock selection logic based on trigger_type
+        # For now, use custom_stocks mode with provided stock codes
+
+        #  Generate posts for each stock
+        generated_posts = []
+        failed_posts = []
+
+        # Get KOL list (simplified - using fixed KOLs for now)
+        kol_serials = [200, 201, 202]  # TODO: Get from database based on assignment strategy
+
+        for stock_code in stock_codes:
+            # Select KOL based on assignment strategy
+            if kol_assignment == 'random':
+                import random
+                kol_serial = random.choice(kol_serials)
+            else:
+                kol_serial = kol_serials[0]  # Default to first KOL
+
+            try:
+                # 🔥 FIX: Get actual stock name from stock_mapping (extract company_name from dict)
+                stock_info = stock_mapping.get(stock_code, {})
+                stock_name = stock_info.get('company_name', stock_code) if isinstance(stock_info, dict) else stock_code
+                logger.info(f"📊 Stock: {stock_code} → {stock_name}")
+
+                # 🔥 FIX: Map content_style to kol_persona
+                content_style = generation_config.get('content_style', 'chart_analysis')
+                kol_persona_mapping = {
+                    'chart_analysis': 'technical',
+                    'technical_analysis': 'technical',
+                    'fundamental_analysis': 'fundamental',
+                    'macro_analysis': 'fundamental',
+                    'news_analysis': 'news_driven',
+                    'mixed_analysis': 'mixed'
+                }
+                kol_persona = generation_config.get('kol_persona') or kol_persona_mapping.get(content_style, 'technical')
+
+                logger.info(f"🔍 Content style: {content_style} → KOL persona: {kol_persona}")
+
+                # Call manual_posting logic internally
+                # Build request body
+                post_body = {
+                    "stock_code": stock_code,
+                    "stock_name": stock_name,  # 🔥 FIX: Use actual stock name
+                    "kol_serial": kol_serial,
+                    "kol_persona": kol_persona,  # 🔥 FIX: Use mapped kol_persona
+                    "session_id": session_id,
+                    "trigger_type": trigger_config.get('trigger_type', 'custom_stocks'),
+                    "posting_type": generation_config.get('posting_type', 'analysis'),
+                    "max_words": generation_config.get('max_words', 200),
+                    "full_triggers_config": {
+                        "trigger_type": trigger_config.get('trigger_type'),
+                        "stock_codes": stock_codes,
+                        "kol_assignment": kol_assignment,
+                        "max_stocks": max_stocks
+                    }
+                }
+
+                # Create a Request object from the body
+                from starlette.requests import Request
+                from starlette.datastructures import Headers
+
+                # Use the existing manual_posting function
+                # We'll call it directly by reconstructing the request
+                scope = {
+                    'type': 'http',
+                    'method': 'POST',
+                    'headers': [(b'content-type', b'application/json')],
+                }
+
+                # Create mock request
+                import io
+                body_bytes = json.dumps(post_body).encode('utf-8')
+
+                async def receive():
+                    return {'type': 'http.request', 'body': body_bytes}
+
+                async def send(message):
+                    pass
+
+                mock_request = Request(scope, receive, send)
+                mock_request._body = body_bytes
+
+                # Call manual_posting
+                result = await manual_posting(mock_request)
+
+                # 🔥 FIX: Handle JSONResponse objects (FastAPI wraps dict returns)
+                from fastapi.responses import JSONResponse
+                if isinstance(result, JSONResponse):
+                    # Extract the content from JSONResponse
+                    result = json.loads(result.body.decode('utf-8'))
+                    logger.info(f"🔧 Extracted dict from JSONResponse: success={result.get('success')}")
+
+                if isinstance(result, dict) and result.get('success'):
+                    generated_posts.append({
+                        "post_id": result.get('post_id'),
+                        "stock_code": stock_code,
+                        "kol_serial": kol_serial,
+                        "title": result.get('content', {}).get('title', ''),
+                        "content": result.get('content', {}).get('content', '')
+                    })
+                    logger.info(f"✅ 生成成功: {stock_code} - KOL {kol_serial}")
+                else:
+                    failed_posts.append({
+                        "stock_code": stock_code,
+                        "error": result.get('message', 'Unknown error')
+                    })
+                    logger.error(f"❌ 生成失敗: {stock_code}")
+
+            except Exception as e:
+                logger.error(f"❌ 生成貼文失敗: {stock_code}, error: {e}")
+                failed_posts.append({
+                    "stock_code": stock_code,
+                    "error": str(e)
+                })
+
+        logger.info(f"📊 排程執行完成: 成功={len(generated_posts)}, 失敗={len(failed_posts)}")
+
+        return {
+            "success": True,
+            "message": f"排程執行完成",
+            "task_id": task_id,
+            "session_id": session_id,
+            "schedule_name": schedule['schedule_name'],
+            "generated_count": len(generated_posts),
+            "failed_count": len(failed_posts),
+            "posts": generated_posts,
+            "errors": failed_posts,
+            "timestamp": get_current_time().isoformat()
+        }
+
     except Exception as e:
-        logger.error(f"❌ 執行排程失敗: {e}")
-        logger.error(f"錯誤詳情: {traceback.format_exc()}")
-        if conn:
-            conn.rollback()
+        logger.error(f"❌ 立即執行排程失敗: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return {
             "success": False,
-            "error": str(e)
+            "error": str(e),
+            "task_id": task_id
         }
     finally:
         if conn:
             return_db_connection(conn)
+
+
+@app.put("/api/schedule/tasks/{task_id}")
+async def update_schedule(task_id: str, request: Request):
+    """
+    編輯排程設定
+    Update schedule configuration
+    """
+    logger.info(f"收到編輯排程請求 - Task ID: {task_id}")
+
+    conn = None
+    try:
+        data = await request.json()
+        logger.info(f"接收到的數據: {data}")
+
+        if not db_pool:
+            return {
+                "success": False,
+                "error": "數據庫連接不可用"
+            }
+
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            # Check if schedule exists
+            cursor.execute("""
+                SELECT schedule_id
+                FROM schedule_tasks
+                WHERE schedule_id = %s
+            """, (task_id,))
+
+            existing = cursor.fetchone()
+            if not existing:
+                return {
+                    "success": False,
+                    "error": f"找不到排程: {task_id}"
+                }
+
+            # Build UPDATE query dynamically based on provided fields
+            update_fields = []
+            update_values = []
+
+            # Handle basic fields
+            if 'schedule_name' in data:
+                update_fields.append("schedule_name = %s")
+                update_values.append(data['schedule_name'])
+
+            if 'schedule_description' in data:
+                update_fields.append("schedule_description = %s")
+                update_values.append(data['schedule_description'])
+
+            if 'auto_posting' in data:
+                update_fields.append("auto_posting = %s")
+                update_values.append(data['auto_posting'])
+
+            if 'weekdays_only' in data:
+                update_fields.append("weekdays_only = %s")
+                update_values.append(data['weekdays_only'])
+
+            # Handle JSON fields
+            if 'generation_config' in data:
+                update_fields.append("generation_config = %s")
+                update_values.append(json.dumps(data['generation_config']))
+
+            if 'trigger_config' in data:
+                update_fields.append("trigger_config = %s")
+                update_values.append(json.dumps(data['trigger_config']))
+
+            if 'schedule_config' in data:
+                update_fields.append("schedule_config = %s")
+                update_values.append(json.dumps(data['schedule_config']))
+
+            # Always update timestamp
+            update_fields.append("updated_at = NOW()")
+
+            if not update_fields:
+                return {
+                    "success": False,
+                    "error": "沒有提供要更新的欄位"
+                }
+
+            # Execute UPDATE
+            query = f"""
+                UPDATE schedule_tasks
+                SET {', '.join(update_fields)}
+                WHERE schedule_id = %s
+                RETURNING *
+            """
+            update_values.append(task_id)
+
+            cursor.execute(query, update_values)
+            updated_schedule = cursor.fetchone()
+
+            conn.commit()
+
+            logger.info(f"✅ 排程更新成功: {task_id}")
+
+            return {
+                "success": True,
+                "message": "排程更新成功",
+                "task_id": task_id,
+                "schedule": dict(updated_schedule) if updated_schedule else None
+            }
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"❌ 編輯排程失敗: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {
+            "success": False,
+            "error": str(e),
+            "task_id": task_id
+        }
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+
+@app.post("/api/schedule/cancel/{task_id}")
+async def cancel_schedule(task_id: str):
+    """
+    取消/停止排程
+    Cancel or stop a schedule
+    """
+    logger.info(f"收到取消排程請求 - Task ID: {task_id}")
+
+    conn = None
+    try:
+        if not db_pool:
+            return {
+                "success": False,
+                "error": "數據庫連接不可用"
+            }
+
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            # Check if schedule exists
+            cursor.execute("""
+                SELECT schedule_id, status
+                FROM schedule_tasks
+                WHERE schedule_id = %s
+            """, (task_id,))
+
+            existing = cursor.fetchone()
+            if not existing:
+                return {
+                    "success": False,
+                    "error": f"找不到排程: {task_id}"
+                }
+
+            # Update status to cancelled
+            cursor.execute("""
+                UPDATE schedule_tasks
+                SET status = 'cancelled',
+                    updated_at = NOW()
+                WHERE schedule_id = %s
+                RETURNING *
+            """, (task_id,))
+
+            updated_schedule = cursor.fetchone()
+            conn.commit()
+
+            logger.info(f"✅ 排程已取消: {task_id}")
+
+            return {
+                "success": True,
+                "message": "排程已取消",
+                "task_id": task_id,
+                "previous_status": existing['status'],
+                "new_status": "cancelled"
+            }
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"❌ 取消排程失敗: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {
+            "success": False,
+            "error": str(e),
+            "task_id": task_id
+        }
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+
+@app.post("/api/schedule/start/{task_id}")
+async def start_schedule(task_id: str):
+    """
+    啟動/恢復排程
+    Start or resume a schedule
+    """
+    logger.info(f"收到啟動排程請求 - Task ID: {task_id}")
+
+    conn = None
+    try:
+        if not db_pool:
+            return {
+                "success": False,
+                "error": "數據庫連接不可用"
+            }
+
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            # Check if schedule exists
+            cursor.execute("""
+                SELECT schedule_id, status
+                FROM schedule_tasks
+                WHERE schedule_id = %s
+            """, (task_id,))
+
+            existing = cursor.fetchone()
+            if not existing:
+                return {
+                    "success": False,
+                    "error": f"找不到排程: {task_id}"
+                }
+
+            # Update status to active
+            cursor.execute("""
+                UPDATE schedule_tasks
+                SET status = 'active',
+                    updated_at = NOW()
+                WHERE schedule_id = %s
+                RETURNING *
+            """, (task_id,))
+
+            updated_schedule = cursor.fetchone()
+            conn.commit()
+
+            logger.info(f"✅ 排程已啟動: {task_id}")
+
+            return {
+                "success": True,
+                "message": "排程已啟動",
+                "task_id": task_id,
+                "previous_status": existing['status'],
+                "new_status": "active"
+            }
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"❌ 啟動排程失敗: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {
+            "success": False,
+            "error": str(e),
+            "task_id": task_id
+        }
+    finally:
+        if conn:
+            return_db_connection(conn)
+
 
 if __name__ == "__main__":
     import uvicorn

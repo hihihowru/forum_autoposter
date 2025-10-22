@@ -428,15 +428,6 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
     }
   ];
 
-  // 自定義股票獨立區塊
-  const customStockSection = {
-    key: 'custom',
-    label: '自定義股票',
-    icon: <EditOutlined />,
-    color: '#722ed1',
-    description: '手動輸入股票代號，包含股票搜尋功能'
-  };
-
   // 處理觸發器選擇
   const handleTriggerSelect = (categoryKey: string, triggerKey: string) => {
     const category = triggerCategories.find(c => c.key === categoryKey);
@@ -467,22 +458,6 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
         console.log(`🎯 觸發器 "${trigger.label}" 已選擇，自動更新新聞搜尋關鍵字:`, trigger.newsKeywords);
       }
     }
-  };
-
-  // 處理自定義股票選擇
-  const handleCustomStockSelect = () => {
-    const triggerConfig: TriggerConfig = {
-      triggerType: 'custom',
-      triggerKey: 'custom_stocks',
-      stockFilter: 'custom_stocks'
-    };
-    
-    onChange({
-      ...value,
-      triggerConfig,
-      threshold: value.threshold || DEFAULT_THRESHOLD,
-      filters: value.filters || FILTER_DEFAULTS
-    });
   };
 
   // 處理閾值變更
@@ -1104,24 +1079,24 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
           result = await PostingManagementAPI.getAfterHoursVolumeChangeRateLow(apiParams);
           break;
 
-        // Intraday triggers
+        // Intraday triggers - 🔥 FIX: Pass full apiParams (includes stockFilterCriteria)
         case 'intraday_gainers_by_amount':
-          result = await PostingManagementAPI.getIntradayGainersByAmount(apiParams.stockCountLimit);
+          result = await PostingManagementAPI.getIntradayGainersByAmount(apiParams);
           break;
         case 'intraday_volume_leaders':
-          result = await PostingManagementAPI.getIntradayVolumeLeaders(apiParams.stockCountLimit);
+          result = await PostingManagementAPI.getIntradayVolumeLeaders(apiParams);
           break;
         case 'intraday_amount_leaders':
-          result = await PostingManagementAPI.getIntradayAmountLeaders(apiParams.stockCountLimit);
+          result = await PostingManagementAPI.getIntradayAmountLeaders(apiParams);
           break;
         case 'intraday_limit_down':
-          result = await PostingManagementAPI.getIntradayLimitDown(apiParams.stockCountLimit);
+          result = await PostingManagementAPI.getIntradayLimitDown(apiParams);
           break;
         case 'intraday_limit_up':
-          result = await PostingManagementAPI.getIntradayLimitUp(apiParams.stockCountLimit);
+          result = await PostingManagementAPI.getIntradayLimitUp(apiParams);
           break;
         case 'intraday_limit_down_by_amount':
-          result = await PostingManagementAPI.getIntradayLimitDownByAmount(apiParams.stockCountLimit);
+          result = await PostingManagementAPI.getIntradayLimitDownByAmount(apiParams);
           break;
 
         default:
@@ -1223,30 +1198,6 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
       
       {/* 觸發器分類 */}
       {triggerCategories.map(renderTriggerCategory)}
-      
-      {/* 自定義股票獨立區塊 */}
-      <Card
-        title={
-          <Space>
-            <span style={{ color: customStockSection.color }}>{customStockSection.icon}</span>
-            <span>{customStockSection.label}</span>
-          </Space>
-        }
-        size="small"
-        style={{ marginBottom: 16 }}
-      >
-        <Space direction="vertical" style={{ width: '100%' }}>
-          <Text type="secondary">{customStockSection.description}</Text>
-          <Button
-            type={value.triggerConfig?.triggerKey === 'custom_stocks' ? 'primary' : 'default'}
-            icon={customStockSection.icon}
-            onClick={handleCustomStockSelect}
-            style={{ width: '100%' }}
-          >
-            啟用自定義股票
-          </Button>
-        </Space>
-      </Card>
       
       {/* 篩選設定 */}
       <Card title="篩選設定" size="small" style={{ marginTop: 16 }}>
@@ -2126,89 +2077,6 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
           )}
         </Card>
       )}
-      
-      {/* 自定義股票輸入 */}
-      {value.triggerConfig?.triggerKey === 'custom_stocks' && (
-        <Card title="自定義股票" size="small" style={{ marginTop: 16 }}>
-          <Space direction="vertical" style={{ width: '100%' }}>
-            {/* 公司搜尋 */}
-            <div>
-              <Text strong>公司名稱搜尋：</Text>
-              <AutoComplete
-                value={companySearchValue}
-                onChange={handleCompanySearch}
-                placeholder="輸入公司名稱或股票代號"
-                style={{ width: '100%', marginTop: 8 }}
-                loading={companySearchLoading}
-                options={companySearchResults.map(company => ({
-                  value: `${company.company_name}(${company.stock_code})`,
-                  label: (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div>
-                        <Text strong>{company.company_name}</Text>
-                        <Text type="secondary" style={{ marginLeft: 8 }}>({company.stock_code})</Text>
-                      </div>
-                      <Tag color="blue">{company.industry}</Tag>
-                    </div>
-                  ),
-                  company: company
-                }))}
-                onSelect={(value, option) => {
-                  if (option.company) {
-                    handleCompanySelect(option.company);
-                  }
-                }}
-                filterOption={false}
-              />
-              {companySearchResults.length > 0 && (
-                <div style={{ marginTop: 8 }}>
-                  <Text type="secondary">找到 {companySearchResults.length} 個結果</Text>
-                </div>
-              )}
-            </div>
-            
-            {/* 已選擇的股票 */}
-            {(value.stock_codes && value.stock_codes.length > 0) && (
-              <div>
-                <Text strong>已選擇的股票：</Text>
-                <div style={{ marginTop: 8 }}>
-                  {value.stock_codes.map((code, index) => (
-                    <Tag 
-                      key={code} 
-                      closable 
-                      onClose={() => {
-                        const newCodes = value.stock_codes?.filter(c => c !== code) || [];
-                        const newNames = value.stock_names?.filter((_, i) => i !== index) || [];
-                        onChange({
-                          ...value,
-                          stock_codes: newCodes,
-                          stock_names: newNames
-                        });
-                      }}
-                      style={{ marginBottom: 4 }}
-                    >
-                      {value.stock_names?.[index] || code} ({code})
-                    </Tag>
-                  ))}
-                </div>
-              </div>
-            )}
-            
-            <CustomStockInput
-              value={value.stock_codes || []}
-              onChange={(codes) => onChange({
-                ...value,
-                stock_codes: codes
-              })}
-              onStockNamesChange={(names) => onChange({
-                ...value,
-                stock_names: names
-              })}
-            />
-          </Space>
-        </Card>
-      )}
-      
 
       {/* 股票代號列表輸入 */}
       {value.triggerConfig?.triggerKey === 'stock_code_list' && (

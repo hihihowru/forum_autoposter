@@ -61,7 +61,7 @@ class ScheduleService:
         self.db_service = schedule_db_service
         self.background_scheduler_running = False
     
-    async def create_schedule_task(self, session_id: int, post_ids: List[str], 
+    async def create_schedule_task(self, session_id: int, post_ids: List[str],
                                  schedule_type: str, interval_seconds: int = 30,
                                  batch_duration_hours: Optional[int] = None,
                                  schedule_name: Optional[str] = None,
@@ -72,6 +72,9 @@ class ScheduleService:
                                  timezone: str = 'Asia/Taipei',
                                  generation_config: Optional[Dict[str, Any]] = None,
                                  batch_info: Optional[Dict[str, Any]] = None,
+                                 # 🔥 FIX: Add trigger_config and schedule_config parameters
+                                 trigger_config: Optional[Dict[str, Any]] = None,
+                                 schedule_config: Optional[Dict[str, Any]] = None,
                                  auto_posting: bool = False,
                                  # 來源追蹤參數
                                  source_type: Optional[str] = None,
@@ -173,6 +176,9 @@ class ScheduleService:
             timezone=timezone,
             generation_config=generation_config,
             batch_info=batch_info,
+            # 🔥 FIX: Pass trigger_config and schedule_config to database
+            trigger_config=trigger_config,
+            schedule_config=schedule_config,
             auto_posting=auto_posting,
             # 來源追蹤參數
             source_type=source_type,
@@ -744,13 +750,16 @@ class ScheduleService:
                         # 更新資料庫中的下次執行時間
                         await self.db_service.update_schedule_next_run(task_id, next_run_time)
                         logger.info(f"⏰ 下次執行時間: {next_run_time}")
-                        
+
                         # 等待到下次執行時間
                         tz = pytz.timezone('Asia/Taipei')
                         now = datetime.now(tz)
                         # 確保兩個時間都是 aware 的
                         if next_run_time.tzinfo is None:
                             next_run_time = tz.localize(next_run_time)
+                        elif next_run_time.tzinfo != tz:
+                            # 如果時區不同，轉換到台北時區
+                            next_run_time = next_run_time.astimezone(tz)
                         if now.tzinfo is None:
                             now = tz.localize(now)
                         sleep_seconds = (next_run_time - now).total_seconds()
@@ -804,6 +813,9 @@ class ScheduleService:
                                 now = datetime.now(tz)
                                 if next_run_time.tzinfo is None:
                                     next_run_time = tz.localize(next_run_time)
+                                elif next_run_time.tzinfo != tz:
+                                    # 如果時區不同，轉換到台北時區
+                                    next_run_time = next_run_time.astimezone(tz)
                                 if now.tzinfo is None:
                                     now = tz.localize(now)
                                 sleep_seconds = (next_run_time - now).total_seconds()
@@ -1197,6 +1209,7 @@ class ScheduleService:
                 stock_name=assignment["stock_name"],
                 kol_serial=assignment["kol_serial"],
                 kol_persona=generation_config.get('kol_persona', 'technical'),
+                posting_type=generation_config.get('posting_type', 'analysis'),  # 🔥 FIX: Add posting_type from config
                 content_style=generation_config.get('content_style', 'chart_analysis'),
                 target_audience=generation_config.get('target_audience', 'active_traders'),
                 content_length=generation_config.get('content_length', 'medium'),
@@ -1251,38 +1264,55 @@ class ScheduleService:
         # 獲取生成的貼文列表
         generated_posts = await self.db_service.get_schedule_posts(task_id)
         
+        # 確保所有時間欄位都正確序列化
+        created_at_str = db_task['created_at'].isoformat() if db_task.get('created_at') else None
+        last_run_str = db_task['last_run'].isoformat() if db_task.get('last_run') else None
+        next_run_str = db_task['next_run'].isoformat() if db_task.get('next_run') else None
+        started_at_str = db_task['started_at'].isoformat() if db_task.get('started_at') else None
+        completed_at_str = db_task['completed_at'].isoformat() if db_task.get('completed_at') else None
+
+        # 確保所有數值欄位都是數字，不是 None
+        run_count = db_task.get('run_count') or 0
+        success_count = db_task.get('success_count') or 0
+        failure_count = db_task.get('failure_count') or 0
+        total_posts_generated = db_task.get('total_posts_generated') or 0
+        interval_seconds = db_task.get('interval_seconds') or 30
+
+        # 計算成功率，確保不會除以零
+        success_rate = (success_count / max(run_count, 1)) * 100 if run_count > 0 else 0.0
+
         return {
             'task_id': db_task['schedule_id'],
-            'name': db_task['schedule_name'],
-            'description': db_task['schedule_description'] or f"基於批次 {db_task['session_id']} 的排程",
-            'session_id': db_task['session_id'],
+            'name': db_task.get('schedule_name') or 'Unnamed Schedule',
+            'description': db_task.get('schedule_description') or f"基於批次 {db_task.get('session_id', 'N/A')} 的排程",
+            'session_id': db_task.get('session_id') or 0,
             'post_ids': generated_posts,  # 從關聯表獲取
-            'schedule_type': db_task['schedule_type'],
-            'status': db_task['status'],
-            'auto_posting': db_task['auto_posting'],  # 新增 auto_posting 欄位
-            'created_at': db_task['created_at'],
-            'last_run': db_task['last_run'],
-            'next_run': db_task['next_run'],
-            'run_count': db_task['run_count'] or 0,
-            'success_count': db_task['success_count'] or 0,
-            'failure_count': db_task['failure_count'] or 0,
-            'success_rate': ((db_task['success_count'] or 0) / max(db_task['run_count'] or 1, 1)) * 100,
-            'started_at': db_task['started_at'],
-            'completed_at': db_task['completed_at'],
-            'error_message': db_task['error_message'],
-            'total_posts_generated': db_task['total_posts_generated'] or 0,
-            'interval_seconds': db_task['interval_seconds'] or 30,
+            'schedule_type': db_task.get('schedule_type') or 'weekday_daily',
+            'status': db_task.get('status') or 'pending',
+            'auto_posting': bool(db_task.get('auto_posting', False)),  # 確保是布林值
+            'created_at': created_at_str,
+            'last_run': last_run_str,
+            'next_run': next_run_str,
+            'run_count': run_count,
+            'success_count': success_count,
+            'failure_count': failure_count,
+            'success_rate': round(success_rate, 2),
+            'started_at': started_at_str,
+            'completed_at': completed_at_str,
+            'error_message': db_task.get('error_message'),
+            'total_posts_generated': total_posts_generated,
+            'interval_seconds': interval_seconds,
             'schedule_config': {
-                'enabled': db_task['status'] == 'active',
-                'posting_time_slots': [db_task['daily_execution_time']] if db_task['daily_execution_time'] else [],
-                'timezone': db_task['timezone'],
-                'auto_posting': db_task['auto_posting']  # 新增 auto_posting 到 schedule_config
+                'enabled': db_task.get('status') == 'active',
+                'posting_time_slots': [db_task['daily_execution_time']] if db_task.get('daily_execution_time') else [],
+                'timezone': db_task.get('timezone') or 'Asia/Taipei',
+                'auto_posting': bool(db_task.get('auto_posting', False))
             },
             'trigger_config': {
                 'trigger_type': (db_task.get('generation_config') or {}).get('trigger_type', 'limit_up_after_hours'),
                 'stock_codes': [],  # 不顯示具體股票代碼
                 'kol_assignment': (db_task.get('generation_config') or {}).get('kol_assignment', 'random'),
-                'max_stocks': (db_task.get('generation_config') or {}).get('max_stocks', 10),
+                'max_stocks': (db_task.get('generation_config') or {}).get('max_stocks', 10) or 10,
                 'stock_sorting': {
                     'primary_sort': (db_task.get('generation_config') or {}).get('stock_sorting', 'five_day_change_desc')
                 }

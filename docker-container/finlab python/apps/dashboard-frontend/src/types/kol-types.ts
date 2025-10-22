@@ -137,11 +137,13 @@ export interface InteractionData {
 
 export interface InteractionTrend {
   date: string;
-  posts_count: number;
-  total_interactions: number;
-  avg_engagement_rate: number;
-  likes: number;
-  comments: number;
+  post_count: number;
+  total_likes: number;
+  total_comments: number;
+  total_shares: number;
+  avg_likes: number;
+  avg_comments: number;
+  avg_shares: number;
 }
 
 export interface TopicPerformance {

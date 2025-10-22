@@ -15,7 +15,8 @@ import {
   Statistic,
   Badge,
   Descriptions,
-  Timeline
+  Timeline,
+  Modal
 } from 'antd';
 import {
   EditOutlined,
@@ -35,6 +36,7 @@ import {
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import ScheduleConfigModal from './ScheduleConfigModal';
+import ScheduleExecutionModal from './ScheduleExecutionModal';
 import { getApiBaseUrl } from '../../../config/api';
 
 const { Title, Text } = Typography;
@@ -55,10 +57,12 @@ interface ScheduleTask {
   interval_seconds?: number;
   schedule_type?: string;
   auto_posting?: boolean;
+  daily_execution_time?: string;  // 🔥 ADD: Root-level execution time
   schedule_config: {
     enabled: boolean;
     posting_time_slots: string[];
     timezone: string;
+    daily_execution_time?: string;  // 🔥 ADD: Nested execution time
   };
   trigger_config: {
     trigger_type: string;
@@ -70,6 +74,11 @@ interface ScheduleTask {
       secondary_sort?: string;
       tertiary_sort?: string;
     };
+  };
+  stock_sorting_display?: {  // 🔥 ADD: Backend-provided display helper
+    method: string;
+    direction: string;
+    label: string;
   };
   batch_info?: {
     session_id: string;
@@ -85,6 +94,11 @@ const ScheduleManagementPage: React.FC = () => {
   const [editingSchedule, setEditingSchedule] = useState<ScheduleTask | undefined>(undefined);
   const [dailyStats, setDailyStats] = useState<any>(null);
   const [schedulerEnabled, setSchedulerEnabled] = useState(true);
+
+  // Execution modal state
+  const [executionModalVisible, setExecutionModalVisible] = useState(false);
+  const [executionResult, setExecutionResult] = useState<any>(null);
+  const [executionLoading, setExecutionLoading] = useState(false);
 
   // 控制背景排程器開關
   const handleSchedulerToggle = async (enabled: boolean) => {
@@ -196,9 +210,15 @@ const ScheduleManagementPage: React.FC = () => {
   // 計算倒計時
   const getCountdown = (nextRun: string | null | undefined, scheduleType: string = '', scheduleConfig: any = null) => {
     if (!nextRun) return '';
-    
+
+    // 🔥 FIX: Properly handle UTC time conversion
+    let dateStr = nextRun;
+    if (!dateStr.endsWith('Z') && !dateStr.includes('+') && !dateStr.includes('T00:00:00')) {
+      dateStr = dateStr + 'Z'; // Mark as UTC if not already marked
+    }
+
     const now = new Date();
-    const target = new Date(nextRun);
+    const target = new Date(dateStr);
     const diff = target.getTime() - now.getTime();
     
     // 對於工作日每日排程，需要特別處理
@@ -256,6 +276,84 @@ const ScheduleManagementPage: React.FC = () => {
 
   const statistics = getStatistics();
 
+  // 將 UTC 時間字串轉換為台灣時間顯示
+  const formatUtcToTaiwanTime = (utcTimeString: string | null | undefined): string => {
+    if (!utcTimeString) return '未設定';
+
+    // API 返回的時間格式: "2025-10-21T07:14:14.115996" (UTC但沒有Z標記)
+    // 需要手動加上Z來標記為UTC，然後轉換為台灣時間
+    let dateStr = utcTimeString;
+    if (!dateStr.endsWith('Z') && !dateStr.includes('+') && !dateStr.includes('T00:00:00')) {
+      dateStr = dateStr + 'Z'; // 標記為UTC
+    }
+
+    const date = new Date(dateStr);
+
+    return date.toLocaleString('zh-TW', {
+      timeZone: 'Asia/Taipei',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    });
+  };
+
+  // 轉換 API 數據結構到前端期望的格式
+  const transformApiTask = (apiTask: any): ScheduleTask => {
+    //  Backend already provides schedule_config and trigger_config
+    // Just use them directly instead of extracting from generation_config
+
+    // 🔥 FIX: Ensure daily_execution_time is properly merged into schedule_config
+    const scheduleConfig = apiTask.schedule_config || {
+      enabled: apiTask.status === 'active',
+      posting_time_slots: apiTask.daily_execution_time ? [apiTask.daily_execution_time] : [],
+      timezone: apiTask.timezone || 'Asia/Taipei'
+    };
+
+    // Merge daily_execution_time into schedule_config if it exists at root level
+    if (apiTask.daily_execution_time && !scheduleConfig.daily_execution_time) {
+      scheduleConfig.daily_execution_time = apiTask.daily_execution_time;
+    }
+
+    return {
+      task_id: apiTask.schedule_id || apiTask.task_id,
+      name: apiTask.schedule_name || apiTask.name || '未命名排程',
+      description: apiTask.schedule_description || apiTask.description || '',
+      status: apiTask.status || 'active',
+      created_at: apiTask.created_at,
+      last_run: apiTask.last_run,
+      next_run: apiTask.next_run,
+      run_count: apiTask.run_count || 0,
+      success_count: apiTask.success_count || 0,
+      failure_count: apiTask.failure_count || 0,
+      success_rate: apiTask.success_rate || (apiTask.run_count > 0
+        ? ((apiTask.success_count || 0) / apiTask.run_count) * 100
+        : 0),
+      interval_seconds: apiTask.interval_seconds || 300,
+      schedule_type: apiTask.schedule_type || 'weekday_daily',
+      auto_posting: apiTask.auto_posting || false,
+      daily_execution_time: apiTask.daily_execution_time,  // 🔥 FIX: Add at root level
+      schedule_config: scheduleConfig,
+      trigger_config: apiTask.trigger_config || {
+        trigger_type: 'custom_stocks',
+        stock_codes: [],
+        kol_assignment: 'random',
+        max_stocks: 10,
+        stock_sorting: {}
+      },
+      stock_sorting_display: apiTask.stock_sorting_display,  // 🔥 FIX: Pass through stock_sorting_display
+      batch_info: apiTask.batch_info ?
+        (typeof apiTask.batch_info === 'string' ? JSON.parse(apiTask.batch_info) : apiTask.batch_info)
+        : {
+          session_id: apiTask.session_id?.toString() || '',
+          total_posts: apiTask.total_posts_generated || 0,
+          published_posts: apiTask.success_count || 0
+        }
+    };
+  };
+
   // 獲取排程列表
   const loadSchedules = async () => {
     setLoading(true);
@@ -263,12 +361,16 @@ const ScheduleManagementPage: React.FC = () => {
       const response = await fetch(`${API_BASE_URL}/api/schedule/tasks`);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
-      }  
+      }
       const result = await response.json();
       // API 返回的數據結構是 {success: true, tasks: [...]}
       const tasks = result.tasks || [];
+
+      // 轉換 API 數據到前端期望的格式
+      const transformedTasks = tasks.map(transformApiTask);
+
       // 按創建時間降序排序，最新的排在最前面
-      const sortedTasks = tasks.sort((a: ScheduleTask, b: ScheduleTask) => {
+      const sortedTasks = transformedTasks.sort((a: ScheduleTask, b: ScheduleTask) => {
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       });
       setSchedules(sortedTasks);
@@ -373,8 +475,14 @@ const ScheduleManagementPage: React.FC = () => {
       const result = await response.json();
       if (result.success) {
         message.success(`自動發文已${autoPosting ? '開啟' : '關閉'}`);
-        // 重新載入排程列表
-        await loadSchedules();
+        // 直接更新本地狀態，不需要重新載入整個列表
+        setSchedules(prevSchedules =>
+          prevSchedules.map(s =>
+            s.task_id === record.task_id
+              ? { ...s, auto_posting: autoPosting }
+              : s
+          )
+        );
       } else {
         message.error(result.message || '更新自動發文設定失敗');
       }
@@ -386,29 +494,77 @@ const ScheduleManagementPage: React.FC = () => {
   // 立即執行排程
   const handleExecuteNow = async (scheduleId: string) => {
     try {
-      setLoading(true);
-      
+      // Open modal immediately with loading state
+      setExecutionModalVisible(true);
+      setExecutionLoading(true);
+      setExecutionResult(null);
+
       const response = await fetch(`${API_BASE_URL}/api/schedule/execute/${scheduleId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         }
       });
-      
+
       const result = await response.json();
-      
+
+      // Store execution result
+      setExecutionResult(result);
+      setExecutionLoading(false);
+
       if (result.success) {
-        message.success('排程已觸發執行，請稍後查看貼文列表');
-        loadSchedules();
+        message.success(`排程執行成功！生成 ${result.generated_count} 篇貼文`);
+        loadSchedules();  // Refresh schedule list
       } else {
-        message.error(result.message || '執行排程失敗');
+        message.error(result.error || result.message || '執行排程失敗');
       }
     } catch (error) {
       console.error('執行排程失敗:', error);
+      setExecutionLoading(false);
+      setExecutionResult({
+        success: false,
+        message: '執行排程失敗',
+        error: error instanceof Error ? error.message : String(error)
+      });
       message.error('執行排程失敗');
-    } finally {
-      setLoading(false);
     }
+  };
+
+  // 刪除排程
+  const handleDeleteSchedule = async (scheduleId: string, scheduleName: string) => {
+    Modal.confirm({
+      title: '確認刪除',
+      content: `確定要刪除排程「${scheduleName}」嗎？此操作無法復原。`,
+      okText: '確認刪除',
+      cancelText: '取消',
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        try {
+          setLoading(true);
+
+          const response = await fetch(`${API_BASE_URL}/api/schedule/tasks/${scheduleId}`, {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json',
+            }
+          });
+
+          const result = await response.json();
+
+          if (result.success) {
+            message.success('排程已刪除');
+            await loadSchedules();
+          } else {
+            message.error(result.message || '刪除排程失敗');
+          }
+        } catch (error) {
+          console.error('刪除排程失敗:', error);
+          message.error('刪除排程失敗');
+        } finally {
+          setLoading(false);
+        }
+      }
+    });
   };
 
   // 編輯排程配置
@@ -491,23 +647,28 @@ const ScheduleManagementPage: React.FC = () => {
       dataIndex: 'schedule_config',
       key: 'posting_time',
       width: 140,
-      render: (_: any, record: ScheduleTask) => (
-        <div>
-          <Space>
-            <ClockCircleOutlined />
-            <Text style={{ fontSize: '11px' }}>
-              {record.schedule_config?.posting_time_slots && record.schedule_config.posting_time_slots.length > 0 
-                ? record.schedule_config.posting_time_slots.join(', ') 
-                : record.schedule_config?.daily_execution_time 
-                ? record.schedule_config.daily_execution_time
-                : '未設定'}
-            </Text>
-          </Space>
-          <div style={{ fontSize: '10px', color: '#666' }}>
-            {record.schedule_config?.timezone || 'Asia/Taipei'}
+      render: (_: any, record: ScheduleTask) => {
+        // 🔥 FIX: Check multiple sources for daily_execution_time
+        const startTime = record.daily_execution_time
+          || record.schedule_config?.daily_execution_time
+          || record.schedule_config?.posting_time_slots?.[0];
+        const intervalSec = record.interval_seconds || 300;
+
+        return (
+          <div>
+            <div style={{ fontSize: '11px', marginBottom: 2 }}>
+              <ClockCircleOutlined style={{ marginRight: 4 }} />
+              開始: {startTime || '未設定'}
+            </div>
+            <div style={{ fontSize: '10px', color: '#666' }}>
+              間隔: {intervalSec}秒 ({Math.round(intervalSec / 60)}分鐘)
+            </div>
+            <div style={{ fontSize: '10px', color: '#999' }}>
+              {record.schedule_config?.timezone || 'Asia/Taipei'}
+            </div>
           </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       title: '發文間隔',
@@ -549,15 +710,27 @@ const ScheduleManagementPage: React.FC = () => {
       width: 120,
       render: (triggerConfig: any, record: ScheduleTask) => {
         const triggerTypeMap: Record<string, { text: string; color: string }> = {
+          // 熱門話題
+          'trending_topics': { text: 'CMoney熱門話題', color: 'purple' },
+          // 盤後觸發器 (6個)
           'limit_up_after_hours': { text: '盤後漲停', color: 'red' },
           'limit_down_after_hours': { text: '盤後跌停', color: 'green' },
+          'after_hours_volume_amount_high': { text: '盤後量(金額)大', color: 'orange' },
+          'after_hours_volume_amount_low': { text: '盤後量(金額)小', color: 'blue' },
+          'after_hours_volume_change_rate_high': { text: '盤後量增(比率)高', color: 'gold' },
+          'after_hours_volume_change_rate_low': { text: '盤後量增(比率)低', color: 'cyan' },
+          // 盤中觸發器 (6個)
           'intraday_limit_up': { text: '盤中漲停', color: 'volcano' },
-          'intraday_limit_down': { text: '盤中跌停', color: 'cyan' },
-          'volume_surge': { text: '成交量暴增', color: 'orange' },
-          'news_hot': { text: '新聞熱股', color: 'magenta' },
-          'custom_stocks': { text: '自選股', color: 'purple' }
+          'intraday_limit_down': { text: '盤中跌停', color: 'geekblue' },
+          'intraday_limit_up_by_amount': { text: '盤中漲(金額)', color: 'magenta' },
+          'intraday_limit_down_by_amount': { text: '盤中跌(金額)', color: 'lime' },
+          'intraday_volume_leaders': { text: '盤中量(成交量)大', color: 'orange' },
+          'intraday_amount_leaders': { text: '盤中量(金額)大', color: 'gold' }
         };
-        const triggerType = triggerConfig?.trigger_type || record.trigger_config?.trigger_type || 'N/A';
+        // 🔥 FIX: Support both old and new trigger_config structures
+        // New structure: triggerConfig.triggerKey
+        // Old structure: triggerConfig.trigger_type
+        const triggerType = triggerConfig?.triggerKey || triggerConfig?.trigger_type || record.trigger_config?.triggerKey || record.trigger_config?.trigger_type || 'N/A';
         const mapped = triggerTypeMap[triggerType] || { text: triggerType, color: 'default' };
         return <Tag color={mapped.color}>{mapped.text}</Tag>;
       },
@@ -567,18 +740,49 @@ const ScheduleManagementPage: React.FC = () => {
       dataIndex: 'trigger_config',
       key: 'stock_settings',
       width: 150,
-      render: (triggerConfig: any, record: ScheduleTask) => (
-        <div>
-          <Text style={{ fontSize: '11px' }}>
-            最多 {triggerConfig?.max_stocks || record.trigger_config?.max_stocks || 'N/A'} 檔
-          </Text>
-          {triggerConfig?.stock_sorting && (
-            <div style={{ fontSize: '10px', color: '#666' }}>
-              排序: {triggerConfig.stock_sorting.primary_sort || 'N/A'}
-            </div>
-          )}
-        </div>
-      ),
+      render: (triggerConfig: any, record: ScheduleTask) => {
+        // 🔥 FIX: Use full_triggers_config as source of truth
+        const fullTriggersConfig = record.schedule_config?.full_triggers_config;
+
+        // Get stockCountLimit (correct source)
+        const stockCount = fullTriggersConfig?.stockCountLimit
+          || triggerConfig?.max_stocks
+          || record.trigger_config?.max_stocks
+          || 'N/A';
+
+        // Get stockFilterCriteria (correct source)
+        const stockFilterCriteria = fullTriggersConfig?.stockFilterCriteria;
+
+        // Map stockFilterCriteria to Chinese labels
+        let sortingDisplay = null;
+        if (stockFilterCriteria && Array.isArray(stockFilterCriteria) && stockFilterCriteria.length > 0) {
+          const criteriaMap: Record<string, string> = {
+            'five_day_gain': '五日漲幅',
+            'five_day_loss': '五日跌幅',
+            'daily_gain': '單日漲幅',
+            'daily_loss': '單日跌幅',
+            'volume_high': '成交量大',
+            'volume_low': '成交量小',
+          };
+          sortingDisplay = criteriaMap[stockFilterCriteria[0]] || stockFilterCriteria[0];
+        } else {
+          // Fallback to backend-provided stock_sorting_display.label
+          sortingDisplay = record.stock_sorting_display?.label;
+        }
+
+        return (
+          <div>
+            <Text style={{ fontSize: '11px' }}>
+              最多 {stockCount} 檔
+            </Text>
+            {sortingDisplay && (
+              <div style={{ fontSize: '10px', color: '#666' }}>
+                排序: {sortingDisplay}
+              </div>
+            )}
+          </div>
+        );
+      },
     },
     {
       title: 'KOL分配',
@@ -632,14 +836,7 @@ const ScheduleManagementPage: React.FC = () => {
       render: (createdAt: string) => (
         <div>
           <Text style={{ fontSize: '11px' }}>
-            {new Date(createdAt).toLocaleString('zh-TW', {
-              timeZone: 'Asia/Taipei',
-              year: 'numeric',
-              month: '2-digit',
-              day: '2-digit',
-              hour: '2-digit',
-              minute: '2-digit'
-            })}
+            {formatUtcToTaiwanTime(createdAt)}
           </Text>
         </div>
       ),
@@ -656,13 +853,13 @@ const ScheduleManagementPage: React.FC = () => {
               <Space style={{ marginBottom: 4 }}>
                 <CalendarOutlined />
                 <Text style={{ fontSize: '11px' }}>
-                  {new Date(nextRun).toLocaleString()}
+                  {formatUtcToTaiwanTime(nextRun)}
                 </Text>
               </Space>
               <div>
-                <Text 
-                  type="secondary" 
-                  style={{ 
+                <Text
+                  type="secondary"
+                  style={{
                     fontSize: '11px',
                     color: '#1890ff',
                     fontWeight: 500
@@ -723,6 +920,7 @@ const ScheduleManagementPage: React.FC = () => {
               type="link"
               icon={<DeleteOutlined />}
               danger
+              onClick={() => handleDeleteSchedule(record.task_id, record.name)}
             />
           </Tooltip>
         </Space>
@@ -960,7 +1158,7 @@ const ScheduleManagementPage: React.FC = () => {
                       <Timeline>
                         {record.last_run && (
                           <Timeline.Item color="green">
-                            {new Date(record.last_run).toLocaleString()} - ✅ 最後執行
+                            {formatUtcToTaiwanTime(record.last_run)} - ✅ 最後執行
                           </Timeline.Item>
                         )}
                         <Timeline.Item color={record.success_count > 0 ? 'green' : 'gray'}>
@@ -1030,6 +1228,17 @@ const ScheduleManagementPage: React.FC = () => {
         }}
         onSave={handleSaveConfig}
         initialData={editingSchedule as any}
+      />
+
+      {/* Schedule Execution Result Modal */}
+      <ScheduleExecutionModal
+        visible={executionModalVisible}
+        executionResult={executionResult}
+        loading={executionLoading}
+        onClose={() => {
+          setExecutionModalVisible(false);
+          setExecutionResult(null);
+        }}
       />
     </div>
   );

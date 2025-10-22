@@ -548,6 +548,20 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
         topic_title: generationConfig.triggers?.triggerConfig?.triggerKey === 'trending_topics' ? '自動獲取熱門話題' : null
       };
 
+      // 🔥 Build fullTriggersConfig with ALL trigger settings for schedule recreation
+      console.log('🔍 DEBUG: generationConfig.triggers:', generationConfig.triggers);
+      const fullTriggersConfig = {
+        ...generationConfig.triggers,
+        triggerConfig: generationConfig.triggers?.triggerConfig,
+        trigger_type: generationConfig.triggers?.triggerConfig?.triggerKey || 'manual',
+        stock_sorting: generationConfig.triggers?.stockSorting,
+        threshold: generationConfig.triggers?.threshold || 20,
+        filters: generationConfig.triggers?.filters || {},
+        stock_codes: generationConfig.triggers?.stock_codes || [],
+        stock_names: generationConfig.triggers?.stock_names || []
+      };
+      console.log('🔍 DEBUG: fullTriggersConfig built:', fullTriggersConfig);
+
       // 🔥 NON-BLOCKING BATCH POSTING - Fire and forget
       // Start batch generation in background without waiting
       PostingManagementAPI.generateBatchPosts({
@@ -582,7 +596,9 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
         // 🔥 FIX: Use triggerKey (e.g., "limit_up_after_hours") not triggerType ("individual")
         trigger_type: generationConfig.triggers?.triggerConfig?.triggerKey || 'manual',
         trigger_data: generationConfig.triggers?.triggerConfig,
-        generation_config: generationConfig.settings
+        generation_config: generationConfig.settings,
+        // 🔥 FIX: Pass full triggers config for schedule recreation
+        full_triggers_config: fullTriggersConfig
       }).then(result => {
         // Silent completion toast (non-blocking)
         if (result.success) {
@@ -599,10 +615,11 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
 
       // 🔥 IMMEDIATELY navigate to review page (don't wait for generation)
       console.log('🚀 立即跳轉到審核頁面，貼文將在背景生成');
+      message.destroy(); // 🔥 FIX: Destroy loading message before navigation
       setCurrentSessionId(session.id);
       setShowReviewPage(true);
       message.info(`開始生成 ${postsToGenerate.length} 篇貼文，頁面將自動更新`, 5);
-      
+
       return; // 提前返回，不執行後續的同步邏輯
       
     } catch (error) {
