@@ -1805,11 +1805,20 @@ _token_cache = {
 async def get_dynamic_auth_token() -> str:
     """使用 forum_200 KOL 憑證動態取得 CMoney API token"""
     try:
-        if (_token_cache["token"] and
-            _token_cache["expires_at"] and
-            get_current_time() < _token_cache["expires_at"]):
-            logger.info("✅ 使用快取的 CMoney API token")
-            return _token_cache["token"]
+        # Check token cache validity
+        if _token_cache["token"] and _token_cache["expires_at"]:
+            current_time = get_current_time()
+            expires_at = _token_cache["expires_at"]
+
+            # Handle timezone-naive datetime from cmoney_client
+            if expires_at.tzinfo is None:
+                # Assume naive datetime is in local timezone (Taipei)
+                taipei_tz = pytz.timezone('Asia/Taipei')
+                expires_at = taipei_tz.localize(expires_at)
+
+            if current_time < expires_at:
+                logger.info("✅ 使用快取的 CMoney API token")
+                return _token_cache["token"]
 
         logger.info("🔐 開始使用 forum_200 憑證登入 CMoney...")
 
