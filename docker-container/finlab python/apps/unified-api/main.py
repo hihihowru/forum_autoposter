@@ -488,10 +488,9 @@ async def publish_posts_with_queue(posts: List[Dict], interval_seconds: int):
                 logger.info(f"📤 [Auto-Posting] Publishing post {idx+1}/{len(posts)}: {stock_code} (ID: {post_id})")
 
                 async with httpx.AsyncClient(timeout=120.0) as client:
-                    # Call the publish endpoint
+                    # Call the publish endpoint (single post)
                     response = await client.post(
-                        f"{api_url}/api/posts/publish",
-                        json={"post_ids": [post_id]}
+                        f"{api_url}/api/posts/{post_id}/publish"
                     )
 
                     if response.status_code == 200:
