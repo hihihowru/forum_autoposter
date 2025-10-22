@@ -714,18 +714,59 @@ const ScheduleManagementPage: React.FC = () => {
       dataIndex: 'trigger_config',
       key: 'stock_settings',
       width: 150,
-      render: (triggerConfig: any, record: ScheduleTask) => (
-        <div>
-          <Text style={{ fontSize: '11px' }}>
-            最多 {triggerConfig?.max_stocks || record.trigger_config?.max_stocks || 'N/A'} 檔
-          </Text>
-          {triggerConfig?.stock_sorting && (
-            <div style={{ fontSize: '10px', color: '#666' }}>
-              排序: {triggerConfig.stock_sorting.primary_sort || 'N/A'}
-            </div>
-          )}
-        </div>
-      ),
+      render: (triggerConfig: any, record: ScheduleTask) => {
+        // Helper function to get stock sorting display name
+        const getStockSortingDisplay = (sorting: any) => {
+          if (!sorting) return null;
+
+          // Handle string format (new API format)
+          if (typeof sorting === 'string') {
+            const sortingMap: Record<string, string> = {
+              'five_day_change_desc': '五日漲幅↓',
+              'five_day_change_asc': '五日漲幅↑',
+              'change_percent_desc': '漲幅↓',
+              'change_percent_asc': '漲幅↑',
+              'volume_desc': '成交量↓',
+              'volume_asc': '成交量↑',
+              'amount_desc': '成交額↓',
+              'amount_asc': '成交額↑',
+              'current_price_desc': '股價↓',
+              'current_price_asc': '股價↑',
+            };
+            return sortingMap[sorting] || sorting;
+          }
+
+          // Handle object format (old API format)
+          if (typeof sorting === 'object' && sorting.primary_sort) {
+            const sortingMap: Record<string, string> = {
+              'change_percent_desc': '漲幅↓',
+              'change_percent_asc': '漲幅↑',
+              'volume_desc': '成交量↓',
+              'volume_asc': '成交量↑',
+              'current_price_desc': '股價↓',
+              'current_price_asc': '股價↑',
+            };
+            return sortingMap[sorting.primary_sort] || sorting.primary_sort;
+          }
+
+          return null;
+        };
+
+        const sortingDisplay = getStockSortingDisplay(triggerConfig?.stock_sorting || record.trigger_config?.stock_sorting);
+
+        return (
+          <div>
+            <Text style={{ fontSize: '11px' }}>
+              最多 {triggerConfig?.max_stocks || record.trigger_config?.max_stocks || 'N/A'} 檔
+            </Text>
+            {sortingDisplay && (
+              <div style={{ fontSize: '10px', color: '#666' }}>
+                排序: {sortingDisplay}
+              </div>
+            )}
+          </div>
+        );
+      },
     },
     {
       title: 'KOL分配',
