@@ -1,7 +1,34 @@
 # Schedule Management Bug Fix Session - 2025-10-22
 
 ## Session Overview
-Fixed critical bugs in schedule creation and execution system for the autoposter forum project. Issues included incomplete configuration storage, API response parsing, and trigger execution logic.
+Fixed critical bugs in schedule creation and execution system for the autoposter forum project. Issues included incomplete configuration storage, API response parsing, trigger execution logic, and display inconsistencies.
+
+### Total Issues Fixed: 12
+
+**Initial Session (Issues #1-8):**
+1. Field name mismatch (generation_params vs generation_config)
+2. SelfLearningPage incomplete payload
+3. JSONB fields returning NULL
+4. Backend ignoring frontend-sent configs
+5. Python variable scope errors (json, daily_execution_time)
+6. Trigger type display showing "N/A"
+7. Execute test requiring pre-configured stocks
+8. Schedule execution modal implementation
+
+**Continuation Session (Issues #9-12):**
+9. stock_id KeyError in execute_schedule_now
+10. KOL assignment showing "N/A"
+11. max_stocks incorrect value (20 instead of 1)
+12. Stock sorting display not working
+
+### Commits Created
+- `5aa8bcee` - Fix field name mismatch
+- `89e5dcf1` - Fix SelfLearningPage payload
+- `25378f04` - Fix JSONB parsing
+- `13aa2e83` - Fix variable scope errors
+- `2d8c2cf5` - Fix trigger display and execution
+- `a4109a7b` - Fix stock_id KeyError and KOL assignment
+- `833c9071` - Fix max_stocks and stock_sorting display
 
 ---
 
@@ -564,17 +591,157 @@ git push
 
 ---
 
+## Continuation Session - Additional Fixes
+
+### ✅ Issue #9: stock_id KeyError in Schedule Execution
+**Problem:** Execute test button failed with error `'stock_id'`
+
+**Root Cause:**
+- Code at main.py:5818 used `stock['stock_id']`
+- But trigger function `get_after_hours_limit_up_stocks()` returns `stock['stock_code']` (see line 1069)
+- KeyError when trying to access non-existent field
+
+**Fix:**
+- **File:** `apps/unified-api/main.py`
+- **Line:** 5818
+- **Change:** `stock['stock_id']` → `stock['stock_code']`
+
+**Commit:** `a4109a7b` - "Fix schedule execution and KOL assignment display"
+
+---
+
+### ✅ Issue #10: KOL Assignment Shows "N/A" for New Schedules
+**Problem:** KOL分配 column displayed "N/A" instead of "隨機分配"
+
+**Root Cause:**
+- BatchScheduleModal.tsx was not including `kol_assignment` field in `trigger_config`
+- Frontend table displayed "N/A" when field was missing
+
+**Fix:**
+- **File:** `apps/dashboard-frontend/src/components/PostingManagement/BatchHistory/BatchScheduleModal.tsx`
+- **Lines:** 196, 212
+- **Change:** Added `kol_assignment: values.generation_config.kol_assignment || 'random'` to both branches of triggerConfig
+
+**Commit:** `a4109a7b` - "Fix schedule execution and KOL assignment display"
+
+---
+
+### ✅ Issue #11: max_stocks Incorrect Value (20 instead of 1)
+**Problem:** New schedules had `trigger_config.max_stocks = 20` instead of correct value (1)
+
+**Root Cause:**
+- BatchScheduleModal.tsx:195 used `fullTriggersConfig.threshold` (value: 20) as fallback
+- Should have used `values.generation_config.max_stocks` (value: 1)
+
+**User Feedback:**
+> "i think before the max_stock setting is correct. make sure."
+
+**Database Evidence:**
+- New schedules showed `"max_stocks": 20` in `trigger_config`
+- Old schedules correctly showed `"max_stocks": 1`
+
+**Fix:**
+- **File:** `apps/dashboard-frontend/src/components/PostingManagement/BatchHistory/BatchScheduleModal.tsx`
+- **Line:** 195
+- **Change:** `max_stocks: fullTriggersConfig.stockCountLimit || fullTriggersConfig.threshold`
+  → `max_stocks: fullTriggersConfig.stockCountLimit || values.generation_config.max_stocks`
+
+**Commit:** `833c9071` - "Fix max_stocks and stock_sorting display issues"
+
+---
+
+### ✅ Issue #12: Stock Sorting Display Shows Nothing or Errors
+**Problem:** "排序" (sorting) field not displaying correctly in schedule management table
+
+**Root Cause:**
+- API returns `stock_sorting` as **string** (e.g., `"five_day_change_desc"`)
+- Frontend code expected `stock_sorting` as **object** (e.g., `{ primary_sort: "..." }`)
+- Code tried to access `stock_sorting.primary_sort` on a string → undefined
+
+**User Feedback:**
+> "排序 應該是股票篩選排序，但我不確定是哪個欄位"
+
+**API Data Evidence:**
+```json
+"generation_config": {
+    "stock_sorting": "five_day_change_desc"  // STRING format
+}
+```
+
+**Fix:**
+- **File:** `apps/dashboard-frontend/src/components/PostingManagement/ScheduleManagement/ScheduleManagementPage.tsx`
+- **Lines:** 717-769
+- **Changes:**
+  1. Added helper function `getStockSortingDisplay()` to handle both formats
+  2. String format: Maps to Chinese labels (e.g., `"five_day_change_desc"` → `"五日漲幅↓"`)
+  3. Object format: Maps `primary_sort` field to Chinese labels
+  4. Supports both old and new API response structures
+
+**Sorting Display Mapping:**
+```typescript
+'five_day_change_desc': '五日漲幅↓'
+'five_day_change_asc': '五日漲幅↑'
+'change_percent_desc': '漲幅↓'
+'change_percent_asc': '漲幅↑'
+'volume_desc': '成交量↓'
+'volume_asc': '成交量↑'
+'amount_desc': '成交額↓'
+'amount_asc': '成交額↑'
+'current_price_desc': '股價↓'
+'current_price_asc': '股價↑'
+```
+
+**Commit:** `833c9071` - "Fix max_stocks and stock_sorting display issues"
+
+---
+
 ## Session End Notes
+
+**Final Deployment:** Commit `833c9071` pushed and auto-deploying
 
 All critical bugs have been fixed and code has been deployed. The main functionality should now work end-to-end:
 
 1. ✅ Create schedules from Batch History with complete configuration
 2. ✅ Create schedules from Self Learning with complete configuration
 3. ✅ API returns complete JSONB data to frontend
-4. ✅ Trigger type displays correctly in table
-5. ✅ Execute test button fetches stocks via trigger and generates posts
+4. ✅ Trigger type displays correctly in table ("盤後漲停" instead of "N/A")
+5. ✅ KOL assignment displays correctly in table ("隨機分配" instead of "N/A")
+6. ✅ Stock settings shows correct max_stocks value (1 instead of 20)
+7. ✅ Stock sorting displays correctly ("五日漲幅↓" instead of N/A or error)
+8. ✅ Execute test button fetches stocks via trigger and generates posts (no KeyError)
 
-Please test all scenarios in the Testing Checklist after deployments complete (~5 minutes).
+### Final Testing Checklist
+
+After deployment completes, verify the following:
+
+**Schedule Creation:**
+- [ ] Create schedule from Batch History modal
+- [ ] Verify trigger_config has correct max_stocks (not 20)
+- [ ] Verify trigger_config includes kol_assignment field
+- [ ] Verify trigger_config includes stock_sorting field
+
+**Schedule Display:**
+- [ ] Table shows correct trigger type ("盤後漲停")
+- [ ] Table shows correct KOL assignment ("隨機分配")
+- [ ] Table shows correct stock count ("最多 1 檔")
+- [ ] Table shows correct sorting ("排序: 五日漲幅↓")
+
+**Schedule Execution:**
+- [ ] Click "立即執行測試" button
+- [ ] Verify no KeyError about stock_id or stock_code
+- [ ] Verify stocks are fetched from trigger
+- [ ] Verify posts are generated successfully
+- [ ] Verify execution modal displays results
+
+**Database Verification:**
+```sql
+SELECT schedule_id, schedule_name,
+       trigger_config->'max_stocks' as max_stocks,
+       trigger_config->'kol_assignment' as kol_assignment,
+       trigger_config->'stock_sorting' as stock_sorting
+FROM schedule_tasks
+ORDER BY created_at DESC LIMIT 5;
+```
 
 If any issues arise, check:
 1. Railway logs for backend errors
