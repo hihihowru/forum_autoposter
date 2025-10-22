@@ -34,6 +34,8 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 import pytz
 import traceback
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+import asyncio
 
 # Timezone utility - Always use Taipei time (GMT+8)
 def get_current_time():
@@ -133,6 +135,9 @@ logger = logging.getLogger(__name__)
 logging.getLogger("openai").setLevel(logging.WARNING)
 logging.getLogger("openai._base_client").setLevel(logging.WARNING)
 logging.getLogger("httpx").setLevel(logging.WARNING)
+
+# 🔥 Initialize APScheduler for automatic schedule execution
+scheduler = AsyncIOScheduler(timezone='Asia/Taipei')
 
 # 創建 FastAPI 應用
 app = FastAPI(
@@ -368,6 +373,212 @@ def create_schedule_tasks_table():
         if conn:
             return_db_connection(conn)
 
+# 🔥 APScheduler Background Job - Check and execute schedules
+async def check_schedules():
+    """
+    Background job that runs every minute to check for schedules ready to execute.
+
+    Flow:
+    1. Find schedules where status='active' AND next_run <= NOW()
+    2. Execute each schedule (generate posts)
+    3. If auto_posting=true: Publish posts with queue intervals
+    4. Calculate and update next_run for next execution
+    """
+    conn = None
+    try:
+        logger.info("🔍 [APScheduler] Checking for schedules ready to execute...")
+
+        conn = get_db_connection()
+        if not conn:
+            logger.error("❌ [APScheduler] Failed to get database connection")
+            return
+
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            # Find active schedules where next_run <= NOW()
+            now = get_current_time()
+            cursor.execute("""
+                SELECT *
+                FROM schedule_tasks
+                WHERE status = 'active'
+                  AND next_run IS NOT NULL
+                  AND next_run <= %s
+                ORDER BY next_run ASC
+            """, (now,))
+
+            ready_schedules = cursor.fetchall()
+
+            if not ready_schedules:
+                logger.info("✅ [APScheduler] No schedules ready to execute")
+                return
+
+            logger.info(f"🚀 [APScheduler] Found {len(ready_schedules)} schedule(s) ready to execute")
+
+            # Execute each schedule
+            for schedule in ready_schedules:
+                try:
+                    schedule_id = schedule['schedule_id']
+                    schedule_name = schedule['schedule_name']
+                    auto_posting = schedule.get('auto_posting', False)
+                    interval_seconds = schedule.get('interval_seconds', 300)
+
+                    logger.info(f"🚀 [APScheduler] Executing schedule: {schedule_name} (ID: {schedule_id})")
+                    logger.info(f"🔧 [APScheduler] auto_posting={auto_posting}, interval_seconds={interval_seconds}")
+
+                    # Import necessary modules for execution
+                    import httpx
+
+                    # Call the existing execute endpoint internally
+                    # We'll construct a request body similar to what the API endpoint expects
+                    async with httpx.AsyncClient(timeout=300.0) as client:
+                        # Call our own execute endpoint
+                        api_url = os.getenv('RAILWAY_PUBLIC_URL', 'http://localhost:8080')
+                        response = await client.post(
+                            f"{api_url}/api/schedule/execute/{schedule_id}",
+                            json={}
+                        )
+
+                        if response.status_code == 200:
+                            result = response.json()
+                            logger.info(f"✅ [APScheduler] Schedule executed successfully: {schedule_name}")
+
+                            # If auto_posting is enabled, publish posts with intervals
+                            if auto_posting and result.get('success'):
+                                posts = result.get('data', {}).get('posts', [])
+                                if posts:
+                                    logger.info(f"📤 [APScheduler] Auto-posting enabled - Publishing {len(posts)} posts with {interval_seconds}s intervals")
+                                    await publish_posts_with_queue(posts, interval_seconds)
+                                else:
+                                    logger.warning(f"⚠️ [APScheduler] No posts to publish for schedule: {schedule_name}")
+
+                            # Calculate next_run for the next execution
+                            await update_next_run(schedule_id, schedule)
+                        else:
+                            logger.error(f"❌ [APScheduler] Schedule execution failed: {schedule_name}, status={response.status_code}")
+
+                except Exception as schedule_error:
+                    logger.error(f"❌ [APScheduler] Error executing schedule {schedule.get('schedule_name')}: {schedule_error}")
+                    logger.error(traceback.format_exc())
+                    # Continue with next schedule even if this one fails
+                    continue
+
+    except Exception as e:
+        logger.error(f"❌ [APScheduler] Error in check_schedules: {e}")
+        logger.error(traceback.format_exc())
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+async def publish_posts_with_queue(posts: List[Dict], interval_seconds: int):
+    """
+    Publish posts one by one with intervals between them.
+
+    Args:
+        posts: List of post dictionaries from schedule execution
+        interval_seconds: Seconds to wait between publishing each post
+    """
+    try:
+        import httpx
+        api_url = os.getenv('RAILWAY_PUBLIC_URL', 'http://localhost:8080')
+
+        for idx, post in enumerate(posts):
+            try:
+                post_id = post.get('post_id')
+                stock_code = post.get('stock_code')
+
+                logger.info(f"📤 [Auto-Posting] Publishing post {idx+1}/{len(posts)}: {stock_code} (ID: {post_id})")
+
+                async with httpx.AsyncClient(timeout=120.0) as client:
+                    # Call the publish endpoint
+                    response = await client.post(
+                        f"{api_url}/api/posts/publish",
+                        json={"post_ids": [post_id]}
+                    )
+
+                    if response.status_code == 200:
+                        result = response.json()
+                        if result.get('success'):
+                            logger.info(f"✅ [Auto-Posting] Post published successfully: {stock_code}")
+                        else:
+                            logger.error(f"❌ [Auto-Posting] Failed to publish post: {result.get('error')}")
+                    else:
+                        logger.error(f"❌ [Auto-Posting] Publish API returned {response.status_code}")
+
+                # Wait interval before publishing next post (except for last post)
+                if idx < len(posts) - 1:
+                    logger.info(f"⏳ [Auto-Posting] Waiting {interval_seconds}s before next post...")
+                    await asyncio.sleep(interval_seconds)
+
+            except Exception as post_error:
+                logger.error(f"❌ [Auto-Posting] Error publishing post {post_id}: {post_error}")
+                # Continue with next post even if this one fails
+                continue
+
+    except Exception as e:
+        logger.error(f"❌ [Auto-Posting] Error in publish_posts_with_queue: {e}")
+        logger.error(traceback.format_exc())
+
+async def update_next_run(schedule_id: str, schedule: Dict):
+    """
+    Calculate and update next_run time for a schedule based on its schedule_type.
+
+    Args:
+        schedule_id: Schedule ID
+        schedule: Schedule dictionary from database
+    """
+    conn = None
+    try:
+        schedule_type = schedule.get('schedule_type', 'daily')
+        daily_execution_time = schedule.get('daily_execution_time')
+        weekdays_only = schedule.get('weekdays_only', True)
+        timezone_str = schedule.get('timezone', 'Asia/Taipei')
+
+        tz = pytz.timezone(timezone_str)
+        now = datetime.now(tz)
+        next_run = None
+
+        if schedule_type == 'daily' and daily_execution_time:
+            # Parse execution time (format: "HH:MM")
+            try:
+                hour, minute = map(int, daily_execution_time.split(':'))
+
+                # Calculate next execution time (tomorrow at the same time)
+                next_run = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                next_run = next_run + timedelta(days=1)
+
+                # Skip weekends if weekdays_only
+                if weekdays_only:
+                    while next_run.weekday() >= 5:  # 5=Saturday, 6=Sunday
+                        next_run = next_run + timedelta(days=1)
+
+                logger.info(f"📅 [APScheduler] Next run for schedule {schedule_id}: {next_run.isoformat()}")
+
+            except Exception as parse_error:
+                logger.error(f"❌ [APScheduler] Failed to parse daily_execution_time: {parse_error}")
+                return
+        else:
+            # For other schedule types or if no daily_execution_time, set to null
+            logger.warning(f"⚠️ [APScheduler] Schedule type '{schedule_type}' not fully supported for auto-update")
+            return
+
+        # Update next_run in database
+        conn = get_db_connection()
+        if conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    UPDATE schedule_tasks
+                    SET next_run = %s, updated_at = NOW()
+                    WHERE schedule_id = %s
+                """, (next_run, schedule_id))
+                conn.commit()
+                logger.info(f"✅ [APScheduler] Updated next_run for schedule {schedule_id}")
+
+    except Exception as e:
+        logger.error(f"❌ [APScheduler] Error updating next_run for schedule {schedule_id}: {e}")
+        logger.error(traceback.format_exc())
+    finally:
+        if conn:
+            return_db_connection(conn)
+
 @app.on_event("startup")
 def startup_event():
     """啟動時初始化 FinLab 和數據庫連接"""
@@ -487,6 +698,41 @@ def startup_event():
                 logger.warning("⚠️ 無法從 FinLab 取得公司資訊")
     except Exception as e:
         logger.error(f"❌ 從 FinLab 載入公司資訊失敗: {e}")
+
+    # 🔥 Initialize and start APScheduler
+    try:
+        logger.info("🚀 [APScheduler] 正在啟動排程器...")
+
+        # Add job to check schedules every minute
+        scheduler.add_job(
+            check_schedules,
+            'interval',
+            minutes=1,
+            id='check_schedules',
+            replace_existing=True,
+            max_instances=1  # Prevent overlapping runs
+        )
+
+        # Start the scheduler
+        scheduler.start()
+        logger.info("✅ [APScheduler] 排程器啟動成功 - 每分鐘檢查排程任務")
+
+    except Exception as scheduler_error:
+        logger.error(f"❌ [APScheduler] 排程器啟動失敗: {scheduler_error}")
+        logger.error(traceback.format_exc())
+        # Don't crash startup if scheduler fails
+
+@app.on_event("shutdown")
+def shutdown_event():
+    """應用關閉時清理資源"""
+    try:
+        # Shutdown scheduler
+        if scheduler and scheduler.running:
+            logger.info("🛑 [APScheduler] 正在關閉排程器...")
+            scheduler.shutdown(wait=False)
+            logger.info("✅ [APScheduler] 排程器已關閉")
+    except Exception as e:
+        logger.error(f"❌ [APScheduler] 排程器關閉失敗: {e}")
 
 def ensure_finlab_login():
     """確保 FinLab 已登入"""
