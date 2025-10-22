@@ -36,6 +36,7 @@ import pytz
 import traceback
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import asyncio
+import asyncpg  # 🔥 Add asyncpg for KOL Profile query
 
 # Timezone utility - Always use Taipei time (GMT+8)
 def get_current_time():
