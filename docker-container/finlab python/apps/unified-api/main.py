@@ -90,8 +90,7 @@ def convert_post_datetimes_to_taipei(post_dict):
                 try:
                     parsed = json.loads(result[field])
                     result[field] = parsed
-                    if field == 'generation_params':
-                        logger.info(f"🔍 DEBUG: Parsed generation_params, has full_triggers_config: {'full_triggers_config' in parsed}")
+                    # Removed excessive debug logging (was causing 500 logs/sec Railway limit)
                 except Exception as e:
                     logger.error(f"❌ Failed to parse {field}: {e}")
                     result[field] = None
@@ -99,8 +98,7 @@ def convert_post_datetimes_to_taipei(post_dict):
     # 🔥 FIX: Rename generation_params to generation_config for frontend compatibility
     if 'generation_params' in result:
         result['generation_config'] = result.pop('generation_params')
-        if result['generation_config']:
-            logger.info(f"🔍 DEBUG: Renamed to generation_config, type: {type(result['generation_config'])}")
+        # Removed excessive debug logging (was causing 500 logs/sec Railway limit)
 
     return result
 
@@ -5856,13 +5854,27 @@ async def execute_schedule_now(task_id: str, request: Request):
                 kol_serial = kol_serials[0]  # Default to first KOL
 
             try:
+                # 🔥 FIX: Map content_style to kol_persona
+                content_style = generation_config.get('content_style', 'chart_analysis')
+                kol_persona_mapping = {
+                    'chart_analysis': 'technical',
+                    'technical_analysis': 'technical',
+                    'fundamental_analysis': 'fundamental',
+                    'macro_analysis': 'fundamental',
+                    'news_analysis': 'news_driven',
+                    'mixed_analysis': 'mixed'
+                }
+                kol_persona = generation_config.get('kol_persona') or kol_persona_mapping.get(content_style, 'technical')
+
+                logger.info(f"🔍 Content style: {content_style} → KOL persona: {kol_persona}")
+
                 # Call manual_posting logic internally
                 # Build request body
                 post_body = {
                     "stock_code": stock_code,
                     "stock_name": stock_code,  # TODO: Get actual stock name
                     "kol_serial": kol_serial,
-                    "kol_persona": generation_config.get('kol_persona', 'technical'),
+                    "kol_persona": kol_persona,  # 🔥 FIX: Use mapped kol_persona
                     "session_id": session_id,
                     "trigger_type": trigger_config.get('trigger_type', 'custom_stocks'),
                     "posting_type": generation_config.get('posting_type', 'analysis'),
