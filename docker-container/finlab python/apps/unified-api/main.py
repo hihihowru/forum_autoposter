@@ -1021,7 +1021,8 @@ async def reconnect_database():
 async def get_after_hours_limit_up_stocks(
     limit: int = Query(1000, description="股票數量限制"),
     changeThreshold: float = Query(9.5, description="漲跌幅閾值百分比"),
-    industries: str = Query("", description="產業類別篩選")
+    industries: str = Query("", description="產業類別篩選"),
+    sortBy: str = Query(None, description="排序方式: five_day_loss, five_day_gain, volume_desc, etc.")
 ):
     """獲取盤後漲停股票列表 - 支持動態漲跌幅設定"""
     try:
@@ -1127,7 +1128,8 @@ async def get_after_hours_limit_up_stocks(
 async def get_after_hours_limit_down_stocks(
     limit: int = Query(1000, description="股票數量限制"),
     changeThreshold: float = Query(-9.5, description="跌幅閾值百分比"),
-    industries: str = Query("", description="產業類別篩選")
+    industries: str = Query("", description="產業類別篩選"),
+    sortBy: str = Query(None, description="排序方式: five_day_loss, five_day_gain, volume_desc, etc.")
 ):
     """獲取盤後跌停股票列表"""
     try:
@@ -5598,6 +5600,33 @@ async def create_schedule(request: Request):
             # 生成配置 (generation_config)
             generation_config = data.get('generation_config', {})
 
+            # 🔥 FIX: Extract correct parameters from full_triggers_config
+            schedule_config_data = data.get('schedule_config', {})
+            full_triggers_config = schedule_config_data.get('full_triggers_config', {})
+
+            # Map stockCountLimit → max_stocks
+            if 'stockCountLimit' in full_triggers_config:
+                generation_config['max_stocks'] = full_triggers_config['stockCountLimit']
+                logger.info(f"🔧 Mapped stockCountLimit={full_triggers_config['stockCountLimit']} → max_stocks")
+
+            # Map stockFilterCriteria → stock_sorting
+            if 'stockFilterCriteria' in full_triggers_config and full_triggers_config['stockFilterCriteria']:
+                criteria_list = full_triggers_config['stockFilterCriteria']
+                if isinstance(criteria_list, list) and len(criteria_list) > 0:
+                    # Map the first criteria to stock_sorting
+                    criteria_map = {
+                        'five_day_gain': 'five_day_change_desc',
+                        'five_day_loss': 'five_day_loss_desc',
+                        'daily_gain': 'daily_change_desc',
+                        'daily_loss': 'daily_change_asc',
+                        'volume_high': 'volume_desc',
+                        'volume_low': 'volume_asc'
+                    }
+                    first_criteria = criteria_list[0]
+                    stock_sorting = criteria_map.get(first_criteria, first_criteria)
+                    generation_config['stock_sorting'] = stock_sorting
+                    logger.info(f"🔧 Mapped stockFilterCriteria={first_criteria} → stock_sorting={stock_sorting}")
+
             # Extract daily_execution_time first (needed for next_run calculation later)
             daily_execution_time = data.get('daily_execution_time')
 
@@ -5624,6 +5653,11 @@ async def create_schedule(request: Request):
                     "max_stocks": max_stocks,
                     "stock_sorting": stock_sorting
                 }
+            else:
+                # 🔥 FIX: Ensure trigger_config uses the correct max_stocks from stockCountLimit
+                if 'stockCountLimit' in full_triggers_config:
+                    trigger_config['max_stocks'] = full_triggers_config['stockCountLimit']
+                    logger.info(f"🔧 Updated trigger_config.max_stocks={full_triggers_config['stockCountLimit']}")
 
             # 🔥 FIX: Use schedule_config from frontend if provided, otherwise build from data
             schedule_config = data.get('schedule_config')
@@ -5845,9 +5879,24 @@ async def execute_schedule_now(task_id: str, request: Request):
         logger.info(f"🔍 trigger_config: {json.dumps(trigger_config, ensure_ascii=False)[:200]}")
         logger.info(f"🔍 schedule_config: {json.dumps(schedule_config, ensure_ascii=False)[:200]}")
 
+        # 🔥 FIX: Prioritize values from full_triggers_config if available
+        full_triggers_config = schedule_config.get('full_triggers_config', {})
+
         # Extract KOL assignment and max stocks
         kol_assignment = trigger_config.get('kol_assignment', 'random')
-        max_stocks = trigger_config.get('max_stocks', 5)
+
+        # Use stockCountLimit from full_triggers_config if available, otherwise fallback to trigger_config
+        if 'stockCountLimit' in full_triggers_config:
+            max_stocks = full_triggers_config['stockCountLimit']
+            logger.info(f"🔧 Using max_stocks={max_stocks} from full_triggers_config.stockCountLimit")
+        else:
+            max_stocks = trigger_config.get('max_stocks', 5)
+            logger.info(f"🔧 Using max_stocks={max_stocks} from trigger_config (fallback)")
+
+        # Extract stock_sorting criteria from full_triggers_config if available
+        stock_filter_criteria = full_triggers_config.get('stockFilterCriteria', [])
+        if stock_filter_criteria:
+            logger.info(f"🔧 Using stockFilterCriteria={stock_filter_criteria} from full_triggers_config")
 
         # 🔥 FIX: Support both old format (stock_codes) and new format (triggerKey)
         stock_codes = trigger_config.get('stock_codes', [])
@@ -5861,17 +5910,41 @@ async def execute_schedule_now(task_id: str, request: Request):
             threshold = trigger_config.get('threshold', 20)
             filters = trigger_config.get('filters', {})
 
+            # 🔥 FIX: Map stock_filter_criteria to sortBy parameter
+            sortBy = None
+            if stock_filter_criteria and len(stock_filter_criteria) > 0:
+                criteria_to_sortBy = {
+                    'five_day_gain': 'five_day_gain',
+                    'five_day_loss': 'five_day_loss',
+                    'daily_gain': 'change_percent_desc',
+                    'daily_loss': 'change_percent_asc',
+                    'volume_high': 'volume_desc',
+                    'volume_low': 'volume_asc'
+                }
+                sortBy = criteria_to_sortBy.get(stock_filter_criteria[0])
+                logger.info(f"🔧 Mapped stockFilterCriteria[0]={stock_filter_criteria[0]} → sortBy={sortBy}")
+
             # Execute trigger based on type
             if trigger_key == 'limit_up_after_hours':
                 trigger_result = await get_after_hours_limit_up_stocks(
-                    limit=1000,
+                    limit=max_stocks * 2,  # Fetch more than needed for filtering
                     changeThreshold=9.5,
-                    industries=""
+                    industries="",
+                    sortBy=sortBy
                 )
                 if 'stocks' in trigger_result:
-                    # 🔥 FIX: Use 'stock_code' not 'stock_id'
                     stock_codes = [stock['stock_code'] for stock in trigger_result['stocks']]
-                    logger.info(f"✅ 觸發器返回 {len(stock_codes)} 檔股票")
+                    logger.info(f"✅ 觸發器返回 {len(stock_codes)} 檔股票 (sortBy={sortBy})")
+            elif trigger_key == 'limit_down_after_hours':
+                trigger_result = await get_after_hours_limit_down_stocks(
+                    limit=max_stocks * 2,  # Fetch more than needed for filtering
+                    changeThreshold=9.5,
+                    industries="",
+                    sortBy=sortBy
+                )
+                if 'stocks' in trigger_result:
+                    stock_codes = [stock['stock_code'] for stock in trigger_result['stocks']]
+                    logger.info(f"✅ 觸發器返回 {len(stock_codes)} 檔股票 (sortBy={sortBy})")
             else:
                 logger.warning(f"⚠️ 未支持的觸發器類型: {trigger_key}")
 
