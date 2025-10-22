@@ -5854,6 +5854,10 @@ async def execute_schedule_now(task_id: str, request: Request):
                 kol_serial = kol_serials[0]  # Default to first KOL
 
             try:
+                # 🔥 FIX: Get actual stock name from stock_mapping
+                stock_name = stock_mapping.get(stock_code, stock_code)  # Fallback to code if not found
+                logger.info(f"📊 Stock: {stock_code} → {stock_name}")
+
                 # 🔥 FIX: Map content_style to kol_persona
                 content_style = generation_config.get('content_style', 'chart_analysis')
                 kol_persona_mapping = {
@@ -5872,7 +5876,7 @@ async def execute_schedule_now(task_id: str, request: Request):
                 # Build request body
                 post_body = {
                     "stock_code": stock_code,
-                    "stock_name": stock_code,  # TODO: Get actual stock name
+                    "stock_name": stock_name,  # 🔥 FIX: Use actual stock name
                     "kol_serial": kol_serial,
                     "kol_persona": kol_persona,  # 🔥 FIX: Use mapped kol_persona
                     "session_id": session_id,
