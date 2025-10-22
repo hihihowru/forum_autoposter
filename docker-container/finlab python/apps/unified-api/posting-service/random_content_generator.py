@@ -41,7 +41,8 @@ class RandomContentGenerator:
         stock_code: str = '',
         trigger_type: str = None,
         serper_data: Dict = None,
-        max_words: int = None
+        max_words: int = None,
+        kol_persona_override: str = None
     ) -> Dict[str, Any]:
         """
         生成隨機化內容
@@ -55,6 +56,7 @@ class RandomContentGenerator:
             stock_code: 股票代碼
             serper_data: 新聞數據
             max_words: 最大字數限制
+            kol_persona_override: KOL人設覆蓋 (可選) - 覆蓋KOL固有人設
 
         Returns:
             包含選中版本和其他版本的字典
@@ -67,7 +69,8 @@ class RandomContentGenerator:
         # 生成5個版本
         versions = self._generate_five_versions(
             original_title, original_content, kol_profile,
-            posting_type, stock_name, stock_code, trigger_type, serper_data, max_words
+            posting_type, stock_name, stock_code, trigger_type, serper_data, max_words,
+            kol_persona_override  # 🔥 FIX: Pass persona override
         )
         
         # 隨機選擇一個版本 - 使用更好的隨機性
@@ -106,7 +109,8 @@ class RandomContentGenerator:
         stock_code: str,
         trigger_type: str = None,
         serper_data: Dict = None,
-        max_words: int = None
+        max_words: int = None,
+        kol_persona_override: str = None
     ) -> List[Dict[str, str]]:
         """生成5個不同版本的內容"""
 
@@ -122,11 +126,17 @@ class RandomContentGenerator:
         prompt_skeleton = getattr(kol_profile, 'prompt_skeleton', '')
 
         # Fallback to OLD fields if NEW fields are empty
-        kol_persona = prompt_persona if prompt_persona else getattr(kol_profile, 'persona', '專業')
+        kol_persona_from_profile = prompt_persona if prompt_persona else getattr(kol_profile, 'persona', '專業')
+
+        # 🔥 FIX: Use override if provided, otherwise use profile persona
+        kol_persona = kol_persona_override if kol_persona_override else kol_persona_from_profile
+
         tone_style = prompt_style if prompt_style else getattr(kol_profile, 'tone_style', '專業分析')
         common_terms = getattr(kol_profile, 'common_terms', '')
         colloquial_terms = getattr(kol_profile, 'colloquial_terms', '')
 
+        if kol_persona_override:
+            self.logger.info(f"🔧 使用覆蓋人設: {kol_persona} (KOL原人設: {kol_persona_from_profile})")
         self.logger.info(f"🎯 KOL 特色 - 暱稱: {kol_nickname}, 人設: {kol_persona}, 風格: {tone_style}")
         self.logger.info(f"🔄 生成 5 個版本...")  # Single line instead of 5+5=10 lines
 

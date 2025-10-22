@@ -2353,7 +2353,8 @@ async def manual_posting(request: Request):
                     trigger_type=trigger_type,
                     real_time_price_data={},
                     posting_type=posting_type,
-                    max_words=max_words
+                    max_words=max_words,
+                    kol_persona_override=kol_persona  # 🔥 FIX: Pass persona override to respect user's content_style choice
                 )
 
                 # 更新為選中的版本內容
@@ -2602,7 +2603,8 @@ async def performance_test(request: Request):
                     trigger_type=trigger_type,
                     real_time_price_data={},
                     posting_type=posting_type,
-                    max_words=max_words
+                    max_words=max_words,
+                    kol_persona_override=kol_persona  # 🔥 FIX: Pass persona override to respect user's content_style choice
                 )
 
                 title = personalized_title
