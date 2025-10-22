@@ -5625,14 +5625,14 @@ async def create_schedule(request: Request):
                 INSERT INTO schedule_tasks (
                     schedule_id, schedule_name, schedule_description, status, schedule_type,
                     interval_seconds, auto_posting, max_posts_per_hour,
-                    timezone, weekdays_only, batch_info, generation_config,
+                    timezone, weekdays_only, daily_execution_time, batch_info, generation_config,
                     trigger_config, schedule_config,
                     next_run, created_at, updated_at,
                     run_count, success_count, failure_count
                 ) VALUES (
                     %s, %s, %s, %s, %s,
                     %s, %s, %s,
-                    %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s,
                     %s, %s,
                     %s, NOW(), NOW(),
                     0, 0, 0
@@ -5654,6 +5654,7 @@ async def create_schedule(request: Request):
                 max_posts_per_hour,
                 timezone,
                 weekdays_only,
+                daily_execution_time,  # 🔥 FIX: Add daily_execution_time
                 json.dumps(batch_info),
                 json.dumps(generation_config),
                 json.dumps(trigger_config),  # 🔥 FIX: Add trigger_config
@@ -6059,6 +6060,76 @@ async def update_schedule(task_id: str, request: Request):
         if conn:
             conn.rollback()
         logger.error(f"❌ 編輯排程失敗: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {
+            "success": False,
+            "error": str(e),
+            "task_id": task_id
+        }
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+
+@app.post("/api/schedule/cancel/{task_id}")
+async def cancel_schedule(task_id: str):
+    """
+    取消/停止排程
+    Cancel or stop a schedule
+    """
+    logger.info(f"收到取消排程請求 - Task ID: {task_id}")
+
+    conn = None
+    try:
+        if not db_pool:
+            return {
+                "success": False,
+                "error": "數據庫連接不可用"
+            }
+
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            # Check if schedule exists
+            cursor.execute("""
+                SELECT schedule_id, status
+                FROM schedule_tasks
+                WHERE schedule_id = %s
+            """, (task_id,))
+
+            existing = cursor.fetchone()
+            if not existing:
+                return {
+                    "success": False,
+                    "error": f"找不到排程: {task_id}"
+                }
+
+            # Update status to cancelled
+            cursor.execute("""
+                UPDATE schedule_tasks
+                SET status = 'cancelled',
+                    updated_at = NOW()
+                WHERE schedule_id = %s
+                RETURNING *
+            """, (task_id,))
+
+            updated_schedule = cursor.fetchone()
+            conn.commit()
+
+            logger.info(f"✅ 排程已取消: {task_id}")
+
+            return {
+                "success": True,
+                "message": "排程已取消",
+                "task_id": task_id,
+                "previous_status": existing['status'],
+                "new_status": "cancelled"
+            }
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"❌ 取消排程失敗: {e}")
         import traceback
         logger.error(traceback.format_exc())
         return {

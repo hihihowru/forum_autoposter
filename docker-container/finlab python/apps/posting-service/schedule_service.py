@@ -1209,6 +1209,7 @@ class ScheduleService:
                 stock_name=assignment["stock_name"],
                 kol_serial=assignment["kol_serial"],
                 kol_persona=generation_config.get('kol_persona', 'technical'),
+                posting_type=generation_config.get('posting_type', 'analysis'),  # 🔥 FIX: Add posting_type from config
                 content_style=generation_config.get('content_style', 'chart_analysis'),
                 target_audience=generation_config.get('target_audience', 'active_traders'),
                 content_length=generation_config.get('content_length', 'medium'),
