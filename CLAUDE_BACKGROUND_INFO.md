@@ -1,12 +1,81 @@
 # Claude CLI Background Information
 **Project**: Forum Autoposter - Automated Stock Discussion Post Generator
-**Last Updated**: 2025-10-22
+**Last Updated**: 2025-10-22 (Session 2)
 **Railway Project**: adaptable-radiance
 **Service**: forum_autoposter
 
 ---
 
-## 📋 Session Summary (2025-10-22)
+## 📋 Latest Session Summary (2025-10-22 - Session 2)
+
+**See detailed summary**: `SESSION_SUMMARY_2025-10-22.md`
+
+### What We Accomplished
+
+#### 1. ✅ Fixed trigger_type Bug (Commit: b3ff273b)
+**Problem**: Scheduled posts showing "自選股" instead of actual trigger (e.g., "漲幅排序+成交額")
+
+**Root Cause**: Line 6193 used `trigger_config.get('trigger_type', 'custom_stocks')` which defaulted to 'custom_stocks'
+
+**Fix**: Changed to use `trigger_key` which contains the actual executed trigger
+
+**File**: `apps/unified-api/main.py:6193`
+
+#### 2. ✅ Added generation_mode Foundation (Commit: b3ff273b, 86746bc8)
+**Purpose**: Distinguish between 手動生成, 排程生成, 自我學習
+
+**Changes**:
+- Added `generation_mode` parameter extraction (main.py:2263)
+- Updated INSERT to include generation_mode (main.py:2462, 2485)
+- Added database migration for generation_mode column (main.py:931-935)
+
+**Values**: `'manual'`, `'scheduled'`, `'self_learning'`
+
+#### 3. ✅ Fixed Versions API + Implemented Version Management (Commit: bcd0705d)
+**Problem**: Versions API returned 404, and UI showed "功能開發中..."
+
+**Fixes**:
+- Fixed API URL in frontend (postingManagementAPI.ts:1013)
+- Fixed backend to read from `alternative_versions` JSON column (main.py:3354-3410)
+- Updated version selection logic (ScheduleExecutionModal.tsx:190-221)
+
+**Now Works**: Users can view and switch between 5 generated versions
+
+#### 4. ✅ Added 生成模式 Column to UI (Commit: bcd0705d)
+**File**: `apps/dashboard-frontend/src/components/.../BatchHistoryPage.tsx:324-337`
+
+**Display**:
+- 🔵 手動生成 (blue) - Manual posts
+- 🟢 排程生成 (green) - Scheduled posts
+- 🟣 自我學習 (purple) - Self-learning posts
+
+---
+
+## 🚨 CRITICAL DISCOVERY: APScheduler NOT Implemented!
+
+**Status**: ❌ auto_posting toggle does NOTHING automatically
+
+**What Exists**:
+- ✅ Database column: `auto_posting` in `schedule_tasks`
+- ✅ API endpoint: `POST /api/schedule/{task_id}/auto-posting`
+- ✅ Manual execution: "立即執行測試" button works
+
+**What's Missing**:
+- ❌ NO APScheduler initialization in startup
+- ❌ NO background job checking schedules
+- ❌ NO automatic execution
+
+**What Needs to Be Done**:
+1. Import and initialize APScheduler in `startup_event()` (main.py:371)
+2. Create `check_and_execute_schedules()` function
+3. Run every minute to check `next_run <= now`
+4. Auto-publish posts if `auto_posting = true`
+
+**See**: `SESSION_SUMMARY_2025-10-22.md` for implementation details
+
+---
+
+## 📋 Previous Session Summary (2025-10-22 - Session 1)
 
 ### What We Accomplished
 
@@ -79,9 +148,16 @@ if expires_at.tzinfo is None:
 
 ## 🚧 Yet to Implement
 
-1. **Version Management**: Currently shows placeholder "功能開發中..."
-   - Needs to display alternative_versions from database
-   - Allow switching between generated versions
+1. **APScheduler Background Job** 🚨 CRITICAL
+   - Initialize APScheduler on startup
+   - Create background job to check schedules every minute
+   - Auto-execute schedules where `next_run <= now`
+   - Auto-publish posts if `auto_posting = true`
+   - **Current Status**: auto_posting toggle does nothing automatically!
+
+2. **Frontend Enhancements** (Optional)
+   - Add generation_mode to PostReviewPage (發文審核)
+   - Add generation_mode filter to batch history
 
 ---
 

@@ -9,6 +9,7 @@ from typing import Dict, List, Any, Optional
 import json
 import logging
 from dotenv import load_dotenv
+import re
 
 # 載入環境變數
 load_dotenv('../../../../.env')
@@ -36,198 +37,399 @@ class GPTContentGenerator:
     def generate_stock_analysis(self,
                              stock_id: str,
                              stock_name: str,
-                             kol_persona: str,
-                             serper_analysis: Dict[str, Any],
-                             data_sources: List[str],
+                             kol_profile: Dict[str, Any],
+                             posting_type: str = "analysis",
+                             trigger_type: str = "custom_stocks",
+                             serper_analysis: Optional[Dict[str, Any]] = None,
+                             ohlc_data: Optional[Dict[str, Any]] = None,
+                             technical_indicators: Optional[Dict[str, Any]] = None,
                              content_length: str = "medium",
                              max_words: int = 200,
-                             model: Optional[str] = None) -> Dict[str, Any]:
-        """使用GPT生成股票分析內容
+                             model: Optional[str] = None,
+                             template_id: Optional[int] = None,
+                             db_connection = None) -> Dict[str, Any]:
+        """使用GPT生成股票分析內容 - Prompt 模板系統
 
         Args:
-            model: 可選的模型ID，如果提供則覆蓋預設模型
+            stock_id: 股票代號
+            stock_name: 股票名稱
+            kol_profile: 完整的KOL資料
+            posting_type: 發文類型 (analysis/interaction/personalized)
+            trigger_type: 觸發器類型
+            serper_analysis: Serper新聞分析結果
+            ohlc_data: OHLC價格數據
+            technical_indicators: 技術指標數據
+            content_length: 內容長度
+            max_words: 最大字數
+            model: 模型ID
+            template_id: Prompt 模板 ID（可選）
+            db_connection: 資料庫連線（可選）
         """
 
         try:
             if not self.api_key:
+                kol_persona = kol_profile.get('persona', 'mixed')
                 return self._fallback_generation(stock_id, stock_name, kol_persona)
 
-            # 🔥 確定使用的模型：傳入的model參數 > 實例預設model
+            # 🔥 確定使用的模型
             chosen_model = model if model else self.model
-            logger.info(f"🤖 GPT 生成器使用模型: {chosen_model}")
+            logger.info(f"🤖 GPT 生成器使用模型: {chosen_model}, posting_type: {posting_type}")
 
-            # 優先使用新聞分析Agent
-            news_items = serper_analysis.get('news_items', [])
-            if news_items:
-                logger.info(f"使用新聞分析Agent分析 {len(news_items)} 則新聞")
-                from news_analysis_agent import news_analysis_agent
-                return news_analysis_agent.analyze_stock_news(
-                    stock_id, stock_name, news_items, kol_persona
-                )
+            # 處理預設值
+            serper_analysis = serper_analysis or {}
 
-            # 如果沒有新聞，使用基本GPT分析
-            prompt = self._build_analysis_prompt(
-                stock_id, stock_name, kol_persona, serper_analysis, data_sources, content_length, max_words
+            # 🎯 載入 Prompt 模板
+            template = self._load_prompt_template(posting_type, template_id, db_connection)
+            logger.info(f"📋 使用模板: {template.get('name', '預設模板')}")
+
+            # 🎯 準備參數
+            params = self._prepare_template_parameters(
+                kol_profile, stock_id, stock_name, trigger_type,
+                serper_analysis, ohlc_data, technical_indicators, max_words
             )
+
+            # 🎯 注入參數到模板
+            system_prompt = self._inject_parameters(template['system_prompt_template'], params)
+            user_prompt = self._inject_parameters(template['user_prompt_template'], params)
+
+            logger.info(f"📝 System Prompt 長度: {len(system_prompt)} 字")
+            logger.info(f"📝 User Prompt 長度: {len(user_prompt)} 字")
 
             # 調用GPT API
             response = openai.chat.completions.create(
-                model=chosen_model,  # 🔥 使用選定的模型
+                model=chosen_model,
                 messages=[
-                    {
-                        "role": "system",
-                        "content": "你是一位專業的股票分析師，擅長從多個角度分析股票漲停原因，並提供平衡的投資建議。"
-                    },
-                    {
-                        "role": "user", 
-                        "content": prompt
-                    }
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
                 ],
                 max_tokens=2000,
                 temperature=0.7
             )
-            
+
             content = response.choices[0].message.content
-            
+
             # 解析GPT回應
-            return self._parse_gpt_response(content, stock_id, stock_name)
-            
+            result = self._parse_gpt_response(content, stock_id, stock_name)
+
+            # 記錄使用的模板和 prompt
+            result['template_id'] = template.get('id')
+            result['prompt_system_used'] = system_prompt
+            result['prompt_user_used'] = user_prompt
+
+            return result
+
         except Exception as e:
             logger.error(f"GPT內容生成失敗: {e}")
+            kol_persona = kol_profile.get('persona', 'mixed')
             return self._fallback_generation(stock_id, stock_name, kol_persona)
-    
-    def _build_analysis_prompt(self, 
-                              stock_id: str, 
-                              stock_name: str, 
-                              kol_persona: str,
-                              serper_analysis: Dict[str, Any],
-                              data_sources: List[str],
-                              content_length: str = "medium",
-                              max_words: int = 200) -> str:
-        """構建分析prompt"""
-        
-        # 提取新聞資訊
-        news_items = serper_analysis.get('news_items', [])
-        limit_up_analysis = serper_analysis.get('limit_up_analysis', {})
-        limit_up_reasons = limit_up_analysis.get('limit_up_reasons', [])
-        key_events = limit_up_analysis.get('key_events', [])
-        market_sentiment = limit_up_analysis.get('market_sentiment', 'neutral')
-        
-        # 構建新聞摘要
-        news_summary = ""
-        if news_items:
-            news_summary = "相關新聞資訊：\n"
-            for i, news in enumerate(news_items[:5], 1):
-                news_summary += f"{i}. {news.get('title', '')}\n"
-                news_summary += f"   {news.get('snippet', '')}\n\n"
-        
-        # 構建漲停原因
-        reasons_summary = ""
-        if limit_up_reasons:
-            reasons_summary = "漲停原因分析：\n"
-            for i, reason in enumerate(limit_up_reasons[:3], 1):
-                reasons_summary += f"{i}. {reason.get('title', '')}\n"
-                reasons_summary += f"   {reason.get('snippet', '')}\n\n"
-        
-        # 構建關鍵事件
-        events_summary = ""
-        if key_events:
-            events_summary = "關鍵事件：\n"
-            for i, event in enumerate(key_events[:3], 1):
-                events_summary += f"{i}. {event.get('event', '')}\n"
-                events_summary += f"   {event.get('description', '')}\n\n"
-        
-        # 根據KOL人設調整分析重點
-        persona_instruction = self._get_persona_instruction(kol_persona)
-        
-        prompt = f"""
-請分析 {stock_name}({stock_id}) 的漲停原因，並生成一篇專業的股票分析文章。
 
-{persona_instruction}
+    def _load_prompt_template(self, posting_type: str, template_id: Optional[int] = None, db_connection = None) -> Dict[str, Any]:
+        """載入 Prompt 模板
 
-{news_summary}
-{reasons_summary}
-{events_summary}
+        優先級：
+        1. 指定 template_id → 從資料庫載入
+        2. 預設模板 → 從資料庫載入 (posting_type + is_default=TRUE)
+        3. Fallback → 使用硬編碼預設模板
+        """
 
-市場情緒：{market_sentiment}
-使用的數據源：{', '.join(data_sources)}
+        # TODO: 實作資料庫查詢（當 db_connection 可用時）
+        # if db_connection and template_id:
+        #     return db_connection.fetchone("SELECT * FROM prompt_templates WHERE id = %s", (template_id,))
+        # elif db_connection:
+        #     return db_connection.fetchone("""
+        #         SELECT * FROM prompt_templates
+        #         WHERE posting_type = %s AND is_default = TRUE AND is_active = TRUE
+        #         ORDER BY performance_score DESC LIMIT 1
+        #     """, (posting_type,))
 
-請按照以下結構生成分析：
+        # 🔥 Fallback: 硬編碼預設模板（與資料庫SQL中的一致）
+        default_templates = {
+            'analysis': {
+                'id': None,
+                'name': '預設深度分析模板',
+                'posting_type': 'analysis',
+                'system_prompt_template': '''你是 {kol_nickname}，一位{persona_name}風格的股票分析師。
 
-漲停原因分析
+{writing_style}
 
-題材面
-- 簡要分析主要題材和影響
+你的目標是提供專業、深入的股票分析，包含技術面、基本面、市場情緒等多角度觀點。
 
-基本面  
-- 關鍵財務數據和營運狀況
+請展現你的獨特分析風格，用你習慣的方式表達觀點。''',
+                'user_prompt_template': '''我想了解 {stock_name}({stock_id}) 最近的表現和投資機會。
 
-技術面
-- 重要技術指標和價位
+【背景】{trigger_description}
 
-籌碼面
-- 法人動向和資金流向
+【市場數據】
+{news_summary}{ohlc_summary}{tech_summary}
+請分析這檔股票，包含：
+1. 為什麼值得關注
+2. 你的專業看法
+3. 潛在機會和風險
 
-操作建議
-- 進場點位和停損停利
-- 風險提醒
+目標長度：約 {max_words} 字'''
+            },
+            'interaction': {
+                'id': None,
+                'name': '預設互動提問模板',
+                'posting_type': 'interaction',
+                'system_prompt_template': '''你是 {kol_nickname}，一位{persona_name}風格的股票分析師。
+
+{writing_style}
+
+你的目標是與讀者互動，提出引發思考的問題，鼓勵討論。例如：「你覺得這檔股票現在適合進場嗎？留言分享你的看法！」內容要簡短有力。
+
+請展現你的獨特風格，用你習慣的方式提問。''',
+                'user_prompt_template': '''我想了解 {stock_name}({stock_id}) 最近的表現。
+
+【背景】{trigger_description}
+
+【市場數據】
+{news_summary}{ohlc_summary}
+請針對這檔股票提出一個引發討論的問題，鼓勵讀者分享看法。
 
 要求：
-- 內容要有條理，邏輯清晰
-- 提供具體的數據和事實支撐
-- 給出平衡的觀點，包含風險提醒
-- 語言專業但易懂
-- 避免重複和贅述
-- 長度控制在{max_words}字，確保內容充實完整
-- 必須達到最低{max_words}字要求
-- 不要使用Markdown格式（##、**等）
-- 不要使用emoji表情符號
+- 內容簡短（約 {max_words} 字）
+- 提出單一核心問題
+- 引發讀者思考和互動'''
+            },
+            'personalized': {
+                'id': None,
+                'name': '預設個性化風格模板',
+                'posting_type': 'personalized',
+                'system_prompt_template': '''你是 {kol_nickname}，一位{persona_name}風格的股票分析師。
 
-請直接輸出分析內容，不要包含額外的說明文字。
-"""
-        
-        return prompt
-    
-    def _get_persona_instruction(self, kol_persona: str) -> str:
-        """根據KOL人設獲取分析指令"""
-        
-        instructions = {
-            'technical': """
-你是一位技術分析專家，擅長從技術指標、圖表形態、成交量等角度分析股票。
-分析重點：
-- 技術指標信號（MA、RSI、MACD等）
-- 圖表形態和突破點
-- 成交量變化
-- 技術面支撐和阻力位
-""",
-            'fundamental': """
-你是一位基本面分析專家，專注於公司財務狀況、產業前景、競爭優勢等基本面因素。
-分析重點：
-- 財務數據分析（營收、獲利、負債等）
-- 產業趨勢和競爭地位
-- 公司治理和經營策略
-- 估值合理性
-""",
-            'news_driven': """
-你是一位市場情報專家，善於從新聞事件、政策變化、市場情緒等角度分析股票。
-分析重點：
-- 新聞事件影響
-- 政策利多利空
-- 市場情緒變化
-- 投資人心理
-""",
-            'mixed': """
-你是一位綜合分析專家，能夠從多個角度全面分析股票。
-分析重點：
-- 技術面、基本面、消息面綜合分析
-- 多維度風險評估
-- 平衡的投資觀點
-- 長短期投資策略
-"""
+{writing_style}
+
+你的目標是展現你獨特的個人風格和觀點，讓讀者感受到你的個性和專業。
+
+請充分發揮你的個人特色，用你最自然、最舒服的方式表達。''',
+                'user_prompt_template': '''我想了解 {stock_name}({stock_id}) 最近的表現和投資機會。
+
+【背景】{trigger_description}
+
+【市場數據】
+{news_summary}{ohlc_summary}{tech_summary}
+請用你獨特的風格分析這檔股票，展現你的個性和專業。
+
+要求：
+- 目標長度：約 {max_words} 字
+- 充分展現你的個人風格
+- 用你習慣的方式組織內容'''
+            }
         }
-        
-        return instructions.get(kol_persona, instructions['mixed'])
-    
+
+        template = default_templates.get(posting_type, default_templates['analysis'])
+        logger.info(f"📋 載入模板: {template['name']} (posting_type={posting_type})")
+        return template
+
+    def _prepare_template_parameters(self,
+                                     kol_profile: Dict[str, Any],
+                                     stock_id: str,
+                                     stock_name: str,
+                                     trigger_type: str,
+                                     serper_analysis: Dict[str, Any],
+                                     ohlc_data: Optional[Dict[str, Any]],
+                                     technical_indicators: Optional[Dict[str, Any]],
+                                     max_words: int) -> Dict[str, Any]:
+        """準備模板參數"""
+
+        # 基本參數
+        params = {
+            'kol_nickname': kol_profile.get('nickname', '股市分析師'),
+            'persona_name': self._get_persona_name(kol_profile.get('persona', 'mixed')),
+            'writing_style': kol_profile.get('writing_style', '請用你的專業風格分析股票。'),
+            'stock_id': stock_id,
+            'stock_name': stock_name,
+            'trigger_description': self._get_trigger_description(trigger_type),
+            'max_words': max_words,
+        }
+
+        # 新聞摘要
+        news_items = serper_analysis.get('news_items', [])
+        if news_items:
+            news_summary = "近期相關新聞：\n"
+            for i, news in enumerate(news_items[:5], 1):
+                title = news.get('title', '')
+                snippet = news.get('snippet', '')
+                news_summary += f"{i}. {title}\n"
+                if snippet:
+                    news_summary += f"   {snippet}\n"
+            news_summary += "\n"
+            params['news_summary'] = news_summary
+        else:
+            params['news_summary'] = ''
+
+        # OHLC 摘要
+        if ohlc_data:
+            close_price = ohlc_data.get('close', 'N/A')
+            change_pct = ohlc_data.get('change_percent', 'N/A')
+            volume = ohlc_data.get('volume', 'N/A')
+            params['ohlc_summary'] = f"""價格資訊：
+- 收盤價：{close_price}
+- 漲跌幅：{change_pct}%
+- 成交量：{volume}
+
+"""
+            # 支援嵌套參數 {ohlc.close}
+            params['ohlc'] = ohlc_data
+        else:
+            params['ohlc_summary'] = ''
+            params['ohlc'] = {}
+
+        # 技術指標摘要
+        if technical_indicators:
+            tech_summary = "技術指標：\n"
+            for key, value in technical_indicators.items():
+                tech_summary += f"- {key}: {value}\n"
+            tech_summary += "\n"
+            params['tech_summary'] = tech_summary
+            # 支援嵌套參數 {tech.RSI}
+            params['tech'] = technical_indicators
+        else:
+            params['tech_summary'] = ''
+            params['tech'] = {}
+
+        # 新聞列表（支援 {news[0].title}）
+        params['news'] = news_items
+
+        return params
+
+    def _inject_parameters(self, template: str, params: Dict[str, Any]) -> str:
+        """注入參數到模板
+
+        支援：
+        - 簡單變數：{kol_nickname}, {stock_id}
+        - 嵌套變數：{ohlc.close}, {tech.RSI}
+        - 陣列索引：{news[0].title}
+        """
+
+        result = template
+
+        # 處理簡單變數和嵌套變數
+        for key, value in params.items():
+            if isinstance(value, dict):
+                # 處理嵌套參數 {ohlc.close}
+                for sub_key, sub_value in value.items():
+                    pattern = f"{{{key}.{sub_key}}}"
+                    result = result.replace(pattern, str(sub_value))
+            elif isinstance(value, list):
+                # 處理陣列索引 {news[0].title}
+                for i, item in enumerate(value):
+                    if isinstance(item, dict):
+                        for item_key, item_value in item.items():
+                            pattern = f"{{{key}[{i}].{item_key}}}"
+                            result = result.replace(pattern, str(item_value))
+            else:
+                # 處理簡單變數 {kol_nickname}
+                pattern = f"{{{key}}}"
+                result = result.replace(pattern, str(value))
+
+        return result
+
+    def _build_system_prompt(self, kol_profile: Dict[str, Any]) -> str:
+        """構建 System Prompt - 定義 KOL 角色和風格"""
+
+        nickname = kol_profile.get('nickname', '股市分析師')
+        persona = kol_profile.get('persona', 'mixed')
+        writing_style = kol_profile.get('writing_style', '')
+
+        # 🎯 簡潔的角色定義，不加限制
+        persona_name = self._get_persona_name(persona)
+
+        system_prompt = f"""你是 {nickname}，一位{persona_name}風格的股票分析師。
+
+{writing_style if writing_style else '請用你的專業風格分析股票。'}
+
+請展現你的獨特分析風格，用你習慣的方式表達觀點。"""
+
+        return system_prompt
+
+    def _build_user_prompt(self,
+                          stock_id: str,
+                          stock_name: str,
+                          trigger_type: str,
+                          serper_analysis: Dict[str, Any],
+                          ohlc_data: Optional[Dict[str, Any]],
+                          technical_indicators: Optional[Dict[str, Any]],
+                          max_words: int) -> str:
+        """構建 User Prompt - 整合所有數據（對話式）"""
+
+        # 🎯 觸發器上下文
+        trigger_desc = self._get_trigger_description(trigger_type)
+
+        # 🎯 新聞 summary（永遠處理，Serper API 永遠會跑）
+        news_summary = ""
+        news_items = serper_analysis.get('news_items', [])
+        if news_items:
+            news_summary = "近期相關新聞：\n"
+            for i, news in enumerate(news_items[:5], 1):
+                title = news.get('title', '')
+                snippet = news.get('snippet', '')
+                news_summary += f"{i}. {title}\n"
+                if snippet:
+                    news_summary += f"   {snippet}\n"
+            news_summary += "\n"
+
+        # 🎯 OHLC（空值用 ''，不補充說明文字）
+        ohlc_summary = ""
+        if ohlc_data:
+            close_price = ohlc_data.get('close', 'N/A')
+            change_pct = ohlc_data.get('change_percent', 'N/A')
+            volume = ohlc_data.get('volume', 'N/A')
+            ohlc_summary = f"""價格資訊：
+- 收盤價：{close_price}
+- 漲跌幅：{change_pct}%
+- 成交量：{volume}
+
+"""
+
+        # 🎯 技術指標（空值用 ''，不補充說明文字）
+        tech_summary = ""
+        if technical_indicators:
+            tech_summary = "技術指標：\n"
+            for key, value in technical_indicators.items():
+                tech_summary += f"- {key}: {value}\n"
+            tech_summary += "\n"
+
+        # 🎯 組合數據區塊
+        data_section = news_summary + ohlc_summary + tech_summary
+
+        # 🎯 對話式 User Prompt（讓 GPT 自由發揮）
+        user_prompt = f"""我想了解 {stock_name}({stock_id}) 最近的表現和投資機會。
+
+【背景】{trigger_desc}
+
+【市場數據】
+{data_section}請分析這檔股票，包含：
+1. 為什麼值得關注
+2. 你的專業看法
+3. 潛在機會和風險
+
+目標長度：約 {max_words} 字
+"""
+
+        return user_prompt
+
+    def _get_trigger_description(self, trigger_type: str) -> str:
+        """獲取觸發器描述"""
+        descriptions = {
+            'limit_up_after_hours': '這是今日盤後漲停的股票',
+            'intraday_gainers_by_amount': '這是今日漲幅領先的股票',
+            'trending_topics': '這是社群熱門討論的股票',
+            'custom_stocks': '這是特定關注的股票'
+        }
+        return descriptions.get(trigger_type, '這是需要分析的股票')
+
+    def _get_persona_name(self, persona: str) -> str:
+        """獲取人設名稱"""
+        names = {
+            'technical': '技術分析',
+            'fundamental': '基本面分析',
+            'news_driven': '消息面分析',
+            'mixed': '綜合分析'
+        }
+        return names.get(persona, '綜合分析')
+
     def _parse_gpt_response(self, content: str, stock_id: str, stock_name: str) -> Dict[str, Any]:
         """解析GPT回應"""
         

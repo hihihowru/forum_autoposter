@@ -547,9 +547,65 @@ const GenerationSettings: React.FC<GenerationSettingsProps> = ({ value, onChange
                     value={value.model_id_override || undefined}
                     onChange={handleModelIdOverrideChange}
                     placeholder="選擇批量模型"
-                    style={{ width: '300px' }}
+                    style={{ width: '350px' }}
                     allowClear
                   >
+                    {/* GPT-5 系列 (2025 最新) */}
+                    <Option value="gpt-5">
+                      <Space>
+                        <span>gpt-5</span>
+                        <Tag color="red" style={{ marginLeft: 8 }}>🔥 最新</Tag>
+                        <Text type="secondary" style={{ fontSize: '11px' }}>推理模型、最強</Text>
+                      </Space>
+                    </Option>
+                    <Option value="gpt-5-mini">
+                      <Space>
+                        <span>gpt-5-mini</span>
+                        <Tag color="volcano" style={{ marginLeft: 8 }}>新</Tag>
+                        <Text type="secondary" style={{ fontSize: '11px' }}>平衡效能與成本</Text>
+                      </Space>
+                    </Option>
+                    <Option value="gpt-5-nano">
+                      <Space>
+                        <span>gpt-5-nano</span>
+                        <Tag color="orange" style={{ marginLeft: 8 }}>輕量</Tag>
+                        <Text type="secondary" style={{ fontSize: '11px' }}>快速、低成本</Text>
+                      </Space>
+                    </Option>
+
+                    {/* GPT-4.1 系列 (2025) */}
+                    <Option value="gpt-4.1">
+                      <Space>
+                        <span>gpt-4.1</span>
+                        <Tag color="purple" style={{ marginLeft: 8 }}>1M context</Tag>
+                        <Text type="secondary" style={{ fontSize: '11px' }}>超長上下文</Text>
+                      </Space>
+                    </Option>
+                    <Option value="gpt-4.1-mini">
+                      <Space>
+                        <span>gpt-4.1-mini</span>
+                        <Tag color="geekblue" style={{ marginLeft: 8 }}>經濟</Tag>
+                        <Text type="secondary" style={{ fontSize: '11px' }}>平衡版</Text>
+                      </Space>
+                    </Option>
+
+                    {/* o3 系列 (2025 深度推理) */}
+                    <Option value="o3">
+                      <Space>
+                        <span>o3</span>
+                        <Tag color="cyan" style={{ marginLeft: 8 }}>🧠 推理</Tag>
+                        <Text type="secondary" style={{ fontSize: '11px' }}>深度推理、複雜分析</Text>
+                      </Space>
+                    </Option>
+                    <Option value="o3-mini">
+                      <Space>
+                        <span>o3-mini</span>
+                        <Tag color="blue" style={{ marginLeft: 8 }}>推理</Tag>
+                        <Text type="secondary" style={{ fontSize: '11px' }}>推理模型輕量版</Text>
+                      </Space>
+                    </Option>
+
+                    {/* GPT-4o 系列 (多模態) */}
                     <Option value="gpt-4o-mini">
                       <Space>
                         <span>gpt-4o-mini</span>
@@ -560,28 +616,30 @@ const GenerationSettings: React.FC<GenerationSettingsProps> = ({ value, onChange
                     <Option value="gpt-4o">
                       <Space>
                         <span>gpt-4o</span>
-                        <Tag color="blue" style={{ marginLeft: 8 }}>高品質</Tag>
-                        <Text type="secondary" style={{ fontSize: '11px' }}>最新模型</Text>
+                        <Tag color="lime" style={{ marginLeft: 8 }}>多模態</Tag>
+                        <Text type="secondary" style={{ fontSize: '11px' }}>圖文並茂</Text>
                       </Space>
                     </Option>
+
+                    {/* 經典模型 */}
                     <Option value="gpt-4-turbo">
                       <Space>
                         <span>gpt-4-turbo</span>
-                        <Tag color="purple" style={{ marginLeft: 8 }}>進階</Tag>
-                        <Text type="secondary" style={{ fontSize: '11px' }}>較貴、強大</Text>
+                        <Tag color="gold" style={{ marginLeft: 8 }}>穩定</Tag>
+                        <Text type="secondary" style={{ fontSize: '11px' }}>經典強大</Text>
                       </Space>
                     </Option>
                     <Option value="gpt-4">
                       <Space>
                         <span>gpt-4</span>
-                        <Tag color="orange" style={{ marginLeft: 8 }}>穩定</Tag>
+                        <Tag color="default" style={{ marginLeft: 8 }}>經典</Tag>
                         <Text type="secondary" style={{ fontSize: '11px' }}>經典版本</Text>
                       </Space>
                     </Option>
                     <Option value="gpt-3.5-turbo">
                       <Space>
                         <span>gpt-3.5-turbo</span>
-                        <Tag color="default" style={{ marginLeft: 8 }}>基礎</Tag>
+                        <Tag style={{ marginLeft: 8 }}>基礎</Tag>
                         <Text type="secondary" style={{ fontSize: '11px' }}>低成本</Text>
                       </Space>
                     </Option>

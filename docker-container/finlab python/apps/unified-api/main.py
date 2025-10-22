@@ -211,6 +211,29 @@ except Exception as e:
     logger.warning(f"⚠️  個人化模組導入失敗: {e}，將跳過個人化處理")
     enhanced_personalization_processor = None
 
+# 導入 Serper API 服務
+try:
+    import sys
+    import os
+    # Add posting-service directory to path (both possible locations)
+    current_dir = os.path.dirname(__file__)
+    posting_service_paths = [
+        os.path.join(current_dir, 'posting-service'),
+        os.path.join(os.path.dirname(current_dir), 'posting-service')
+    ]
+
+    for path in posting_service_paths:
+        if path not in sys.path and os.path.exists(path):
+            sys.path.insert(0, path)
+            logger.info(f"📁 添加路徑到 sys.path: {path}")
+
+    from serper_integration import SerperNewsService
+    serper_service = SerperNewsService()
+    logger.info("✅ Serper API 服務初始化成功")
+except Exception as e:
+    logger.warning(f"⚠️  Serper API 服務導入失敗: {e}，將使用模擬數據")
+    serper_service = None
+
 stock_mapping = {}
 db_pool = None  # Connection pool instead of single connection
 
@@ -2656,47 +2679,113 @@ async def manual_posting(request: Request):
         # 確定使用的模型
         chosen_model_id = None
 
+        # 🔥 查詢完整 KOL Profile（不只 model_id）
+        kol_profile = None
+
         # 優先級 1: 批量覆蓋模型（如果設定且不使用 KOL 預設）
         if not use_kol_default_model and model_id_override:
             chosen_model_id = model_id_override
             logger.info(f"🤖 使用批量覆蓋模型: {chosen_model_id}")
         else:
-            # 優先級 2: 從數據庫獲取 KOL 的預設模型
-            try:
-                conn = await asyncpg.connect(
-                    host=DB_CONFIG['host'],
-                    port=DB_CONFIG['port'],
-                    database=DB_CONFIG['database'],
-                    user=DB_CONFIG['user'],
-                    password=DB_CONFIG['password']
-                )
-                kol_model_id = await conn.fetchval(
-                    "SELECT model_id FROM kol_profiles WHERE serial = $1",
-                    str(kol_serial)
-                )
-                await conn.close()
+            chosen_model_id = "gpt-4o-mini"  # 預設值
 
-                if kol_model_id:
-                    chosen_model_id = kol_model_id
-                    logger.info(f"🤖 使用 KOL 預設模型: {chosen_model_id} (KOL serial: {kol_serial})")
+        # 優先級 2: 從數據庫獲取 KOL 完整資料
+        try:
+            conn = await asyncpg.connect(
+                host=DB_CONFIG['host'],
+                port=DB_CONFIG['port'],
+                database=DB_CONFIG['database'],
+                user=DB_CONFIG['user'],
+                password=DB_CONFIG['password']
+            )
+
+            # 🔥 查詢完整 KOL Profile
+            kol_row = await conn.fetchrow("""
+                SELECT serial, nickname, persona,
+                       writing_style, tone_settings, model_id
+                FROM kol_profiles
+                WHERE serial = $1
+            """, str(kol_serial))
+
+            await conn.close()
+
+            if kol_row:
+                # 🔥 構建 kol_profile dict
+                kol_profile = {
+                    'serial': kol_row['serial'],
+                    'nickname': kol_row['nickname'],
+                    'persona': kol_row['persona'],
+                    'writing_style': kol_row['writing_style'] or '',
+                    'tone_settings': kol_row['tone_settings'] or ''
+                }
+
+                # 模型選擇邏輯（保持不變）
+                if use_kol_default_model and kol_row['model_id']:
+                    chosen_model_id = kol_row['model_id']
+                    logger.info(f"🤖 使用 KOL 預設模型: {chosen_model_id} (KOL: {kol_row['nickname']})")
                 else:
-                    # 優先級 3: 備用預設模型
-                    chosen_model_id = "gpt-4o-mini"
-                    logger.info(f"🤖 KOL 未設定模型，使用預設: {chosen_model_id}")
-            except Exception as db_error:
-                logger.warning(f"⚠️  無法獲取 KOL 模型設定: {db_error}，使用預設模型")
-                chosen_model_id = "gpt-4o-mini"
+                    logger.info(f"🤖 使用預設模型: {chosen_model_id}")
+            else:
+                logger.warning(f"⚠️  KOL serial {kol_serial} 不存在，使用降級 profile")
+                # 降級處理
+                kol_profile = {
+                    'serial': str(kol_serial),
+                    'nickname': '分析師',
+                    'persona': kol_persona,
+                    'writing_style': '',
+                    'tone_settings': ''
+                }
+
+        except Exception as db_error:
+            logger.warning(f"⚠️  無法獲取 KOL Profile: {db_error}，使用降級 profile")
+            # 降級處理
+            kol_profile = {
+                'serial': str(kol_serial),
+                'nickname': '分析師',
+                'persona': kol_persona,
+                'writing_style': '',
+                'tone_settings': ''
+            }
+
+        # 🔥 Phase 2: 調用 Serper API 獲取新聞數據
+        serper_analysis = {}
+        if serper_service:
+            try:
+                logger.info(f"🔍 開始搜尋 {stock_name}({stock_code}) 相關新聞...")
+                # 從前端獲取新聞配置（如果有）
+                news_config = body.get('news_config', {})
+                search_keywords = news_config.get('search_keywords')
+                time_range = news_config.get('time_range', 'd1')  # 預設過去1天
+
+                serper_analysis = serper_service.get_comprehensive_stock_analysis(
+                    stock_code=stock_code,
+                    stock_name=stock_name,
+                    search_keywords=search_keywords,
+                    time_range=time_range,
+                    trigger_type=trigger_type
+                )
+
+                news_count = len(serper_analysis.get('news_items', []))
+                logger.info(f"✅ Serper API 調用成功，找到 {news_count} 則新聞")
+            except Exception as serper_error:
+                logger.warning(f"⚠️  Serper API 調用失敗: {serper_error}，繼續使用空數據")
+                serper_analysis = {}
+        else:
+            logger.info("ℹ️  Serper 服務未初始化，跳過新聞搜尋")
 
         # 使用 GPT 生成內容
         if gpt_generator:
-            logger.info(f"使用 GPT 生成器生成內容: stock_code={stock_code}, kol_persona={kol_persona}, model={chosen_model_id}")
+            logger.info(f"使用 GPT 生成器生成內容: stock_code={stock_code}, kol={kol_profile.get('nickname')}, model={chosen_model_id}")
             try:
                 gpt_result = gpt_generator.generate_stock_analysis(
                     stock_id=stock_code,
                     stock_name=stock_name,
-                    kol_persona=kol_persona,
-                    serper_analysis={},  # 可選：可接入 Serper API 獲取新聞
-                    data_sources=[],
+                    kol_profile=kol_profile,  # 🔥 傳完整 profile
+                    posting_type=posting_type,  # 🔥 使用 posting_type 決定 prompt 模板
+                    trigger_type=trigger_type,  # 🔥 新增
+                    serper_analysis=serper_analysis,  # ✅ 傳入真實 Serper 數據
+                    ohlc_data=None,  # 🔥 Phase 2 接入
+                    technical_indicators=None,  # 🔥 Phase 2 接入
                     content_length="medium",
                     max_words=max_words,
                     model=chosen_model_id  # 🔥 傳遞選定的模型
@@ -2747,43 +2836,10 @@ async def manual_posting(request: Request):
 
 以上分析僅供參考，投資需謹慎評估自身風險承受能力。"""
 
-        # 隨機版本生成 - ALL posting_types 都生成 5 個版本（避免模板化）
+        # ✅ 移除隨機版本生成 - 統一使用 Prompt 模板系統
+        # Prompt 模板系統已根據 posting_type 生成不同風格內容
         alternative_versions = []
-        if enhanced_personalization_processor:
-            logger.info(f"🎯 開始生成 5 個隨機版本: KOL={kol_serial}, posting_type={posting_type}")
-            try:
-                # 🔥 FIX: Pass stock info to personalization processor so it can include stock names in fallback
-                serper_analysis_with_stock = {
-                    'stock_name': stock_name,
-                    'stock_code': stock_code
-                }
-                logger.info(f"📊 傳遞股票信息到個人化模組: {stock_name}({stock_code})")
-
-                personalized_title, personalized_content, random_metadata = enhanced_personalization_processor.personalize_content(
-                    standard_title=title,
-                    standard_content=content,
-                    kol_serial=kol_serial,
-                    batch_config={},
-                    serper_analysis=serper_analysis_with_stock,
-                    trigger_type=trigger_type,
-                    real_time_price_data={},
-                    posting_type=posting_type,
-                    max_words=max_words,
-                    kol_persona_override=kol_persona  # 🔥 FIX: Pass persona override to respect user's content_style choice
-                )
-
-                # 更新為選中的版本內容
-                title = personalized_title
-                content = personalized_content
-
-                # 提取其他 4 個版本
-                if random_metadata:
-                    alternative_versions = random_metadata.get('alternative_versions', [])
-                    logger.info(f"✅ 版本生成完成: 選中版本 + {len(alternative_versions)} 個替代版本 = 共 {len(alternative_versions) + 1} 個版本")
-            except Exception as e:
-                logger.error(f"⚠️  版本生成失敗: {e}，使用原始內容")
-        else:
-            logger.warning(f"⚠️  個人化模組不可用: posting_type={posting_type}")
+        logger.info(f"✅ 使用 Prompt 模板系統生成內容: posting_type={posting_type}")
 
         # 生成 UUID 作為 post_id
         import uuid
@@ -2947,32 +3003,84 @@ async def performance_test(request: Request):
         model_id_override = body.get('model_id_override')
         use_kol_default_model = body.get('use_kol_default_model', True)
 
-        # Step 2: Model Selection (with DB query)
+        # Step 2: Model Selection + KOL Profile Query (with DB query)
         step_start = time.time()
         chosen_model_id = None
+        kol_profile = None
 
         if not use_kol_default_model and model_id_override:
             chosen_model_id = model_id_override
         else:
-            try:
-                conn = await asyncpg.connect(
-                    host=DB_CONFIG['host'],
-                    port=DB_CONFIG['port'],
-                    database=DB_CONFIG['database'],
-                    user=DB_CONFIG['user'],
-                    password=DB_CONFIG['password']
-                )
-                kol_model_id = await conn.fetchval(
-                    "SELECT model_id FROM kol_profiles WHERE serial = $1",
-                    str(kol_serial)
-                )
-                await conn.close()
+            chosen_model_id = "gpt-4o-mini"  # 預設值
 
-                chosen_model_id = kol_model_id if kol_model_id else "gpt-4o-mini"
-            except Exception as db_error:
-                chosen_model_id = "gpt-4o-mini"
+        # 🔥 查詢完整 KOL Profile
+        try:
+            conn = await asyncpg.connect(
+                host=DB_CONFIG['host'],
+                port=DB_CONFIG['port'],
+                database=DB_CONFIG['database'],
+                user=DB_CONFIG['user'],
+                password=DB_CONFIG['password']
+            )
+
+            # 🔥 查詢完整 KOL Profile
+            kol_row = await conn.fetchrow("""
+                SELECT serial, nickname, persona,
+                       writing_style, tone_settings, model_id
+                FROM kol_profiles
+                WHERE serial = $1
+            """, str(kol_serial))
+
+            await conn.close()
+
+            if kol_row:
+                kol_profile = {
+                    'serial': kol_row['serial'],
+                    'nickname': kol_row['nickname'],
+                    'persona': kol_row['persona'],
+                    'writing_style': kol_row['writing_style'] or '',
+                    'tone_settings': kol_row['tone_settings'] or ''
+                }
+
+                if use_kol_default_model and kol_row['model_id']:
+                    chosen_model_id = kol_row['model_id']
+            else:
+                # 降級處理
+                kol_profile = {
+                    'serial': str(kol_serial),
+                    'nickname': '分析師',
+                    'persona': kol_persona,
+                    'writing_style': '',
+                    'tone_settings': ''
+                }
+
+        except Exception as db_error:
+            # 降級處理
+            kol_profile = {
+                'serial': str(kol_serial),
+                'nickname': '分析師',
+                'persona': kol_persona,
+                'writing_style': '',
+                'tone_settings': ''
+            }
 
         timings['2_model_selection_db'] = round((time.time() - step_start) * 1000, 2)
+
+        # Step 2.5: Serper API Call (for news data)
+        step_start = time.time()
+        serper_analysis = {}
+        if serper_service:
+            try:
+                serper_analysis = serper_service.get_comprehensive_stock_analysis(
+                    stock_code=stock_code,
+                    stock_name=stock_name,
+                    search_keywords=None,
+                    time_range='d1',
+                    trigger_type=trigger_type
+                )
+            except Exception as e:
+                pass
+        timings['2_5_serper_api'] = round((time.time() - step_start) * 1000, 2)
 
         # Step 3: GPT Content Generation
         step_start = time.time()
@@ -2984,9 +3092,12 @@ async def performance_test(request: Request):
                 gpt_result = gpt_generator.generate_stock_analysis(
                     stock_id=stock_code,
                     stock_name=stock_name,
-                    kol_persona=kol_persona,
-                    serper_analysis={},
-                    data_sources=[],
+                    kol_profile=kol_profile,  # 🔥 傳完整 profile
+                    posting_type=posting_type,  # 🔥 使用 posting_type 決定 prompt 模板
+                    trigger_type=trigger_type,  # 🔥 新增
+                    serper_analysis=serper_analysis,  # ✅ 傳入真實 Serper 數據
+                    ohlc_data=None,  # 🔥 Phase 2 接入
+                    technical_indicators=None,  # 🔥 Phase 2 接入
                     content_length="medium",
                     max_words=max_words,
                     model=chosen_model_id
@@ -2999,37 +3110,9 @@ async def performance_test(request: Request):
 
         timings['3_gpt_generation'] = round((time.time() - step_start) * 1000, 2)
 
-        # Step 4: Alternative Versions Generation
-        step_start = time.time()
+        # ✅ 移除隨機版本生成 - 統一使用 Prompt 模板系統
+        # Prompt 模板系統已根據 posting_type 生成不同風格內容
         alternative_versions = []
-
-        if enhanced_personalization_processor:
-            try:
-                serper_analysis_with_stock = {
-                    'stock_name': stock_name,
-                    'stock_code': stock_code
-                }
-
-                personalized_title, personalized_content, random_metadata = enhanced_personalization_processor.personalize_content(
-                    standard_title=title,
-                    standard_content=content,
-                    kol_serial=kol_serial,
-                    batch_config={},
-                    serper_analysis=serper_analysis_with_stock,
-                    trigger_type=trigger_type,
-                    real_time_price_data={},
-                    posting_type=posting_type,
-                    max_words=max_words,
-                    kol_persona_override=kol_persona  # 🔥 FIX: Pass persona override to respect user's content_style choice
-                )
-
-                title = personalized_title
-                content = personalized_content
-
-                if random_metadata:
-                    alternative_versions = random_metadata.get('alternative_versions', [])
-            except Exception as e:
-                pass
 
         timings['4_alternative_versions'] = round((time.time() - step_start) * 1000, 2)
 
