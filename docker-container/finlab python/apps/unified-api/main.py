@@ -5814,7 +5814,8 @@ async def execute_schedule_now(task_id: str, request: Request):
                     industries=""
                 )
                 if 'stocks' in trigger_result:
-                    stock_codes = [stock['stock_id'] for stock in trigger_result['stocks']]
+                    # 🔥 FIX: Use 'stock_code' not 'stock_id'
+                    stock_codes = [stock['stock_code'] for stock in trigger_result['stocks']]
                     logger.info(f"✅ 觸發器返回 {len(stock_codes)} 檔股票")
             else:
                 logger.warning(f"⚠️ 未支持的觸發器類型: {trigger_key}")

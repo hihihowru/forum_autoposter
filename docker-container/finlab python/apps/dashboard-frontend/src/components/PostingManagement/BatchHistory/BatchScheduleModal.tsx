@@ -193,6 +193,7 @@ const BatchScheduleModal: React.FC<BatchScheduleModalProps> = ({
         stockFilter: fullTriggersConfig.triggerConfig.stockFilter || "limit_up_stocks",
         stock_sorting: fullTriggersConfig.stock_sorting || fullTriggersConfig.stockSorting,
         max_stocks: fullTriggersConfig.stockCountLimit || fullTriggersConfig.threshold,
+        kol_assignment: values.generation_config.kol_assignment || 'random',
         filters: fullTriggersConfig.filters || {},
         threshold: fullTriggersConfig.threshold || 20,
         // Include all filter details
@@ -208,6 +209,7 @@ const BatchScheduleModal: React.FC<BatchScheduleModalProps> = ({
         stockFilter: "limit_up_stocks",
         stock_sorting: values.generation_config.stock_sorting,
         max_stocks: values.generation_config.max_stocks,
+        kol_assignment: values.generation_config.kol_assignment || 'random',
         filters: {},
         threshold: 20
       };
