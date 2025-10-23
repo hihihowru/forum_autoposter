@@ -262,6 +262,8 @@ export class PostingManagementAPI {
     max_stocks_per_post?: number;
     max_words?: number;
     full_triggers_config?: any;  // 🔥 Add full_triggers_config to interface
+    model_id_override?: string | null;  // 🔥 Add model_id_override to interface
+    use_kol_default_model?: boolean;  // 🔥 Add use_kol_default_model to interface
   }): Promise<GeneratePostsResponse> {
     try {
       console.log('🚀 開始批量生成貼文:', {
@@ -344,8 +346,8 @@ export class PostingManagementAPI {
             posting_type: batchConfig.posting_type || 'analysis',  // 🔥 新增：發文類型
 
             // 🔥 新增：模型 ID 覆蓋選項
-            model_id_override: (batchConfig as any).settings?.model_id_override || null,
-            use_kol_default_model: (batchConfig as any).settings?.use_kol_default_model !== false,
+            model_id_override: batchConfig.model_id_override || null,
+            use_kol_default_model: batchConfig.use_kol_default_model !== false,
 
             // 新增：所有步驟的配置
             stock_count_limit: batch_config.stock_count_limit,
