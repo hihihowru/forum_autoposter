@@ -258,15 +258,15 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
       triggers: [
         {
           key: 'intraday_gainers_by_amount',
-          label: '漲幅排序+成交額',
+          label: '強勢股',
           icon: <RiseOutlined />,
-          description: '按成交額排序的漲幅股票',
+          description: '按成交額排序的漲幅股票（漲幅排序+成交額）',
           triggerType: 'intraday',
           newsKeywords: ['上漲', '漲幅', '強勢', '飆漲']
         },
         {
           key: 'intraday_volume_leaders',
-          label: '成交量排序',
+          label: '成交量高',
           icon: <BarChartOutlined />,
           description: '按成交量排序的熱門股票',
           triggerType: 'intraday',
@@ -274,7 +274,7 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
         },
         {
           key: 'intraday_amount_leaders',
-          label: '成交額排序',
+          label: '成交額高',
           icon: <GlobalOutlined />,
           description: '按成交額排序的熱門股票',
           triggerType: 'intraday',
@@ -282,7 +282,7 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
         },
         {
           key: 'intraday_limit_down',
-          label: '跌停篩選',
+          label: '跌停股',
           icon: <FallOutlined />,
           description: '篩選跌停股票',
           triggerType: 'intraday',
@@ -290,7 +290,7 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
         },
         {
           key: 'intraday_limit_up',
-          label: '漲停篩選',
+          label: '漲停股',
           icon: <ArrowUpOutlined />,
           description: '篩選漲停股票',
           triggerType: 'intraday',
@@ -298,11 +298,27 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
         },
         {
           key: 'intraday_limit_down_by_amount',
-          label: '跌停篩選+成交額',
+          label: '弱勢股',
           icon: <FallOutlined />,
-          description: '按成交額排序的跌停股票',
+          description: '按成交額排序的跌停股票（跌停篩選+成交額）',
           triggerType: 'intraday',
           newsKeywords: ['跌停', '大跌', '賣壓', '弱勢']
+        }
+      ]
+    },
+    {
+      key: 'custom',
+      label: '自定義股票',
+      icon: <EditOutlined />,
+      color: '#13c2c2',
+      triggers: [
+        {
+          key: 'custom_stocks',
+          label: '自選股票',
+          icon: <StockOutlined />,
+          description: '手動輸入或搜尋特定股票代碼',
+          triggerType: 'custom',
+          newsKeywords: []
         }
       ]
     },
@@ -311,38 +327,44 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
       label: '產業',
       icon: <BankOutlined />,
       color: '#52c41a',
+      disabled: true,
+      comingSoon: true,
       triggers: [
         {
           key: 'sector_rotation',
           label: '類股輪動',
           icon: <BarChartOutlined />,
-          description: '領漲類股分析',
+          description: '領漲類股分析（即將推出）',
           stockFilter: 'sector_leaders',
-          sectorFilter: 'technology/finance/biotech'
+          sectorFilter: 'technology/finance/biotech',
+          disabled: true
         },
         {
           key: 'sector_momentum',
           label: '產業動能',
           icon: <ThunderboltOutlined />,
-          description: '產業趨勢分析',
+          description: '產業趨勢分析（即將推出）',
           stockFilter: 'sector_momentum_stocks',
-          sectorFilter: 'ai/semiconductor/ev'
+          sectorFilter: 'ai/semiconductor/ev',
+          disabled: true
         },
         {
           key: 'sector_selection',
           label: '產業選擇',
           icon: <AppstoreOutlined />,
-          description: '按產業選擇股票',
+          description: '按產業選擇股票（即將推出）',
           stockFilter: 'sector_stocks',
-          sectorFilter: 'multi_select'
+          sectorFilter: 'multi_select',
+          disabled: true
         },
         {
           key: 'sector_news',
           label: '產業新聞',
           icon: <FileTextOutlined />,
-          description: '產業政策影響',
+          description: '產業政策影響（即將推出）',
           stockFilter: 'sector_news_stocks',
-          newsFilter: 'policy/regulation/innovation'
+          newsFilter: 'policy/regulation/innovation',
+          disabled: true
         }
       ]
     },
@@ -351,38 +373,44 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
       label: '總經',
       icon: <GlobalOutlined />,
       color: '#fa8c16',
+      disabled: true,
+      comingSoon: true,
       triggers: [
         {
           key: 'fed_policy',
           label: 'Fed政策',
           icon: <BankOutlined />,
-          description: '聯準會政策影響',
+          description: '聯準會政策影響（即將推出）',
           stockFilter: 'TWA00',
-          macroFilter: 'interest_rate/inflation'
+          macroFilter: 'interest_rate/inflation',
+          disabled: true
         },
         {
           key: 'economic_data',
           label: '經濟數據',
           icon: <BarChartOutlined />,
-          description: '重要經濟指標',
+          description: '重要經濟指標（即將推出）',
           stockFilter: 'TWA00',
-          macroFilter: 'gdp/cpi/unemployment'
+          macroFilter: 'gdp/cpi/unemployment',
+          disabled: true
         },
         {
           key: 'currency_movement',
           label: '匯率變動',
           icon: <RiseOutlined />,
-          description: '匯率波動影響',
+          description: '匯率波動影響（即將推出）',
           stockFilter: 'TWA00',
-          macroFilter: 'usd_twd/euro_yen'
+          macroFilter: 'usd_twd/euro_yen',
+          disabled: true
         },
         {
           key: 'commodity_prices',
           label: '商品價格',
           icon: <FireOutlined />,
-          description: '原物料價格變動',
+          description: '原物料價格變動（即將推出）',
           stockFilter: 'TWA00',
-          macroFilter: 'oil/gold/copper'
+          macroFilter: 'oil/gold/copper',
+          disabled: true
         }
       ]
     },
@@ -391,38 +419,44 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
       label: '新聞',
       icon: <FileTextOutlined />,
       color: '#722ed1',
+      disabled: true,
+      comingSoon: true,
       triggers: [
         {
           key: 'company_news',
           label: '公司新聞',
           icon: <FileTextOutlined />,
-          description: '個股重大消息',
+          description: '個股重大消息（即將推出）',
           stockFilter: 'news_related_stocks',
-          newsFilter: 'merger/acquisition/partnership'
+          newsFilter: 'merger/acquisition/partnership',
+          disabled: true
         },
         {
           key: 'regulatory_news',
           label: '監管新聞',
           icon: <SettingOutlined />,
-          description: '監管政策變化',
+          description: '監管政策變化（即將推出）',
           stockFilter: 'regulated_stocks',
-          newsFilter: 'approval/warning/investigation'
+          newsFilter: 'approval/warning/investigation',
+          disabled: true
         },
         {
           key: 'market_news',
           label: '市場新聞',
           icon: <BarChartOutlined />,
-          description: '市場情緒變化',
+          description: '市場情緒變化（即將推出）',
           stockFilter: 'TWA00',
-          newsFilter: 'market_sentiment/volatility'
+          newsFilter: 'market_sentiment/volatility',
+          disabled: true
         },
         {
           key: 'global_news',
           label: '國際新聞',
           icon: <GlobalOutlined />,
-          description: '國際事件影響',
+          description: '國際事件影響（即將推出）',
           stockFilter: 'global_impact_stocks',
-          newsFilter: 'geopolitical/trade_war'
+          newsFilter: 'geopolitical/trade_war',
+          disabled: true
         }
       ]
     }
@@ -1152,29 +1186,40 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
       key={category.key}
       title={
         <Space>
-          <span style={{ color: category.color }}>{category.icon}</span>
-          <span>{category.label}</span>
+          <span style={{ color: category.disabled ? '#bfbfbf' : category.color }}>{category.icon}</span>
+          <span style={{ color: category.disabled ? '#bfbfbf' : 'inherit' }}>{category.label}</span>
+          {category.comingSoon && <Tag color="orange">即將推出</Tag>}
         </Space>
       }
       size="small"
-      style={{ marginBottom: 16 }}
+      style={{
+        marginBottom: 16,
+        opacity: category.disabled ? 0.6 : 1,
+        cursor: category.disabled ? 'not-allowed' : 'default'
+      }}
     >
       <Row gutter={[16, 16]}>
         {category.triggers.map((trigger: any) => (
           <Col span={8} key={trigger.key}>
             <Card
-              hoverable
+              hoverable={!category.disabled && !trigger.disabled}
               size="small"
-              onClick={() => handleTriggerSelect(category.key, trigger.key)}
+              onClick={() => {
+                if (!category.disabled && !trigger.disabled) {
+                  handleTriggerSelect(category.key, trigger.key);
+                }
+              }}
               style={{
                 border: value.triggerConfig?.triggerKey === trigger.key ? `2px solid ${category.color}` : '1px solid #d9d9d9',
-                backgroundColor: value.triggerConfig?.triggerKey === trigger.key ? `${category.color}10` : '#fff'
+                backgroundColor: value.triggerConfig?.triggerKey === trigger.key ? `${category.color}10` : '#fff',
+                cursor: category.disabled || trigger.disabled ? 'not-allowed' : 'pointer',
+                opacity: category.disabled || trigger.disabled ? 0.5 : 1
               }}
             >
               <Space direction="vertical" style={{ width: '100%', textAlign: 'center' }}>
-                <span style={{ color: category.color, fontSize: '20px' }}>{trigger.icon}</span>
-                <Text strong>{trigger.label}</Text>
-                <Text type="secondary" style={{ fontSize: '12px' }}>
+                <span style={{ color: category.disabled || trigger.disabled ? '#bfbfbf' : category.color, fontSize: '20px' }}>{trigger.icon}</span>
+                <Text strong style={{ color: category.disabled || trigger.disabled ? '#bfbfbf' : 'inherit' }}>{trigger.label}</Text>
+                <Text type="secondary" style={{ fontSize: '12px', color: category.disabled || trigger.disabled ? '#bfbfbf' : 'inherit' }}>
                   {trigger.description}
                 </Text>
               </Space>
@@ -2093,6 +2138,23 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
             })}
           />
         </Card>
+      )}
+
+      {/* 自定義股票輸入 */}
+      {value.triggerConfig?.triggerKey === 'custom_stocks' && (
+        <div style={{ marginTop: 16 }}>
+          <CustomStockInput
+            value={value.stock_codes || []}
+            onChange={(codes) => onChange({
+              ...value,
+              stock_codes: codes
+            })}
+            onStockNamesChange={(names) => onChange({
+              ...value,
+              stock_names: names
+            })}
+          />
+        </div>
       )}
     </div>
   );
