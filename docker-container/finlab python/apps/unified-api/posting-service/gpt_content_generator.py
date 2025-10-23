@@ -44,7 +44,7 @@ class GPTContentGenerator:
                              ohlc_data: Optional[Dict[str, Any]] = None,
                              technical_indicators: Optional[Dict[str, Any]] = None,
                              content_length: str = "medium",
-                             max_words: int = 200,
+                             max_words: int = 1000,  # 🔥 增加字數限制以獲得更詳細的分析
                              model: Optional[str] = None,
                              template_id: Optional[int] = None,
                              db_connection = None) -> Dict[str, Any]:
@@ -95,8 +95,13 @@ class GPTContentGenerator:
             logger.info(f"📝 System Prompt 長度: {len(system_prompt)} 字")
             logger.info(f"📝 User Prompt 長度: {len(user_prompt)} 字")
 
-            # 🔥 判斷是否為 GPT-5 系列 (需使用 Responses API)
+            # 🔥 判斷是否為 GPT-5 系列
             is_gpt5_model = chosen_model.startswith('gpt-5')
+
+            # 🔥 GPT-5 可以使用兩種 API：
+            # 1. Responses API (推薦，支援 CoT)
+            # 2. Chat Completions API (傳統方式，用 reasoning_effort 參數)
+            # 我們優先使用 Responses API
 
             if is_gpt5_model:
                 # 🔥 GPT-5: 使用 Responses API
@@ -107,12 +112,12 @@ class GPTContentGenerator:
                     "model": chosen_model,
                     "instructions": system_prompt,  # System/developer message
                     "input": user_prompt,  # User input
-                    "max_output_tokens": 2000,
-                    "reasoning": {"effort": "low"},  # 使用 low 以加快速度
-                    "text": {"verbosity": "medium"}
+                    "max_output_tokens": 3000,  # 增加輸出長度限制
+                    "reasoning": {"effort": "high"},  # 🔥 改為 high 以獲得最深入的分析
+                    "text": {"verbosity": "high"}  # 🔥 改為 high 以獲得更詳細的內容
                 }
 
-                logger.info(f"🤖 GPT-5 參數: max_output_tokens=2000, reasoning=low, verbosity=medium")
+                logger.info(f"🤖 GPT-5 參數: max_output_tokens=3000, reasoning=high, verbosity=high")
 
                 # 調用 Responses API
                 try:
@@ -302,9 +307,9 @@ class GPTContentGenerator:
 3. 潛在機會和風險
 
 🔥 重要格式要求：
-- 第一行是標題，必須在 15 字以內（含標點符號）
-- 標題範例：「康舒股價漲停分析」（8字）「台積電Q4展望」（7字）
-- 內容長度：約 {max_words} 字'''
+- 第一行是標題，簡潔有力（建議 15-25 字）
+- 標題範例：「康舒股價漲停分析」「台積電Q4展望與投資機會」
+- 內容長度：約 {max_words} 字，提供深入分析'''
             },
             'interaction': {
                 'id': None,
@@ -331,9 +336,9 @@ class GPTContentGenerator:
 請針對這檔股票提出一個引發討論的問題，鼓勵讀者分享看法。
 
 要求：
-- 🔥 第一行是標題，必須在 15 字以內（含標點符號）
-- 標題範例：「康舒股價漲停分析」（8字）「台積電Q4展望」（7字）
-- 內容簡短（約 {max_words} 字）
+- 🔥 第一行是標題，簡潔有力（建議 15-25 字）
+- 標題範例：「康舒股價漲停分析」「台積電Q4展望與投資機會」
+- 內容長度：約 {max_words} 字
 - 提出單一核心問題
 - 引發讀者思考和互動'''
             },
@@ -362,9 +367,9 @@ class GPTContentGenerator:
 請用你獨特的風格分析這檔股票，展現你的個性和專業。
 
 要求：
-- 🔥 第一行是標題，必須在 15 字以內（含標點符號）
-- 標題範例：「康舒股價漲停分析」（8字）「台積電Q4展望」（7字）
-- 目標長度：約 {max_words} 字
+- 🔥 第一行是標題，簡潔有力（建議 15-25 字）
+- 標題範例：「康舒股價漲停分析」「台積電Q4展望與投資機會」
+- 目標長度：約 {max_words} 字，提供深入分析
 - 充分展現你的個人風格
 - 用你習慣的方式組織內容'''
             }

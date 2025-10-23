@@ -43,12 +43,12 @@ const GenerationSettings: React.FC<GenerationSettingsProps> = ({ value, onChange
 
   const handleContentLengthChange = (length: 'short' | 'medium' | 'long' | 'extended' | 'comprehensive' | 'thorough') => {
     const maxWordsMap = {
-      'short': 100,
-      'medium': 200,
-      'long': 400,
-      'extended': 600,
-      'comprehensive': 800,
-      'thorough': 1000
+      'short': 200,    // 🔥 Increased from 100
+      'medium': 600,   // 🔥 Increased from 200 - better for stock analysis
+      'long': 800,     // 🔥 Increased from 400
+      'extended': 1000,  // 🔥 Increased from 600
+      'comprehensive': 1200,  // 🔥 Increased from 800
+      'thorough': 1500   // 🔥 Increased from 1000
     };
     
     onChange({
@@ -126,7 +126,7 @@ const GenerationSettings: React.FC<GenerationSettingsProps> = ({ value, onChange
     } else if (postingType === 'personalized') {
       // 個人化內容類型：使用 KOL 人設生成多版本
       newSettings.content_length = 'medium';
-      newSettings.max_words = 200;  // 🔥 Capped at 200 to prevent 502 timeouts
+      newSettings.max_words = 600;  // 🔥 Changed to 600 for better personalized content
       newSettings.include_questions = false;
       newSettings.include_emoji = false;
       newSettings.include_hashtag = true;
@@ -135,7 +135,7 @@ const GenerationSettings: React.FC<GenerationSettingsProps> = ({ value, onChange
     } else {
       // 發表分析類型：正常流程
       newSettings.content_length = 'medium';
-      newSettings.max_words = 150;  // 🔥 Changed from 200 to 150 for better quality
+      newSettings.max_words = 600;  // 🔥 Changed to 600 for detailed stock analysis
       newSettings.include_questions = false;
       newSettings.include_emoji = false;
       newSettings.include_hashtag = true;
