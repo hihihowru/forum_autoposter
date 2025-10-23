@@ -2718,9 +2718,10 @@ async def manual_posting(request: Request):
                 password=DB_CONFIG['password']
             )
 
-            # 🔥 查詢完整 KOL Profile (removed writing_style, tone_settings - columns don't exist)
+            # 🔥 查詢完整 KOL Profile (包含 prompt 設定)
             kol_row = await conn.fetchrow("""
-                SELECT serial, nickname, persona, model_id
+                SELECT serial, nickname, persona, model_id,
+                       prompt_persona, prompt_style, prompt_guardrails, prompt_skeleton
                 FROM kol_profiles
                 WHERE serial = $1
             """, str(kol_serial))
@@ -2728,11 +2729,15 @@ async def manual_posting(request: Request):
             await conn.close()
 
             if kol_row:
-                # 🔥 構建 kol_profile dict (removed writing_style, tone_settings)
+                # 🔥 構建 kol_profile dict (包含完整 prompt 設定)
                 kol_profile = {
                     'serial': kol_row['serial'],
                     'nickname': kol_row['nickname'],
-                    'persona': kol_row['persona']
+                    'persona': kol_row['persona'],
+                    'writing_style': kol_row['prompt_style'] or '',  # 使用 prompt_style 作為 writing_style
+                    'prompt_persona': kol_row['prompt_persona'] or '',
+                    'prompt_guardrails': kol_row['prompt_guardrails'] or '',
+                    'prompt_skeleton': kol_row['prompt_skeleton'] or ''
                 }
 
                 # 模型選擇邏輯（保持不變）
