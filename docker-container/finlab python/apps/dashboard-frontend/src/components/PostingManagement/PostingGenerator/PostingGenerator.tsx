@@ -598,7 +598,10 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
         trigger_data: generationConfig.triggers?.triggerConfig,
         generation_config: generationConfig.settings,
         // 🔥 FIX: Pass full triggers config for schedule recreation
-        full_triggers_config: fullTriggersConfig
+        full_triggers_config: fullTriggersConfig,
+        // 🔥 FIX: Pass model_id_override and use_kol_default_model from Step 7
+        model_id_override: generationConfig.settings?.model_id_override,
+        use_kol_default_model: generationConfig.settings?.use_kol_default_model
       }).then(result => {
         // Silent completion toast (non-blocking)
         if (result.success) {

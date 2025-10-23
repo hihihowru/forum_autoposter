@@ -2714,10 +2714,9 @@ async def manual_posting(request: Request):
                 password=DB_CONFIG['password']
             )
 
-            # 🔥 查詢完整 KOL Profile
+            # 🔥 查詢完整 KOL Profile (removed writing_style, tone_settings - columns don't exist)
             kol_row = await conn.fetchrow("""
-                SELECT serial, nickname, persona,
-                       writing_style, tone_settings, model_id
+                SELECT serial, nickname, persona, model_id
                 FROM kol_profiles
                 WHERE serial = $1
             """, str(kol_serial))
@@ -2725,13 +2724,11 @@ async def manual_posting(request: Request):
             await conn.close()
 
             if kol_row:
-                # 🔥 構建 kol_profile dict
+                # 🔥 構建 kol_profile dict (removed writing_style, tone_settings)
                 kol_profile = {
                     'serial': kol_row['serial'],
                     'nickname': kol_row['nickname'],
-                    'persona': kol_row['persona'],
-                    'writing_style': kol_row['writing_style'] or '',
-                    'tone_settings': kol_row['tone_settings'] or ''
+                    'persona': kol_row['persona']
                 }
 
                 # 模型選擇邏輯（保持不變）
@@ -2746,9 +2743,7 @@ async def manual_posting(request: Request):
                 kol_profile = {
                     'serial': str(kol_serial),
                     'nickname': '分析師',
-                    'persona': kol_persona,
-                    'writing_style': '',
-                    'tone_settings': ''
+                    'persona': kol_persona
                 }
 
         except Exception as db_error:
@@ -3038,10 +3033,9 @@ async def performance_test(request: Request):
                 password=DB_CONFIG['password']
             )
 
-            # 🔥 查詢完整 KOL Profile
+            # 🔥 查詢完整 KOL Profile (removed writing_style, tone_settings - columns don't exist)
             kol_row = await conn.fetchrow("""
-                SELECT serial, nickname, persona,
-                       writing_style, tone_settings, model_id
+                SELECT serial, nickname, persona, model_id
                 FROM kol_profiles
                 WHERE serial = $1
             """, str(kol_serial))
@@ -3064,9 +3058,7 @@ async def performance_test(request: Request):
                 kol_profile = {
                     'serial': str(kol_serial),
                     'nickname': '分析師',
-                    'persona': kol_persona,
-                    'writing_style': '',
-                    'tone_settings': ''
+                    'persona': kol_persona
                 }
 
         except Exception as db_error:
