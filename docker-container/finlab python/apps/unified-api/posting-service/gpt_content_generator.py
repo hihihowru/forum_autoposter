@@ -107,17 +107,28 @@ class GPTContentGenerator:
                 # 🔥 GPT-5: 使用 Responses API
                 logger.info(f"🤖 使用 GPT-5 Responses API")
 
+                # 🔥 根據模型調整 reasoning effort
+                # gpt-5: 最強，使用 high
+                # gpt-5-mini: 平衡，使用 medium
+                # gpt-5-nano: 輕量，使用 low
+                if 'nano' in chosen_model:
+                    reasoning_effort = "low"
+                elif 'mini' in chosen_model:
+                    reasoning_effort = "medium"
+                else:
+                    reasoning_effort = "high"
+
                 # 🔥 使用 instructions (system prompt) 和 input (user prompt) 分開傳遞
                 api_params = {
                     "model": chosen_model,
                     "instructions": system_prompt,  # System/developer message
                     "input": user_prompt,  # User input
                     "max_output_tokens": 3000,  # 增加輸出長度限制
-                    "reasoning": {"effort": "high"},  # 🔥 改為 high 以獲得最深入的分析
-                    "text": {"verbosity": "high"}  # 🔥 改為 high 以獲得更詳細的內容
+                    "reasoning": {"effort": reasoning_effort},  # 🔥 根據模型動態調整
+                    "text": {"verbosity": "high"}  # 🔥 保持 high 以獲得詳細內容
                 }
 
-                logger.info(f"🤖 GPT-5 參數: max_output_tokens=3000, reasoning=high, verbosity=high")
+                logger.info(f"🤖 GPT-5 參數: model={chosen_model}, max_output_tokens=3000, reasoning={reasoning_effort}, verbosity=high")
 
                 # 調用 Responses API
                 try:
