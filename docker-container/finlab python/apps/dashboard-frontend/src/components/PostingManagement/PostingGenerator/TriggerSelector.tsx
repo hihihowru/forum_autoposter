@@ -1829,6 +1829,16 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
       {/* 符合條件的股票列表 - 獨立 section */}
       {stockCountResult && (
         <Card title="符合條件的股票列表" size="small" style={{ marginTop: 16 }}>
+          {/* Show note for custom stocks */}
+          {stockCountResult.source === 'custom_stocks' && stockCountResult.note && (
+            <Alert
+              message={stockCountResult.note}
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+            />
+          )}
+
           {/* 篩選閾值設定 */}
           <Row gutter={16} align="middle" style={{ marginBottom: 16 }}>
             <Col span={8}>
@@ -2015,20 +2025,25 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
                     dataIndex: 'current_price',
                     key: 'current_price',
                     width: 100,
-                    sorter: (a: any, b: any) => a.current_price - b.current_price,
-                    render: (price) => `${price}`  // 移除 $ 符號
+                    sorter: (a: any, b: any) => (a.current_price || 0) - (b.current_price || 0),
+                    render: (price) => price !== null && price !== undefined ? `${price}` : <Text type="secondary">-</Text>
                   },
                   {
                     title: '漲跌幅',
                     dataIndex: 'change_percent',
                     key: 'change_percent',
                     width: 100,
-                    sorter: (a: any, b: any) => a.change_percent - b.change_percent,
-                    render: (percent) => (
-                      <Tag color={percent > 0 ? 'red' : 'green'}>
-                        {percent > 0 ? '+' : ''}{percent}%
-                      </Tag>
-                    )
+                    sorter: (a: any, b: any) => (a.change_percent || 0) - (b.change_percent || 0),
+                    render: (percent) => {
+                      if (percent === null || percent === undefined) {
+                        return <Text type="secondary">-</Text>;
+                      }
+                      return (
+                        <Tag color={percent > 0 ? 'red' : 'green'}>
+                          {percent > 0 ? '+' : ''}{percent}%
+                        </Tag>
+                      );
+                    }
                   },
                   {
                     title: '成交金額',
@@ -2145,10 +2160,64 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
         <div style={{ marginTop: 16 }}>
           <CustomStockInput
             value={value.stock_codes || []}
-            onChange={(codes) => onChange({
-              ...value,
-              stock_codes: codes
-            })}
+            onChange={async (codes) => {
+              // Update stock codes
+              onChange({
+                ...value,
+                stock_codes: codes
+              });
+
+              // Fetch stock details and populate stockCountResult table
+              if (codes.length > 0) {
+                try {
+                  // Build stock data from codes using company name mapping
+                  const stocks = codes.map((code) => {
+                    const stockInfo = getStockNameMapping()[code];
+                    return {
+                      stock_code: code,
+                      stock_name: stockInfo || `股票${code}`,
+                      industry: '自定義', // Mark as custom
+                      current_price: null, // No real-time data
+                      change_percent: null, // No real-time data
+                      volume: null, // No real-time data
+                      amount: null, // No real-time data
+                      close_price: null, // No real-time data
+                      five_day_gain_days: null,
+                      five_day_gain_percent: null
+                    };
+                  });
+
+                  // Update stockCountResult to show in table
+                  setStockCountResult({
+                    success: true,
+                    total_count: stocks.length,
+                    stocks: stocks,
+                    timestamp: new Date().toISOString(),
+                    source: 'custom_stocks',
+                    note: '⚠️ 自定義股票不提供即時市場數據，僅用於生成分析文章'
+                  });
+
+                  // Also update companyNameMapping for display
+                  const newMapping: Record<string, string> = {};
+                  codes.forEach(code => {
+                    newMapping[code] = getStockNameMapping()[code] || `股票${code}`;
+                  });
+                  setCompanyNameMapping(prev => ({ ...prev, ...newMapping }));
+
+                  // Also update selectedStocksForBatch to match the custom stocks
+                  setSelectedStocksForBatch(codes);
+
+                  message.success(`已加載 ${codes.length} 支自定義股票到列表`);
+                } catch (error) {
+                  console.error('加載自定義股票失敗:', error);
+                  message.error('加載自定義股票失敗');
+                }
+              } else {
+                // Clear the table when no stocks
+                setStockCountResult(null);
+                setSelectedStocksForBatch([]);
+              }
+            }}
             onStockNamesChange={(names) => onChange({
               ...value,
               stock_names: names
