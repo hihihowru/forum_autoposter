@@ -2804,6 +2804,13 @@ async def manual_posting(request: Request):
                     max_words=max_words,
                     model=chosen_model_id  # 🔥 傳遞選定的模型
                 )
+
+                # 🔍 DEBUG: 印出 gpt_result 的完整內容
+                logger.info(f"🔍 DEBUG gpt_result keys: {list(gpt_result.keys())}")
+                logger.info(f"🔍 DEBUG gpt_result title: {gpt_result.get('title', 'None')}")
+                logger.info(f"🔍 DEBUG gpt_result content 長度: {len(gpt_result.get('content', ''))}")
+                logger.info(f"🔍 DEBUG gpt_result content 前 100 字: {gpt_result.get('content', '')[:100]}")
+
                 title = gpt_result.get('title', f"{stock_name}({stock_code}) 分析")
                 content = gpt_result.get('content', '')
                 logger.info(f"✅ GPT 內容生成成功: title={title[:30]}...")

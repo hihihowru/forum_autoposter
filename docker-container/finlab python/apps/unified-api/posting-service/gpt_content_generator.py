@@ -124,8 +124,16 @@ class GPTContentGenerator:
 
             content = response.choices[0].message.content
 
+            # 🔍 DEBUG: 印出 GPT 原始回應
+            logger.info(f"🔍 DEBUG GPT 原始回應長度: {len(content) if content else 0} 字")
+            logger.info(f"🔍 DEBUG GPT 原始回應前 200 字: {content[:200] if content else 'None'}")
+
             # 解析GPT回應
             result = self._parse_gpt_response(content, stock_id, stock_name)
+
+            # 🔍 DEBUG: 印出解析後的結果
+            logger.info(f"🔍 DEBUG 解析後 title: {result.get('title', 'None')}")
+            logger.info(f"🔍 DEBUG 解析後 content 長度: {len(result.get('content', ''))}")
 
             # 記錄使用的模板和 prompt
             result['template_id'] = template.get('id')
