@@ -102,18 +102,17 @@ class GPTContentGenerator:
                 # 🔥 GPT-5: 使用 Responses API
                 logger.info(f"🤖 使用 GPT-5 Responses API")
 
-                # 組合 input (將 system 和 user prompt 合併)
-                combined_input = f"{system_prompt}\n\n{user_prompt}"
-
+                # 🔥 使用 instructions (system prompt) 和 input (user prompt) 分開傳遞
                 api_params = {
                     "model": chosen_model,
-                    "input": combined_input,
+                    "instructions": system_prompt,  # System/developer message
+                    "input": user_prompt,  # User input
                     "max_output_tokens": 2000,
-                    "reasoning": {"effort": "medium"},  # medium 是預設值
+                    "reasoning": {"effort": "low"},  # 使用 low 以加快速度
                     "text": {"verbosity": "medium"}
                 }
 
-                logger.info(f"🤖 GPT-5 參數: max_output_tokens=2000, reasoning=medium, verbosity=medium")
+                logger.info(f"🤖 GPT-5 參數: max_output_tokens=2000, reasoning=low, verbosity=medium")
 
                 # 調用 Responses API
                 try:
