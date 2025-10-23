@@ -155,7 +155,16 @@ class GPTContentGenerator:
 
                 # 從 Responses API 提取內容
                 content = None
-                if response.output and len(response.output) > 0:
+
+                # 🔥 首先嘗試使用 SDK 的便捷屬性 output_text
+                if hasattr(response, 'output_text') and response.output_text:
+                    content = response.output_text
+                    logger.info(f"✅ 使用 SDK output_text 屬性提取內容，長度: {len(content)} 字")
+
+                # 如果沒有 output_text，手動遍歷 output array
+                elif response.output and len(response.output) > 0:
+                    logger.info(f"⚠️ SDK 沒有 output_text，手動遍歷 output array")
+
                     # 遍歷所有 output items，找到 message 類型
                     for i, output_item in enumerate(response.output):
                         logger.info(f"🔍 DEBUG output[{i}].type: {output_item.type}")
