@@ -107,16 +107,15 @@ class GPTContentGenerator:
                 # 🔥 GPT-5: 使用 Responses API
                 logger.info(f"🤖 使用 GPT-5 Responses API")
 
-                # 🔥 根據模型調整 reasoning effort
-                # gpt-5: 最強，使用 high
-                # gpt-5-mini: 平衡，使用 medium
-                # gpt-5-nano: 輕量，使用 low
-                if 'nano' in chosen_model:
-                    reasoning_effort = "low"
-                elif 'mini' in chosen_model:
-                    reasoning_effort = "medium"
-                else:
-                    reasoning_effort = "high"
+                # 🔥 所有 GPT-5 模型都使用 medium reasoning effort
+                # medium 提供最佳的速度/質量平衡：
+                # - gpt-5: ~30-40秒，800-1200字 ✅
+                # - gpt-5-mini: ~15-25秒，600-1000字 ✅
+                # - gpt-5-nano: ~10-15秒，400-800字 ✅
+                #
+                # 避免使用 high（太慢，60-90秒，經常 incomplete）
+                # 避免使用 low（太快，但內容太短 200-300字）
+                reasoning_effort = "medium"
 
                 # 🔥 使用 instructions (system prompt) 和 input (user prompt) 分開傳遞
                 api_params = {
