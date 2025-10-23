@@ -320,6 +320,8 @@ export class PostingManagementAPI {
 
           // 🔍 DEBUG: Log what's actually being sent in the request
           console.log('🔍 DEBUG - full_triggers_config in request:', JSON.stringify((batchConfig as any).full_triggers_config, null, 2));
+          console.log('🔍 DEBUG - model_id_override:', batchConfig.model_id_override, 'type:', typeof batchConfig.model_id_override);
+          console.log('🔍 DEBUG - use_kol_default_model:', batchConfig.use_kol_default_model, 'type:', typeof batchConfig.use_kol_default_model);
 
           // 調用單個貼文生成 API
           const response = await axios.post(`${POSTING_SERVICE_URL}/api/manual-posting`, {
