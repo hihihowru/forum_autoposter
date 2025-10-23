@@ -2824,6 +2824,41 @@ async def manual_posting(request: Request):
                 title = gpt_result.get('title', f"{stock_name}({stock_code}) 分析")
                 content = gpt_result.get('content', '')
                 logger.info(f"✅ GPT 內容生成成功: title={title[:30]}...")
+
+                # 🔥 FIX: 整合新聞連結到內容末尾
+                if serper_analysis and serper_analysis.get('enable_news_links', True):
+                    news_items = serper_analysis.get('news_items', [])
+                    news_max_links = serper_analysis.get('news_max_links', 5)
+
+                    if news_items:
+                        # 檢查內容中是否已經有新聞來源
+                        if "新聞來源:" not in content and "📰 新聞來源:" not in content:
+                            logger.info(f"📰 開始整合 {len(news_items)} 則新聞來源 (max: {news_max_links})")
+
+                            news_sources = []
+                            for i, news in enumerate(news_items[:news_max_links]):
+                                title_text = news.get('title', '')
+                                link = news.get('link', '')
+
+                                if title_text and link:
+                                    news_sources.append(f"{i+1}. {title_text}\n   🔗 {link}")
+                                elif title_text:
+                                    news_sources.append(f"{i+1}. {title_text}")
+
+                            if news_sources:
+                                news_section = "\n\n📰 新聞來源：\n" + "\n".join(news_sources)
+                                content += news_section
+                                logger.info(f"✅ 成功附加 {len(news_sources)} 則新聞連結")
+                        else:
+                            logger.info("⚠️  內容中已包含新聞來源，跳過重複添加")
+                    else:
+                        logger.info("ℹ️  無新聞數據可附加")
+                else:
+                    if serper_analysis:
+                        logger.info(f"ℹ️  新聞連結已停用 (enable_news_links={serper_analysis.get('enable_news_links')})")
+                    else:
+                        logger.info("ℹ️  無 serper_analysis 數據")
+
             except Exception as gpt_error:
                 logger.error(f"❌ GPT 生成失敗，使用模板: {gpt_error}")
                 title = f"{stock_name}({stock_code}) 技術分析與操作策略"
