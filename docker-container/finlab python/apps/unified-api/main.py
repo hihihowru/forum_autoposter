@@ -6709,6 +6709,15 @@ async def execute_schedule_now(task_id: str, request: Request):
                     "generation_mode": "scheduled",  # 🔥 NEW: Mark as scheduled generation
                     "posting_type": generation_config.get('posting_type', 'analysis'),
                     "max_words": generation_config.get('max_words', 200),
+                    # 🔥 FIX: Pass news_config from generation_config
+                    "news_config": generation_config.get('news_config', {
+                        'enable_news_links': True,
+                        'max_links': 5,
+                        'time_range': 'd1'
+                    }),
+                    # 🔥 FIX: Pass model override settings from generation_config
+                    "model_id_override": generation_config.get('model_id_override'),
+                    "use_kol_default_model": generation_config.get('use_kol_default_model', True),
                     "full_triggers_config": {
                         "trigger_type": trigger_key,  # 🔥 FIX: Use actual trigger_key
                         "stock_codes": stock_codes,
