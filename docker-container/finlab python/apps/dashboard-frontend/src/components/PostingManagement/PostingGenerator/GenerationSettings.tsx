@@ -25,6 +25,9 @@ interface GenerationSettings {
   // 新增：模型 ID 覆蓋選項
   model_id_override?: string | null; // null = 使用 KOL 預設, string = 批量覆蓋
   use_kol_default_model: boolean; // true = 使用 KOL 預設, false = 使用批量覆蓋
+  // 🔥 新增：新聞連結設定
+  include_news_links: boolean; // 是否附加新聞連結
+  news_links_count: number; // 附加的新聞連結數量 (1-5)
 }
 
 interface GenerationSettingsProps {
@@ -108,6 +111,17 @@ const GenerationSettings: React.FC<GenerationSettingsProps> = ({ value, onChange
   };
 
   const handlePostingTypeChange = (postingType: 'interaction' | 'analysis' | 'personalized') => {
+    // 🔥 FIX: max_words 應該由 content_length 決定，不應該在這裡硬編碼
+    // 使用統一的映射表
+    const maxWordsMap: { [key: string]: number } = {
+      'short': 200,
+      'medium': 600,
+      'long': 800,
+      'extended': 1000,
+      'comprehensive': 1200,
+      'thorough': 1500
+    };
+
     const newSettings = {
       ...value,
       posting_type: postingType
@@ -117,7 +131,7 @@ const GenerationSettings: React.FC<GenerationSettingsProps> = ({ value, onChange
     if (postingType === 'interaction') {
       // 互動發問類型：簡短內容，包含問句和表情符號
       newSettings.content_length = 'short';
-      newSettings.max_words = 50;  // 🔥 Fixed: Changed from 30 to 50 (more reasonable)
+      newSettings.max_words = maxWordsMap['short'];  // 🔥 FIX: 從映射表獲取，保持一致性
       newSettings.include_questions = true;
       newSettings.include_emoji = true;
       newSettings.include_hashtag = true;
@@ -126,7 +140,7 @@ const GenerationSettings: React.FC<GenerationSettingsProps> = ({ value, onChange
     } else if (postingType === 'personalized') {
       // 個人化內容類型：使用 KOL 人設生成多版本
       newSettings.content_length = 'medium';
-      newSettings.max_words = 600;  // 🔥 Changed to 600 for better personalized content
+      newSettings.max_words = maxWordsMap['medium'];  // 🔥 FIX: 從映射表獲取，保持一致性
       newSettings.include_questions = false;
       newSettings.include_emoji = false;
       newSettings.include_hashtag = true;
@@ -135,7 +149,7 @@ const GenerationSettings: React.FC<GenerationSettingsProps> = ({ value, onChange
     } else {
       // 發表分析類型：正常流程
       newSettings.content_length = 'medium';
-      newSettings.max_words = 600;  // 🔥 Changed to 600 for detailed stock analysis
+      newSettings.max_words = maxWordsMap['medium'];  // 🔥 FIX: 從映射表獲取，保持一致性
       newSettings.include_questions = false;
       newSettings.include_emoji = false;
       newSettings.include_hashtag = true;

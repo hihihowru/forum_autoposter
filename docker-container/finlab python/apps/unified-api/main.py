@@ -2771,6 +2771,12 @@ async def manual_posting(request: Request):
                 search_keywords = news_config.get('search_keywords')
                 time_range = news_config.get('time_range', 'd1')  # 預設過去1天
 
+                # 🔥 FIX: 提取新聞連結設定 (enable_news_links, max_links)
+                enable_news_links = news_config.get('enable_news_links', True)  # 預設開啟
+                news_max_links = news_config.get('max_links', 5)  # 預設5個連結
+
+                logger.info(f"📰 新聞連結設定: enable={enable_news_links}, max_links={news_max_links}")
+
                 serper_analysis = serper_service.get_comprehensive_stock_analysis(
                     stock_code=stock_code,
                     stock_name=stock_name,
@@ -2778,6 +2784,10 @@ async def manual_posting(request: Request):
                     time_range=time_range,
                     trigger_type=trigger_type
                 )
+
+                # 🔥 FIX: 將新聞連結設定注入到 serper_analysis，供 personalization_module 使用
+                serper_analysis['enable_news_links'] = enable_news_links
+                serper_analysis['news_max_links'] = news_max_links
 
                 news_count = len(serper_analysis.get('news_items', []))
                 logger.info(f"✅ Serper API 調用成功，找到 {news_count} 則新聞")
@@ -3096,6 +3106,9 @@ async def performance_test(request: Request):
                     time_range='d1',
                     trigger_type=trigger_type
                 )
+                # 🔥 FIX: 為測試端點也添加新聞連結設定（使用預設值）
+                serper_analysis['enable_news_links'] = True  # 測試端點預設開啟
+                serper_analysis['news_max_links'] = 5  # 測試端點預設5個
             except Exception as e:
                 pass
         timings['2_5_serper_api'] = round((time.time() - step_start) * 1000, 2)
