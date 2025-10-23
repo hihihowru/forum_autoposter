@@ -161,7 +161,7 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
       quality_check_enabled: true,
       ai_detection_enabled: true,
       shared_commodity_tags: true,  // 啟用同 batch 共享股票標籤
-      generation_mode: 'high_quality',
+      generation_mode: 'manual',  // 🔥 FIX: 手動生成應使用 'manual' 而非 'high_quality'
       posting_type: 'analysis'  // 新增：發文類型
     }
   });

@@ -331,6 +331,10 @@ const BatchHistoryPage: React.FC = () => {
           'manual': { text: '手動生成', color: 'blue' },
           'scheduled': { text: '排程生成', color: 'green' },
           'self_learning': { text: '自我學習', color: 'purple' },
+          // 🔥 FIX: 支援舊的值作為 fallback (歷史數據兼容)
+          'high_quality': { text: '手動生成 (舊)', color: 'blue' },
+          'fast': { text: '手動生成 (快速)', color: 'cyan' },
+          'balanced': { text: '手動生成 (平衡)', color: 'geekblue' },
         };
         const mapped = modeMap[generationMode] || { text: generationMode || '手動生成', color: 'default' };
         return <Tag color={mapped.color}>{mapped.text}</Tag>;

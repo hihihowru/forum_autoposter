@@ -23,8 +23,8 @@ interface BatchModeConfig {
   publish_delay_minutes: number;
   quality_check_enabled: boolean;
   ai_detection_enabled: boolean;
-  // 新增：生成模式
-  generation_mode: 'simple' | 'trash' | 'high_quality';
+  // 新增：生成模式 (🔥 FIX: 使用正確的值 manual/scheduled/self_learning)
+  generation_mode: 'manual' | 'scheduled' | 'self_learning';
   // 新增：發文類型
   posting_type: 'interaction' | 'analysis' | 'personalized';
 }

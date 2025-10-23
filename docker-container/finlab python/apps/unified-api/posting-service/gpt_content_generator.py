@@ -432,22 +432,24 @@ class GPTContentGenerator:
 
     def _parse_gpt_response(self, content: str, stock_id: str, stock_name: str) -> Dict[str, Any]:
         """解析GPT回應"""
-        
+
         # 簡單的內容分割
         lines = content.split('\n')
         title = ""
         main_content = content
-        
+
         # 提取標題
         for line in lines:
             if line.strip() and not line.startswith(' '):
                 title = line.strip()
+                # 🔥 FIX: 移除 Markdown 標題符號 (###, ##, #)
+                title = title.lstrip('#').strip()
                 break
-        
+
         # 如果沒有找到標題，使用預設
         if not title:
             title = f"{stock_name} 分析"
-        
+
         return {
             "title": title,
             "content": main_content,
