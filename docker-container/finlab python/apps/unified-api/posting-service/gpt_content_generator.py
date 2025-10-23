@@ -122,6 +122,11 @@ class GPTContentGenerator:
             # 調用GPT API
             response = openai.chat.completions.create(**api_params)
 
+            # 🔍 DEBUG: 印出完整 response 結構
+            logger.info(f"🔍 DEBUG response.choices 長度: {len(response.choices)}")
+            logger.info(f"🔍 DEBUG response.choices[0].message: {response.choices[0].message}")
+            logger.info(f"🔍 DEBUG response.choices[0].finish_reason: {response.choices[0].finish_reason}")
+
             content = response.choices[0].message.content
 
             # 🔍 DEBUG: 印出 GPT 原始回應
