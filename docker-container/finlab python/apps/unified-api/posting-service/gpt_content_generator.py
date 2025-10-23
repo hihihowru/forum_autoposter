@@ -576,23 +576,34 @@ class GPTContentGenerator:
         title = ""
         main_content = content
 
-        # 提取標題
-        for line in lines:
+        # 提取標題（第一行非空行）
+        title_line_index = -1
+        for i, line in enumerate(lines):
             if line.strip() and not line.startswith(' '):
                 title = line.strip()
+                title_line_index = i
                 break
 
         # 如果沒有找到標題，使用預設
         if not title:
             title = f"{stock_name} 分析"
 
-        # 🔥 FIX: 強制限制標題長度在 15 字以內（防禦性編程）
-        if len(title) > 15:
-            title = title[:15]
-            # 如果截斷位置是標點符號的一半，往前調整
-            if title[-1] in '「『（【':
-                title = title[:-1]
-            logger.warning(f"⚠️  標題過長已截斷至 15 字: {title}")
+        # 🔥 移除內容開頭的重複標題
+        # 如果內容以標題開頭，則移除第一行（標題行）及其後的空行
+        if title_line_index >= 0:
+            # 從標題行之後開始
+            content_lines = lines[title_line_index + 1:]
+
+            # 跳過標題後的空行
+            while content_lines and not content_lines[0].strip():
+                content_lines.pop(0)
+
+            # 重新組合內容（不包含標題）
+            main_content = '\n'.join(content_lines).strip()
+
+        # 如果移除標題後內容為空，使用原始內容
+        if not main_content:
+            main_content = content
 
         return {
             "title": title,
