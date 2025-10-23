@@ -168,8 +168,8 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
 
   const steps = [
     { title: '觸發器選擇', description: '選擇內容觸發器' },
-    { title: '數據源配置', description: '配置數據來源' },
-    { title: '解釋層設定', description: '設定可解釋性' },
+    { title: '數據源配置 (測試中、即將推出)', description: '配置數據來源' },
+    { title: '解釋層設定 (測試中、即將推出)', description: '設定可解釋性' },
     { title: '新聞搜尋', description: '配置新聞搜尋' },
     { title: 'KOL 選擇', description: '選擇 KOL' },
     { title: 'KOL Prompt 微調', description: '微調 KOL Prompt' },

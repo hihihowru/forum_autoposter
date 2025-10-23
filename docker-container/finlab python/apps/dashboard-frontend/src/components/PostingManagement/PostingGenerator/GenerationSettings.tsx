@@ -269,11 +269,14 @@ const GenerationSettings: React.FC<GenerationSettingsProps> = ({ value, onChange
                   </Space>
                 </Space>
               </Radio>
-              <Radio value="one_to_many" style={{ width: '100%' }}>
+              <Radio value="one_to_many" style={{ width: '100%' }} disabled>
                 <Space>
                   <ClusterOutlined />
                   <Space direction="vertical" size={0}>
-                    <Text strong>一對多模式</Text>
+                    <Space>
+                      <Text strong>一對多模式</Text>
+                      <Tag color="orange">測試中、即將推出</Tag>
+                    </Space>
                     <Text type="secondary" style={{ fontSize: '12px' }}>
                       {getPostModeDescription('one_to_many')}
                     </Text>
@@ -392,11 +395,15 @@ const GenerationSettings: React.FC<GenerationSettingsProps> = ({ value, onChange
 
         {/* 內容風格設定 */}
         <div>
-          <Title level={5}>內容風格</Title>
+          <Space>
+            <Title level={5}>內容風格</Title>
+            <Tag color="orange">測試中、即將推出</Tag>
+          </Space>
           <Radio.Group
             value={value.content_style}
             onChange={(e) => handleContentStyleChange(e.target.value)}
             style={{ width: '100%' }}
+            disabled
           >
             <Row gutter={[16, 16]}>
               <Col span={12}>
@@ -447,11 +454,15 @@ const GenerationSettings: React.FC<GenerationSettingsProps> = ({ value, onChange
 
         {/* 分析深度設定 */}
         <div>
-          <Title level={5}>分析深度</Title>
+          <Space>
+            <Title level={5}>分析深度</Title>
+            <Tag color="orange">測試中、即將推出</Tag>
+          </Space>
           <Radio.Group
             value={value.include_analysis_depth}
             onChange={(e) => handleAnalysisDepthChange(e.target.value)}
             style={{ width: '100%' }}
+            disabled
           >
             <Space direction="vertical" style={{ width: '100%' }}>
               <Radio value="basic" style={{ width: '100%' }}>
@@ -486,7 +497,10 @@ const GenerationSettings: React.FC<GenerationSettingsProps> = ({ value, onChange
 
         {/* 額外功能設定 */}
         <div>
-          <Title level={5}>額外功能</Title>
+          <Space>
+            <Title level={5}>額外功能</Title>
+            <Tag color="orange">測試中、即將推出</Tag>
+          </Space>
           <Space direction="vertical" style={{ width: '100%' }}>
             <div>
               <Space>
@@ -494,6 +508,7 @@ const GenerationSettings: React.FC<GenerationSettingsProps> = ({ value, onChange
                   type="checkbox"
                   checked={value.include_charts}
                   onChange={(e) => handleIncludeChartsChange(e.target.checked)}
+                  disabled
                 />
                 <Text>包含圖表說明</Text>
                 <Tag color="blue">建議</Tag>
@@ -509,6 +524,7 @@ const GenerationSettings: React.FC<GenerationSettingsProps> = ({ value, onChange
                   type="checkbox"
                   checked={value.include_risk_warning}
                   onChange={(e) => handleIncludeRiskWarningChange(e.target.checked)}
+                  disabled
                 />
                 <Text>包含風險警告</Text>
                 <Tag color="red">必要</Tag>
