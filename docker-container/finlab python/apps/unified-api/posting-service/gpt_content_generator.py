@@ -561,19 +561,16 @@ class GPTContentGenerator:
         # 🎯 組合數據區塊
         data_section = news_summary + ohlc_summary + tech_summary
 
-        # 🎯 對話式 User Prompt（讓 GPT 自由發揮）
-        user_prompt = f"""我想了解 {stock_name}({stock_id}) 最近的表現和投資機會。
+        # 🎯 對話式 User Prompt（更自然、不強制結構）
+        user_prompt = f"""請分析 {stock_name}({stock_id}) 的投資價值。
 
-【背景】{trigger_desc}
+背景：{trigger_desc}
 
-【市場數據】
-{data_section}請分析這檔股票，包含：
-1. 為什麼值得關注
-2. 你的專業看法
-3. 潛在機會和風險
+相關資訊：
+{data_section}
+用你的專業角度分析這檔股票，包括值得關注的重點、你的看法、以及投資人應該注意的機會與風險。
 
-目標長度：約 {max_words} 字
-"""
+請用自然流暢的方式表達，不需要固定格式，約 {max_words} 字。"""
 
         return user_prompt
 
