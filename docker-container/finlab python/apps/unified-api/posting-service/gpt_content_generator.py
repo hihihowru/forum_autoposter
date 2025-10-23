@@ -95,16 +95,32 @@ class GPTContentGenerator:
             logger.info(f"📝 System Prompt 長度: {len(system_prompt)} 字")
             logger.info(f"📝 User Prompt 長度: {len(user_prompt)} 字")
 
-            # 調用GPT API
-            response = openai.chat.completions.create(
-                model=chosen_model,
-                messages=[
+            # 🔥 根據模型類型選擇正確的 API 參數
+            # GPT-5 和新模型使用 max_completion_tokens（不支援 temperature）
+            # 舊模型使用 max_tokens + temperature
+            api_params = {
+                "model": chosen_model,
+                "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
-                ],
-                max_tokens=2000,
-                temperature=0.7
-            )
+                ]
+            }
+
+            # 判斷是否為新模型（GPT-5, o1, o1-mini, o1-preview 等）
+            is_new_model = any(model_prefix in chosen_model.lower() for model_prefix in ['gpt-5', 'o1', 'o3'])
+
+            if is_new_model:
+                # 新模型：使用 max_completion_tokens，不使用 temperature
+                api_params["max_completion_tokens"] = 2000
+                logger.info(f"🤖 使用新模型參數: max_completion_tokens=2000 (無 temperature)")
+            else:
+                # 舊模型：使用 max_tokens + temperature
+                api_params["max_tokens"] = 2000
+                api_params["temperature"] = 0.7
+                logger.info(f"🤖 使用舊模型參數: max_tokens=2000, temperature=0.7")
+
+            # 調用GPT API
+            response = openai.chat.completions.create(**api_params)
 
             content = response.choices[0].message.content
 
