@@ -36,42 +36,45 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onRefresh }) => {
       label: '儀表板總覽',
       icon: <DashboardOutlined />,
     },
-    {
-      key: 'system-monitoring',
-      label: '系統監控',
-      icon: <MonitorOutlined />,
-      children: [
-        {
-          key: '/system-monitoring',
-          label: '系統狀態',
-        },
-        {
-          key: '/system-monitoring/services',
-          label: '微服務監控',
-        },
-        {
-          key: '/system-monitoring/tasks',
-          label: '任務執行',
-        },
-      ],
-    },
+    // ❌ DISABLED: 系統監控 (mock data, not helpful)
+    // {
+    //   key: 'system-monitoring',
+    //   label: '系統監控',
+    //   icon: <MonitorOutlined />,
+    //   children: [
+    //     {
+    //       key: '/system-monitoring',
+    //       label: '系統狀態',
+    //     },
+    //     {
+    //       key: '/system-monitoring/services',
+    //       label: '微服務監控',
+    //     },
+    //     {
+    //       key: '/system-monitoring/tasks',
+    //       label: '任務執行',
+    //     },
+    //   ],
+    // },
     {
       key: 'content-management',
       label: '內容管理',
       icon: <FileTextOutlined />,
       children: [
-        {
-          key: '/content-management',
-          label: '內容總覽',
-        },
+        // ❌ DISABLED: 內容總覽 (mock data, not helpful)
+        // {
+        //   key: '/content-management',
+        //   label: '內容總覽',
+        // },
         {
           key: '/content-management/kols',
           label: 'KOL 管理',
         },
-        {
-          key: '/content-management/posts',
-          label: '貼文管理',
-        },
+        // ❌ DISABLED: 貼文管理 (mock data, not helpful)
+        // {
+        //   key: '/content-management/posts',
+        //   label: '貼文管理',
+        // },
       ],
     },
     {
@@ -79,14 +82,16 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onRefresh }) => {
       label: '發文管理',
       icon: <EditOutlined />,
       children: [
-        {
-          key: '/posting-management',
-          label: '發文總覽',
-        },
-        {
-          key: '/posting-management/dashboard',
-          label: '發文儀表板',
-        },
+        // ❌ DISABLED: 發文總覽 (mock data, not helpful)
+        // {
+        //   key: '/posting-management',
+        //   label: '發文總覽',
+        // },
+        // ❌ DISABLED: 發文儀表板 (mock data, not helpful)
+        // {
+        //   key: '/posting-management/dashboard',
+        //   label: '發文儀表板',
+        // },
         {
           key: '/posting-management/generator',
           label: '發文生成器',
@@ -100,10 +105,11 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onRefresh }) => {
           label: '已發布貼文',
           icon: <SendOutlined />,
         },
-        {
-          key: '/posting-management/test-after-hours',
-          label: '盤後漲停測試',
-        },
+        // ❌ DISABLED: 盤後漲停觸發器測試 (mock data, not helpful)
+        // {
+        //   key: '/posting-management/test-after-hours',
+        //   label: '盤後漲停測試',
+        // },
         {
           key: '/posting-management/batch-history',
           label: '批次歷史',
@@ -119,16 +125,18 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onRefresh }) => {
           label: '自我學習',
           icon: <RocketOutlined />,
         },
-        {
-          key: '/posting-management/interaction-analysis',
-          label: '互動分析',
-          icon: <BarChartOutlined />,
-        },
-        {
-          key: '/posting-management/performance-analysis',
-          label: '成效分析',
-          icon: <TrophyOutlined />,
-        },
+        // ❌ DISABLED: 互動分析 (duplicate/mock data, not helpful)
+        // {
+        //   key: '/posting-management/interaction-analysis',
+        //   label: '互動分析',
+        //   icon: <BarChartOutlined />,
+        // },
+        // ❌ DISABLED: 成效分析 (mock data, not helpful)
+        // {
+        //   key: '/posting-management/performance-analysis',
+        //   label: '成效分析',
+        //   icon: <TrophyOutlined />,
+        // },
         {
           key: '/posting-management/manual-posting',
           label: '手動發文',
@@ -136,67 +144,70 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onRefresh }) => {
         },
       ],
     },
-    {
-      key: 'interaction-analysis',
-      label: '互動分析',
-      icon: <BarChartOutlined />,
-      children: [
-        {
-          key: '/interaction-analysis',
-          label: '互動總覽',
-        },
-        {
-          key: '/interaction-analysis/features',
-          label: '內容特徵分析',
-        },
-        {
-          key: '/interaction-analysis/1hr',
-          label: '1小時數據',
-        },
-        {
-          key: '/interaction-analysis/1day',
-          label: '1日數據',
-        },
-        {
-          key: '/interaction-analysis/7days',
-          label: '7日數據',
-        },
-      ],
-    },
-    {
-      key: 'system-settings',
-      label: '系統設置',
-      icon: <SettingOutlined />,
-      children: [
-        {
-          key: '/settings',
-          label: '基本設置',
-        },
-        {
-          key: '/settings/api',
-          label: 'API 設置',
-        },
-        {
-          key: '/settings/data',
-          label: '數據源設置',
-        },
-      ],
-    },
-    {
-      key: 'user-management',
-      label: '用戶管理',
-      icon: <UserOutlined />,
-      children: [
-        {
-          key: '/users',
-          label: '用戶列表',
-        },
-        {
-          key: '/users/roles',
-          label: '角色權限',
-        },
-      ],
-    }
+    // ❌ DISABLED: 互動分析 (entire section - mock data, not helpful)
+    // {
+    //   key: 'interaction-analysis',
+    //   label: '互動分析',
+    //   icon: <BarChartOutlined />,
+    //   children: [
+    //     {
+    //       key: '/interaction-analysis',
+    //       label: '互動總覽',
+    //     },
+    //     {
+    //       key: '/interaction-analysis/features',
+    //       label: '內容特徵分析',
+    //     },
+    //     {
+    //       key: '/interaction-analysis/1hr',
+    //       label: '1小時數據',
+    //     },
+    //     {
+    //       key: '/interaction-analysis/1day',
+    //       label: '1日數據',
+    //     },
+    //     {
+    //       key: '/interaction-analysis/7days',
+    //       label: '7日數據',
+    //     },
+    //   ],
+    // },
+    // ❌ DISABLED: 系統設置 (entire section - mock data, not helpful)
+    // {
+    //   key: 'system-settings',
+    //   label: '系統設置',
+    //   icon: <SettingOutlined />,
+    //   children: [
+    //     {
+    //       key: '/settings',
+    //       label: '基本設置',
+    //     },
+    //     {
+    //       key: '/settings/api',
+    //       label: 'API 設置',
+    //     },
+    //     {
+    //       key: '/settings/data',
+    //       label: '數據源設置',
+    //     },
+    //   ],
+    // },
+    // ❌ DISABLED: 用戶管理 (entire section - mock data, not helpful)
+    // {
+    //   key: 'user-management',
+    //   label: '用戶管理',
+    //   icon: <UserOutlined />,
+    //   children: [
+    //     {
+    //       key: '/users',
+    //       label: '用戶列表',
+    //     },
+    //     {
+    //       key: '/users/roles',
+    //       label: '角色權限',
+    //     },
+    //   ],
+    // }
   ];
 
   const handleMenuClick = ({ key }: { key: string }) => {
