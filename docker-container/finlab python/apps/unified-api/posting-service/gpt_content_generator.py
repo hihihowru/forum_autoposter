@@ -128,27 +128,60 @@ class GPTContentGenerator:
                 logger.info(f"🔍 DEBUG response.status: {response.status}")
                 logger.info(f"🔍 DEBUG response.output 長度: {len(response.output)}")
 
-                # 從 Responses API 提取內容
-                if response.output and len(response.output) > 0:
-                    first_output = response.output[0]
-                    logger.info(f"🔍 DEBUG first_output.type: {first_output.type}")
+                # 🔥 如果 response 還沒完成，等待它完成
+                if response.status == "incomplete" or response.status == "in_progress":
+                    logger.warning(f"⚠️ Response 狀態為 {response.status}，嘗試輪詢獲取完整結果...")
 
-                    if first_output.type == "message" and first_output.content:
-                        # 提取 output_text
-                        content = None
-                        for content_item in first_output.content:
-                            if content_item.type == "output_text":
-                                content = content_item.text
-                                break
+                    # 輪詢等待完成（最多等待 60 秒）
+                    import time
+                    max_retries = 60
+                    retry_count = 0
 
-                        if not content:
-                            logger.error(f"❌ 無法從 Responses API 提取文字內容")
-                            content = None
+                    while retry_count < max_retries and response.status in ["incomplete", "in_progress"]:
+                        time.sleep(1)
+                        retry_count += 1
+
+                        # 重新獲取 response
+                        try:
+                            response = openai.responses.retrieve(response.id)
+                            logger.info(f"🔄 輪詢 {retry_count}/{max_retries}: status={response.status}")
+                        except Exception as poll_error:
+                            logger.error(f"❌ 輪詢失敗: {poll_error}")
+                            break
+
+                    if response.status != "completed":
+                        logger.error(f"❌ Response 未在時限內完成，最終狀態: {response.status}")
                     else:
-                        content = None
+                        logger.info(f"✅ Response 完成，共輪詢 {retry_count} 次")
+
+                # 從 Responses API 提取內容
+                content = None
+                if response.output and len(response.output) > 0:
+                    # 遍歷所有 output items，找到 message 類型
+                    for i, output_item in enumerate(response.output):
+                        logger.info(f"🔍 DEBUG output[{i}].type: {output_item.type}")
+
+                        if output_item.type == "message":
+                            logger.info(f"✅ 找到 message item at index {i}")
+
+                            # 檢查 message 是否有 content
+                            if hasattr(output_item, 'content') and output_item.content:
+                                # 提取 output_text
+                                for content_item in output_item.content:
+                                    if hasattr(content_item, 'type') and content_item.type == "output_text":
+                                        content = content_item.text
+                                        logger.info(f"✅ 成功提取文字內容，長度: {len(content)} 字")
+                                        break
+
+                                if content:
+                                    break  # 找到內容後跳出循環
+
+                    if not content:
+                        logger.error(f"❌ 無法從 Responses API 提取文字內容")
+                        logger.error(f"❌ response.status: {response.status}")
+                        logger.error(f"❌ 所有 output types: {[item.type for item in response.output]}")
                 else:
                     logger.error(f"❌ Responses API 回應沒有 output")
-                    content = None
 
             else:
                 # 🔥 舊模型: 使用 Chat Completions API
