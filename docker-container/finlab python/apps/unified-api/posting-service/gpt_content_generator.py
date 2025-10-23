@@ -120,7 +120,13 @@ class GPTContentGenerator:
                 logger.info(f"🤖 使用舊模型參數: max_tokens=2000, temperature=0.7")
 
             # 調用GPT API
-            response = openai.chat.completions.create(**api_params)
+            try:
+                response = openai.chat.completions.create(**api_params)
+            except Exception as api_error:
+                logger.error(f"❌ OpenAI API 調用失敗: {type(api_error).__name__}: {api_error}")
+                logger.error(f"❌ 使用的模型: {chosen_model}")
+                logger.error(f"❌ API 參數: {api_params}")
+                raise  # Re-raise to trigger fallback
 
             # 🔍 DEBUG: 印出完整 response 結構
             logger.info(f"🔍 DEBUG response.choices 長度: {len(response.choices)}")
