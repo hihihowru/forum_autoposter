@@ -300,7 +300,7 @@ export class PostingManagementAPI {
               post_to_thread: null,
               batch_mode: true,
               session_id: session_id,
-              max_words: (batchConfig as any).settings?.max_words || 1000,
+              max_words: batchConfig.max_words || 1000,  // 🔥 修正：直接從 batchConfig 讀取
               data_sources: data_sources || {},
               explainability_config: batchConfig.explainability_config || {},
               news_config: batchConfig.news_config || {},
@@ -336,7 +336,7 @@ export class PostingManagementAPI {
             batch_mode: true,
             session_id: session_id,
             content_length: batch_config.content_length || 'medium',  // 新增：內容長度
-            max_words: (batchConfig as any).settings?.max_words || 200,
+            max_words: batchConfig.max_words || 1000,  // 🔥 修正：直接從 batchConfig 讀取，預設 1000
             data_sources: data_sources || {},
             explainability_config: batchConfig.explainability_config || {},
             news_config: batchConfig.news_config || {},
