@@ -1,10 +1,8 @@
-import React, { useState } from 'react';
-import { Card, Input, Button, Space, Tag, Typography, Row, Col, message, Select, AutoComplete } from 'antd';
-import { PlusOutlined, DeleteOutlined, StockOutlined, SearchOutlined } from '@ant-design/icons';
+import React, { useState, useEffect } from 'react';
+import { Card, Input, Button, Space, Tag, Typography, Row, Col, message, AutoComplete } from 'antd';
+import { PlusOutlined, StockOutlined } from '@ant-design/icons';
 
 const { Title, Text } = Typography;
-const { TextArea } = Input;
-const { Option } = Select;
 
 interface CustomStockInputProps {
   value?: string[];
@@ -12,55 +10,41 @@ interface CustomStockInputProps {
   onStockNamesChange?: (stockNames: string[]) => void;
 }
 
+interface StockMapping {
+  [stockCode: string]: {
+    company_name: string;
+    industry?: string;
+  };
+}
+
 const CustomStockInput: React.FC<CustomStockInputProps> = ({ value = [], onChange, onStockNamesChange }) => {
   const [inputValue, setInputValue] = useState('');
-  const [searchValue, setSearchValue] = useState('');
+  const [stockMapping, setStockMapping] = useState<StockMapping>({});
+  const [loading, setLoading] = useState(false);
 
-  // 常見股票選項
-  const stockOptions = [
-    { value: '2330', label: '2330 台積電' },
-    { value: '2454', label: '2454 聯發科' },
-    { value: '2317', label: '2317 鴻海' },
-    { value: '6505', label: '6505 台塑化' },
-    { value: '2881', label: '2881 富邦金' },
-    { value: '2882', label: '2882 國泰金' },
-    { value: '2308', label: '2308 台達電' },
-    { value: '3711', label: '3711 日月光投控' },
-    { value: '1303', label: '1303 南亞' },
-    { value: '2002', label: '2002 中鋼' },
-    { value: '1101', label: '1101 台泥' },
-    { value: '1102', label: '1102 亞泥' },
-    { value: '1216', label: '1216 統一' },
-    { value: '1326', label: '1326 台化' },
-    { value: '1402', label: '1402 遠東新' },
-    { value: '2207', label: '2207 和泰車' },
-    { value: '2303', label: '2303 聯電' },
-    { value: '2327', label: '2327 國巨' },
-    { value: '2377', label: '2377 微星' },
-    { value: '2382', label: '2382 廣達' },
-    { value: '2408', label: '2408 南亞科' },
-    { value: '2474', label: '2474 可成' },
-    { value: '2498', label: '2498 宏達電' },
-    { value: '3008', label: '3008 大立光' },
-    { value: '3034', label: '3034 聯詠' },
-    { value: '3045', label: '3045 台灣大' },
-    { value: '3231', label: '3231 緯創' },
-    { value: '3443', label: '3443 創意' },
-    { value: '3714', label: '3714 富采' },
-    { value: '4938', label: '4938 和碩' },
-    { value: '5871', label: '5871 中租-KY' },
-    { value: '6505', label: '6505 台塑化' },
-    { value: '6669', label: '6669 緯穎' },
-    { value: '6770', label: '6770 力積電' },
-    { value: '8046', label: '8046 南電' },
-    { value: '8454', label: '8454 富邦媒' },
-    { value: '9910', label: '9910 豐泰' }
-  ];
+  // 載入 stock_mapping
+  useEffect(() => {
+    const loadStockMapping = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch('/api/stock_mapping.json');
+        const data = await response.json();
+        if (data.success) {
+          setStockMapping(data.data || {});
+        }
+      } catch (error) {
+        console.error('載入股票映射表失敗:', error);
+        message.error('無法載入股票資料');
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadStockMapping();
+  }, []);
 
   // 獲取股票名稱的函數
   const getStockName = (stockCode: string): string => {
-    const stockInfo = stockOptions.find(option => option.value === stockCode);
-    return stockInfo?.label.split(' ')[1] || `股票${stockCode}`;
+    return stockMapping[stockCode]?.company_name || `股票${stockCode}`;
   };
 
   // 更新股票名稱
@@ -71,107 +55,108 @@ const CustomStockInput: React.FC<CustomStockInputProps> = ({ value = [], onChang
     }
   };
 
-  const handleAddStock = () => {
-    const stockCode = inputValue.trim().toUpperCase();
-    
-    if (!stockCode) {
-      message.warning('請輸入股票代號');
+  // 處理添加股票（支援搜尋選擇和直接輸入）
+  const handleAddStock = (stockCode?: string) => {
+    const code = (stockCode || inputValue).trim();
+
+    if (!code) {
+      message.warning('請輸入股票代號或搜尋股票名稱');
       return;
     }
 
     // 驗證股票代號格式 (4位數字)
-    if (!/^\d{4}$/.test(stockCode)) {
+    if (!/^\d{4}$/.test(code)) {
       message.error('股票代號格式不正確，請輸入4位數字');
       return;
     }
 
-    if (value.includes(stockCode)) {
-      message.warning('該股票代號已存在');
+    if (value.includes(code)) {
+      message.warning('該股票已存在於列表中');
       return;
     }
 
-    const newStockCodes = [...value, stockCode];
+    const newStockCodes = [...value, code];
     onChange(newStockCodes);
     updateStockNames(newStockCodes);
     setInputValue('');
-    message.success(`已添加股票代號: ${stockCode}`);
+
+    const stockName = getStockName(code);
+    message.success(`已添加: ${code} ${stockName}`);
   };
 
   const handleRemoveStock = (stockCode: string) => {
     const newStockCodes = value.filter(code => code !== stockCode);
     onChange(newStockCodes);
     updateStockNames(newStockCodes);
-    message.success(`已移除股票代號: ${stockCode}`);
-  };
-
-  const handleSelectStock = (stockCode: string) => {
-    if (value.includes(stockCode)) {
-      message.warning('該股票代號已存在');
-      return;
-    }
-    const newStockCodes = [...value, stockCode];
-    onChange(newStockCodes);
-    updateStockNames(newStockCodes);
-    setSearchValue('');
-    message.success(`已添加股票代號: ${stockCode}`);
+    message.success(`已移除: ${stockCode}`);
   };
 
   const handleClearAll = () => {
     onChange([]);
     updateStockNames([]);
-    message.success('已清空所有股票代號');
+    message.success('已清空所有股票');
   };
 
-  // 過濾選項
-  const filteredOptions = stockOptions.filter(option =>
-    option.label.toLowerCase().includes(searchValue.toLowerCase()) ||
-    option.value.includes(searchValue)
-  );
+  // 準備 AutoComplete 選項（過濾已添加的股票）
+  const autocompleteOptions = Object.keys(stockMapping)
+    .filter(code => {
+      if (!inputValue) return false;
+      if (value.includes(code)) return false; // 過濾已添加的股票
+
+      const stockInfo = stockMapping[code];
+      const searchLower = inputValue.toLowerCase();
+
+      // 搜尋股票代號或名稱
+      return (
+        code.includes(inputValue) ||
+        stockInfo.company_name.toLowerCase().includes(searchLower)
+      );
+    })
+    .slice(0, 20) // 限制顯示數量
+    .map(code => ({
+      value: code,
+      label: `${code} ${stockMapping[code].company_name}`
+    }));
+
+  // 熱門股票快速選擇（前20支）
+  const popularStocks = Object.keys(stockMapping)
+    .slice(0, 20)
+    .map(code => ({
+      code,
+      name: stockMapping[code].company_name
+    }));
 
   return (
-    <Card title="自定義股票選擇" size="small">
+    <Card title="自定義股票選擇" size="small" loading={loading}>
       <Space direction="vertical" style={{ width: '100%' }} size="middle">
         <Text type="secondary">
-          手動選擇特定股票進行分析，支援搜尋和直接輸入
+          輸入股票代號（如：2330）或搜尋股票名稱（如：台積電）
         </Text>
 
-        {/* 搜尋添加 */}
+        {/* 統一的輸入欄位：支援搜尋和直接輸入 */}
         <div>
-          <Title level={5}>搜尋添加</Title>
-          <AutoComplete
-            style={{ width: '100%' }}
-            options={filteredOptions}
-            value={searchValue}
-            onChange={setSearchValue}
-            onSelect={handleSelectStock}
-            placeholder="搜尋股票代號或名稱..."
-            filterOption={(inputValue, option) =>
-              option?.label.toLowerCase().includes(inputValue.toLowerCase()) ||
-              option?.value.includes(inputValue)
-            }
-          />
-        </div>
-
-        {/* 直接輸入 */}
-        <div>
-          <Title level={5}>直接輸入</Title>
+          <Title level={5}>輸入或搜尋股票</Title>
           <Space.Compact style={{ width: '100%' }}>
-            <Input
-              placeholder="輸入股票代號 (例: 2330)"
+            <AutoComplete
+              style={{ flex: 1 }}
+              options={autocompleteOptions}
               value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onPressEnter={handleAddStock}
-              maxLength={4}
-              style={{ textTransform: 'uppercase' }}
+              onChange={setInputValue}
+              onSelect={handleAddStock}
+              placeholder="輸入股票代號或搜尋股票名稱（例：2330 或 台積電）"
+              filterOption={false} // 手動過濾
             />
-            <Button 
-              type="primary" 
-              icon={<PlusOutlined />} 
-              onClick={handleAddStock}
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => handleAddStock()}
             >
               添加
             </Button>
           </Space.Compact>
+          <Text type="secondary" style={{ fontSize: '12px', display: 'block', marginTop: '4px' }}>
+            💡 可以直接輸入4位數股票代號，或搜尋股票名稱後選擇
+          </Text>
         </div>
 
         {/* 已選擇的股票列表 */}
@@ -181,9 +166,9 @@ const CustomStockInput: React.FC<CustomStockInputProps> = ({ value = [], onChang
               已選擇的股票 ({value.length} 支)
             </Title>
             {value.length > 0 && (
-              <Button 
-                type="text" 
-                danger 
+              <Button
+                type="text"
+                danger
                 size="small"
                 onClick={handleClearAll}
               >
@@ -191,13 +176,13 @@ const CustomStockInput: React.FC<CustomStockInputProps> = ({ value = [], onChang
               </Button>
             )}
           </div>
-          
+
           {value.length === 0 ? (
             <Text type="secondary">尚未選擇任何股票</Text>
           ) : (
             <Space wrap>
               {value.map((stockCode) => {
-                const stockInfo = stockOptions.find(option => option.value === stockCode);
+                const stockName = getStockName(stockCode);
                 return (
                   <Tag
                     key={stockCode}
@@ -205,7 +190,7 @@ const CustomStockInput: React.FC<CustomStockInputProps> = ({ value = [], onChang
                     onClose={() => handleRemoveStock(stockCode)}
                     color="blue"
                   >
-                    <StockOutlined /> {stockCode} {stockInfo?.label.split(' ')[1]}
+                    <StockOutlined /> {stockCode} {stockName}
                   </Tag>
                 );
               })}
@@ -234,24 +219,26 @@ const CustomStockInput: React.FC<CustomStockInputProps> = ({ value = [], onChang
         )}
 
         {/* 快速選擇建議 */}
-        <div>
-          <Title level={5}>熱門股票快速選擇</Title>
-          <Text type="secondary" style={{ fontSize: '12px', display: 'block', marginBottom: '8px' }}>
-            點擊下方標籤快速添加熱門股票
-          </Text>
-          <Space wrap>
-            {stockOptions.slice(0, 10).map((stock) => (
-              <Tag
-                key={stock.value}
-                color="green"
-                style={{ cursor: 'pointer' }}
-                onClick={() => handleSelectStock(stock.value)}
-              >
-                <StockOutlined /> {stock.value} {stock.label.split(' ')[1]}
-              </Tag>
-            ))}
-          </Space>
-        </div>
+        {popularStocks.length > 0 && (
+          <div>
+            <Title level={5}>熱門股票快速選擇</Title>
+            <Text type="secondary" style={{ fontSize: '12px', display: 'block', marginBottom: '8px' }}>
+              點擊下方標籤快速添加熱門股票
+            </Text>
+            <Space wrap>
+              {popularStocks.map((stock) => (
+                <Tag
+                  key={stock.code}
+                  color="green"
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => handleAddStock(stock.code)}
+                >
+                  <StockOutlined /> {stock.code} {stock.name}
+                </Tag>
+              ))}
+            </Space>
+          </div>
+        )}
       </Space>
     </Card>
   );
