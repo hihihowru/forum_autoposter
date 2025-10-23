@@ -238,6 +238,9 @@ except Exception as e:
 stock_mapping = {}
 db_pool = None  # Connection pool instead of single connection
 
+# 🔥 FIX: Parse DATABASE_URL into DB_CONFIG for asyncpg connections
+DB_CONFIG = None
+
 def get_db_connection():
     """Get a connection from the pool"""
     if db_pool is None:
@@ -707,6 +710,17 @@ def startup_event():
                 'keepalives_interval': 30,
                 'keepalives_count': 3
             }
+
+            # 🔥 FIX: Set DB_CONFIG for asyncpg connections (used in KOL Profile queries)
+            global DB_CONFIG
+            DB_CONFIG = {
+                'host': parsed_url.hostname,
+                'port': parsed_url.port or 5432,
+                'database': parsed_url.path[1:],
+                'user': parsed_url.username,
+                'password': parsed_url.password
+            }
+            logger.info(f"✅ DB_CONFIG 已設置: host={DB_CONFIG['host']}, database={DB_CONFIG['database']}")
 
             # Create connection pool (1-10 concurrent connections)
             # Use minconn=1 for faster startup
