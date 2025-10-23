@@ -125,12 +125,11 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onRefresh }) => {
           label: '自我學習',
           icon: <RocketOutlined />,
         },
-        // ❌ DISABLED: 互動分析 (duplicate/mock data, not helpful)
-        // {
-        //   key: '/posting-management/interaction-analysis',
-        //   label: '互動分析',
-        //   icon: <BarChartOutlined />,
-        // },
+        {
+          key: '/posting-management/interaction-analysis',
+          label: '互動分析',
+          icon: <BarChartOutlined />,
+        },
         // ❌ DISABLED: 成效分析 (mock data, not helpful)
         // {
         //   key: '/posting-management/performance-analysis',
