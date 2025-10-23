@@ -550,26 +550,26 @@ const GenerationSettings: React.FC<GenerationSettingsProps> = ({ value, onChange
                     style={{ width: '350px' }}
                     allowClear
                   >
-                    {/* o1 系列 (2025 最新推理模型) */}
-                    <Option value="o1">
+                    {/* GPT-5 系列 (2025 最新) */}
+                    <Option value="gpt-5">
                       <Space>
-                        <span>o1</span>
+                        <span>gpt-5</span>
                         <Tag color="red" style={{ marginLeft: 8 }}>🔥 最新</Tag>
                         <Text type="secondary" style={{ fontSize: '11px' }}>推理模型、最強</Text>
                       </Space>
                     </Option>
-                    <Option value="o1-mini">
+                    <Option value="gpt-5-mini">
                       <Space>
-                        <span>o1-mini</span>
+                        <span>gpt-5-mini</span>
                         <Tag color="volcano" style={{ marginLeft: 8 }}>新</Tag>
                         <Text type="secondary" style={{ fontSize: '11px' }}>平衡效能與成本</Text>
                       </Space>
                     </Option>
-                    <Option value="o1-preview">
+                    <Option value="gpt-5-nano">
                       <Space>
-                        <span>o1-preview</span>
-                        <Tag color="orange" style={{ marginLeft: 8 }}>預覽</Tag>
-                        <Text type="secondary" style={{ fontSize: '11px' }}>搶先體驗</Text>
+                        <span>gpt-5-nano</span>
+                        <Tag color="orange" style={{ marginLeft: 8 }}>輕量</Tag>
+                        <Text type="secondary" style={{ fontSize: '11px' }}>快速、低成本</Text>
                       </Space>
                     </Option>
 

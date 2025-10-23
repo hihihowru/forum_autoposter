@@ -95,45 +95,99 @@ class GPTContentGenerator:
             logger.info(f"📝 System Prompt 長度: {len(system_prompt)} 字")
             logger.info(f"📝 User Prompt 長度: {len(user_prompt)} 字")
 
-            # 🔥 根據模型類型選擇正確的 API 參數
-            # GPT-5 和新模型使用 max_completion_tokens（不支援 temperature）
-            # 舊模型使用 max_tokens + temperature
-            api_params = {
-                "model": chosen_model,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ]
-            }
+            # 🔥 判斷是否為 GPT-5 系列 (需使用 Responses API)
+            is_gpt5_model = chosen_model.startswith('gpt-5')
 
-            # 判斷是否為新模型（GPT-5, o1, o1-mini, o1-preview 等）
-            is_new_model = any(model_prefix in chosen_model.lower() for model_prefix in ['gpt-5', 'o1', 'o3'])
+            if is_gpt5_model:
+                # 🔥 GPT-5: 使用 Responses API
+                logger.info(f"🤖 使用 GPT-5 Responses API")
 
-            if is_new_model:
-                # 新模型：使用 max_completion_tokens，不使用 temperature
-                api_params["max_completion_tokens"] = 2000
-                logger.info(f"🤖 使用新模型參數: max_completion_tokens=2000 (無 temperature)")
+                # 組合 input (將 system 和 user prompt 合併)
+                combined_input = f"{system_prompt}\n\n{user_prompt}"
+
+                api_params = {
+                    "model": chosen_model,
+                    "input": combined_input,
+                    "max_output_tokens": 2000,
+                    "reasoning": {"effort": "medium"},  # medium 是預設值
+                    "text": {"verbosity": "medium"}
+                }
+
+                logger.info(f"🤖 GPT-5 參數: max_output_tokens=2000, reasoning=medium, verbosity=medium")
+
+                # 調用 Responses API
+                try:
+                    response = openai.responses.create(**api_params)
+                except Exception as api_error:
+                    logger.error(f"❌ OpenAI Responses API 調用失敗: {type(api_error).__name__}: {api_error}")
+                    logger.error(f"❌ 使用的模型: {chosen_model}")
+                    logger.error(f"❌ API 參數: {api_params}")
+                    raise
+
+                # 🔍 DEBUG: 印出 Responses API 回應結構
+                logger.info(f"🔍 DEBUG response.status: {response.status}")
+                logger.info(f"🔍 DEBUG response.output 長度: {len(response.output)}")
+
+                # 從 Responses API 提取內容
+                if response.output and len(response.output) > 0:
+                    first_output = response.output[0]
+                    logger.info(f"🔍 DEBUG first_output.type: {first_output.type}")
+
+                    if first_output.type == "message" and first_output.content:
+                        # 提取 output_text
+                        content = None
+                        for content_item in first_output.content:
+                            if content_item.type == "output_text":
+                                content = content_item.text
+                                break
+
+                        if not content:
+                            logger.error(f"❌ 無法從 Responses API 提取文字內容")
+                            content = None
+                    else:
+                        content = None
+                else:
+                    logger.error(f"❌ Responses API 回應沒有 output")
+                    content = None
+
             else:
-                # 舊模型：使用 max_tokens + temperature
-                api_params["max_tokens"] = 2000
-                api_params["temperature"] = 0.7
-                logger.info(f"🤖 使用舊模型參數: max_tokens=2000, temperature=0.7")
+                # 🔥 舊模型: 使用 Chat Completions API
+                api_params = {
+                    "model": chosen_model,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ]
+                }
 
-            # 調用GPT API
-            try:
-                response = openai.chat.completions.create(**api_params)
-            except Exception as api_error:
-                logger.error(f"❌ OpenAI API 調用失敗: {type(api_error).__name__}: {api_error}")
-                logger.error(f"❌ 使用的模型: {chosen_model}")
-                logger.error(f"❌ API 參數: {api_params}")
-                raise  # Re-raise to trigger fallback
+                # 判斷是否為推理模型（o1, o3 等）
+                is_reasoning_model = any(model_prefix in chosen_model.lower() for model_prefix in ['o1', 'o3'])
 
-            # 🔍 DEBUG: 印出完整 response 結構
-            logger.info(f"🔍 DEBUG response.choices 長度: {len(response.choices)}")
-            logger.info(f"🔍 DEBUG response.choices[0].message: {response.choices[0].message}")
-            logger.info(f"🔍 DEBUG response.choices[0].finish_reason: {response.choices[0].finish_reason}")
+                if is_reasoning_model:
+                    # 推理模型：使用 max_completion_tokens，不使用 temperature
+                    api_params["max_completion_tokens"] = 2000
+                    logger.info(f"🤖 使用推理模型參數: max_completion_tokens=2000 (無 temperature)")
+                else:
+                    # 一般模型：使用 max_tokens + temperature
+                    api_params["max_tokens"] = 2000
+                    api_params["temperature"] = 0.7
+                    logger.info(f"🤖 使用一般模型參數: max_tokens=2000, temperature=0.7")
 
-            content = response.choices[0].message.content
+                # 調用 Chat Completions API
+                try:
+                    response = openai.chat.completions.create(**api_params)
+                except Exception as api_error:
+                    logger.error(f"❌ OpenAI Chat Completions API 調用失敗: {type(api_error).__name__}: {api_error}")
+                    logger.error(f"❌ 使用的模型: {chosen_model}")
+                    logger.error(f"❌ API 參數: {api_params}")
+                    raise
+
+                # 🔍 DEBUG: 印出完整 response 結構
+                logger.info(f"🔍 DEBUG response.choices 長度: {len(response.choices)}")
+                logger.info(f"🔍 DEBUG response.choices[0].message: {response.choices[0].message}")
+                logger.info(f"🔍 DEBUG response.choices[0].finish_reason: {response.choices[0].finish_reason}")
+
+                content = response.choices[0].message.content
 
             # 🔍 DEBUG: 印出 GPT 原始回應
             logger.info(f"🔍 DEBUG GPT 原始回應長度: {len(content) if content else 0} 字")
