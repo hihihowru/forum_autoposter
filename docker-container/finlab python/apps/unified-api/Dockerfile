@@ -5,8 +5,9 @@ FROM python:3.11.9-slim-bookworm
 # 設置工作目錄
 WORKDIR /app
 
-# 安裝系統依賴
-RUN apt-get update && apt-get install -y \
+# 安裝系統依賴 (with retry logic for Railway network issues)
+RUN apt-get update --fix-missing || apt-get update && \
+    apt-get install -y --no-install-recommends \
     gcc \
     g++ \
     && rm -rf /var/lib/apt/lists/*
