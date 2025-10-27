@@ -219,15 +219,20 @@ class GPTContentGenerator:
                 # 判斷是否為推理模型（o1, o3 等）
                 is_reasoning_model = any(model_prefix in chosen_model.lower() for model_prefix in ['o1', 'o3'])
 
+                # 🔥 根據 max_words 動態計算 max_tokens
+                # 中文: 1 token ≈ 1-2 個字，給3倍緩衝確保完整生成
+                # 最小 1500，最大 16000（GPT-4 限制）
+                calculated_max_tokens = min(max(max_words * 3, 1500), 16000)
+
                 if is_reasoning_model:
                     # 推理模型：使用 max_completion_tokens，不使用 temperature
-                    api_params["max_completion_tokens"] = 2000
-                    logger.info(f"🤖 使用推理模型參數: max_completion_tokens=2000 (無 temperature)")
+                    api_params["max_completion_tokens"] = calculated_max_tokens
+                    logger.info(f"🤖 使用推理模型參數: max_completion_tokens={calculated_max_tokens} (max_words={max_words})")
                 else:
                     # 一般模型：使用 max_tokens + temperature
-                    api_params["max_tokens"] = 2000
+                    api_params["max_tokens"] = calculated_max_tokens
                     api_params["temperature"] = 0.7
-                    logger.info(f"🤖 使用一般模型參數: max_tokens=2000, temperature=0.7")
+                    logger.info(f"🤖 使用一般模型參數: max_tokens={calculated_max_tokens}, temperature=0.7 (max_words={max_words})")
 
                 # 調用 Chat Completions API
                 try:
@@ -242,6 +247,13 @@ class GPTContentGenerator:
                 logger.info(f"🔍 DEBUG response.choices 長度: {len(response.choices)}")
                 logger.info(f"🔍 DEBUG response.choices[0].message: {response.choices[0].message}")
                 logger.info(f"🔍 DEBUG response.choices[0].finish_reason: {response.choices[0].finish_reason}")
+
+                # ⚠️ 檢查是否因 token 限制而截斷
+                finish_reason = response.choices[0].finish_reason
+                if finish_reason == "length":
+                    logger.warning(f"⚠️ 內容因達到 max_tokens 限制而被截斷！")
+                    logger.warning(f"⚠️ 當前設定: max_tokens={calculated_max_tokens}, max_words={max_words}")
+                    logger.warning(f"⚠️ 建議: 減少 max_words 或內容會不完整")
 
                 content = response.choices[0].message.content
 
