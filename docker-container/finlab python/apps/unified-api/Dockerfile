@@ -12,9 +12,11 @@ RUN apt-get update --fix-missing || apt-get update && \
     g++ \
     && rm -rf /var/lib/apt/lists/*
 
-# 複製 requirements.txt 並安裝 Python 依賴
+# 複製 requirements.txt 並安裝 Python 依賴 (with retry logic for Railway network issues)
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --retries 10 --timeout 300 -r requirements.txt || \
+    pip install --no-cache-dir --retries 10 --timeout 300 -r requirements.txt || \
+    pip install --no-cache-dir --retries 10 --timeout 300 -r requirements.txt
 
 # 複製應用程式碼
 COPY main.py .
