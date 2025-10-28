@@ -1509,19 +1509,22 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
               style={{ marginBottom: 16 }}
             />
             
-            <Row gutter={16}>
-              {/* 成交量篩選 */}
+            {/* ⚠️ 以下篩選條件暫未實裝，已禁用 */}
+            <Alert
+              message="⚠️ 注意：以下進階篩選條件尚未與後端API整合"
+              description="目前僅支援基本的股票數量限制和五日漲幅排序。技術指標、基本面、新聞熱度等進階篩選功能正在開發中。"
+              type="warning"
+              showIcon
+              style={{ marginTop: 16 }}
+            />
+
+            <Row gutter={16} style={{ marginTop: 16, opacity: 0.5, pointerEvents: 'none' }}>
+              {/* 成交量篩選 - 禁用 */}
               <Col span={8}>
                 <Text strong>成交量篩選：</Text>
                 <Select
+                  disabled
                   value={value.filters?.volumeFilter?.type || 'high'}
-                  onChange={(newValue) => onChange({
-                    ...value,
-                    filters: {
-                      ...value.filters,
-                      volumeFilter: { ...value.filters?.volumeFilter, type: newValue }
-                    }
-                  })}
                   style={{ width: '100%' }}
                 >
                   <Option value="high">高成交量 (優先)</Option>
@@ -1530,19 +1533,13 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
                   <Option value="custom">自定義</Option>
                 </Select>
               </Col>
-              
-              {/* 價格篩選 */}
+
+              {/* 價格篩選 - 禁用 */}
               <Col span={8}>
                 <Text strong>價格篩選：</Text>
                 <Select
+                  disabled
                   value={value.filters?.priceFilter?.type || 'above'}
-                  onChange={(newValue) => onChange({
-                    ...value,
-                    filters: {
-                      ...value.filters,
-                      priceFilter: { ...value.filters?.priceFilter, type: newValue }
-                    }
-                  })}
                   style={{ width: '100%' }}
                 >
                   <Option value="above">高價股 (預設)</Option>
@@ -1550,19 +1547,13 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
                   <Option value="range">價格區間</Option>
                 </Select>
               </Col>
-              
-              {/* 市值篩選 */}
+
+              {/* 市值篩選 - 禁用 */}
               <Col span={8}>
                 <Text strong>市值篩選：</Text>
                 <Select
+                  disabled
                   value={value.filters?.marketCapFilter?.type || 'large'}
-                  onChange={(newValue) => onChange({
-                    ...value,
-                    filters: {
-                      ...value.filters,
-                      marketCapFilter: { ...value.filters?.marketCapFilter, type: newValue }
-                    }
-                  })}
                   style={{ width: '100%' }}
                 >
                   <Option value="large">大型股 (預設)</Option>
@@ -1572,28 +1563,19 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
                 </Select>
               </Col>
             </Row>
-            
-            {/* 第二行：技術指標和基本面篩選 */}
-            <Row gutter={16} style={{ marginTop: 16 }}>
-              {/* 技術指標篩選 */}
+
+            {/* 第二行：技術指標和基本面篩選 - 禁用 */}
+            <Row gutter={16} style={{ marginTop: 16, opacity: 0.5, pointerEvents: 'none' }}>
+              {/* 技術指標篩選 - 禁用 */}
               <Col span={8}>
                 <Text strong>技術指標：</Text>
                 <Space direction="vertical" style={{ width: '100%', marginTop: 8 }}>
                   <Space>
                     <Text>RSI 超買超賣：</Text>
                     <Select
+                      disabled
                       placeholder="選擇RSI範圍"
                       style={{ width: 120 }}
-                      onChange={(value) => onChange({
-                        ...value,
-                        filters: {
-                          ...value.filters,
-                          technicalFilter: { 
-                            ...value.filters?.technicalFilter, 
-                            rsi: { ...value.filters?.technicalFilter?.rsi, enabled: !!value }
-                          }
-                        }
-                      })}
                     >
                       <Option value="oversold">超賣 (&lt; 30)</Option>
                       <Option value="neutral">中性 (30-70)</Option>
@@ -1603,18 +1585,9 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
                   <Space>
                     <Text>MACD 信號：</Text>
                     <Select
+                      disabled
                       placeholder="選擇MACD信號"
                       style={{ width: 120 }}
-                      onChange={(value) => onChange({
-                        ...value,
-                        filters: {
-                          ...value.filters,
-                          technicalFilter: { 
-                            ...value.filters?.technicalFilter, 
-                            macd: { ...value.filters?.technicalFilter?.macd, enabled: !!value }
-                          }
-                        }
-                      })}
                     >
                       <Option value="bullish">多頭信號</Option>
                       <Option value="bearish">空頭信號</Option>
@@ -1623,172 +1596,93 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
                   </Space>
                 </Space>
               </Col>
-              
-              {/* 基本面篩選 */}
+
+              {/* 基本面篩選 - 禁用 */}
               <Col span={8}>
                 <Text strong>基本面指標：</Text>
                 <Space direction="vertical" style={{ width: '100%', marginTop: 8 }}>
                   <Space>
                     <Text>本益比 (PE)：</Text>
                     <InputNumber
+                      disabled
                       placeholder="最小值"
                       style={{ width: 80 }}
-                      onChange={(value) => onChange({
-                        ...value,
-                        filters: {
-                          ...value.filters,
-                          fundamentalFilter: { 
-                            ...value.filters?.fundamentalFilter, 
-                            pe: { ...value.filters?.fundamentalFilter?.pe, min: value, enabled: !!value }
-                          }
-                        }
-                      })}
                     />
                     <Text>-</Text>
                     <InputNumber
+                      disabled
                       placeholder="最大值"
                       style={{ width: 80 }}
-                      onChange={(value) => onChange({
-                        ...value,
-                        filters: {
-                          ...value.filters,
-                          fundamentalFilter: { 
-                            ...value.filters?.fundamentalFilter, 
-                            pe: { ...value.filters?.fundamentalFilter?.pe, max: value, enabled: !!value }
-                          }
-                        }
-                      })}
                     />
                   </Space>
                   <Space>
                     <Text>股價淨值比 (PB)：</Text>
                     <InputNumber
+                      disabled
                       placeholder="最小值"
                       style={{ width: 80 }}
-                      onChange={(value) => onChange({
-                        ...value,
-                        filters: {
-                          ...value.filters,
-                          fundamentalFilter: { 
-                            ...value.filters?.fundamentalFilter, 
-                            pb: { ...value.filters?.fundamentalFilter?.pb, min: value, enabled: !!value }
-                          }
-                        }
-                      })}
                     />
                     <Text>-</Text>
                     <InputNumber
+                      disabled
                       placeholder="最大值"
                       style={{ width: 80 }}
-                      onChange={(value) => onChange({
-                        ...value,
-                        filters: {
-                          ...value.filters,
-                          fundamentalFilter: { 
-                            ...value.filters?.fundamentalFilter, 
-                            pb: { ...value.filters?.fundamentalFilter?.pb, max: value, enabled: !!value }
-                          }
-                        }
-                      })}
                     />
                   </Space>
                 </Space>
               </Col>
-              
-              {/* 新聞熱度篩選 */}
+
+              {/* 新聞熱度篩選 - 禁用 */}
               <Col span={6}>
                 <Text strong>新聞熱度：</Text>
                 <Space direction="vertical" style={{ width: '100%', marginTop: 8 }}>
                   <Space>
                     <Text>新聞數量：</Text>
                     <InputNumber
+                      disabled
                       placeholder="最少新聞數"
                       min={1}
                       style={{ width: 100 }}
-                      onChange={(value) => onChange({
-                        ...value,
-                        filters: {
-                          ...value.filters,
-                          discussionFilter: { 
-                            ...value.filters?.discussionFilter, 
-                            newsCount: { ...value.filters?.discussionFilter?.newsCount, min: value, enabled: !!value }
-                          }
-                        }
-                      })}
                     />
                   </Space>
                   <Space>
                     <Text>社群提及：</Text>
                     <InputNumber
+                      disabled
                       placeholder="最少提及數"
                       min={1}
                       style={{ width: 100 }}
-                      onChange={(value) => onChange({
-                        ...value,
-                        filters: {
-                          ...value.filters,
-                          discussionFilter: { 
-                            ...value.filters?.discussionFilter, 
-                            socialMention: { ...value.filters?.discussionFilter?.socialMention, min: value, enabled: !!value }
-                          }
-                        }
-                      })}
                     />
                   </Space>
                 </Space>
               </Col>
-              
-              {/* 成交金額篩選 */}
+
+              {/* 成交金額篩選 - 禁用 */}
               <Col span={6}>
                 <Text strong>成交金額：</Text>
                 <Space direction="vertical" style={{ width: '100%', marginTop: 8 }}>
                   <Space>
                     <Text>最小成交：</Text>
                     <InputNumber
+                      disabled
                       placeholder="最小股數"
                       min={0}
-                      step={1000000}
                       style={{ width: 120 }}
-                      formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                      parser={(value) => value!.replace(/\$\s?|(,*)/g, '')}
-                      onChange={(value) => onChange({
-                        ...value,
-                        filters: {
-                          ...value.filters,
-                          volumeAmountFilter: { 
-                            ...value.filters?.volumeAmountFilter, 
-                            minVolume: value, 
-                            enabled: !!value
-                          }
-                        }
-                      })}
                     />
                   </Space>
                   <Space>
                     <Text>最大成交：</Text>
                     <InputNumber
+                      disabled
                       placeholder="最大股數"
                       min={0}
-                      step={1000000}
                       style={{ width: 120 }}
-                      formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                      parser={(value) => value!.replace(/\$\s?|(,*)/g, '')}
-                      onChange={(value) => onChange({
-                        ...value,
-                        filters: {
-                          ...value.filters,
-                          volumeAmountFilter: { 
-                            ...value.filters?.volumeAmountFilter, 
-                            maxVolume: value, 
-                            enabled: !!value
-                          }
-                        }
-                      })}
                     />
                   </Space>
                   <Space>
                     <Text>成交百分位：</Text>
                     <Select
+                      disabled
                       placeholder="選擇百分位"
                       style={{ width: 120 }}
                       onChange={(value) => onChange({
@@ -2046,57 +1940,54 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
                     }
                   },
                   {
-                    title: '成交金額',
+                    title: '成交張數',
                     dataIndex: 'volume',
                     key: 'volume',
                     width: 120,
                     sorter: (a: any, b: any) => (a.volume || 0) - (b.volume || 0),
-                    render: (amount) => {
-                      if (!amount || typeof amount !== 'number') {
+                    render: (volume) => {
+                      if (!volume || typeof volume !== 'number') {
                         return '0';
                       }
-                      if (amount >= 100000000) {
-                        return `${(amount / 100000000).toFixed(2)}億`;
-                      } else if (amount >= 10000) {
-                        return `${(amount / 10000).toFixed(0)}萬`;
-                      }
-                      return amount.toLocaleString();
+                      // volume 是張數，直接顯示（加千分位）
+                      return volume.toLocaleString();
                     }
                   },
-                  {
-                    title: '成交量排名',
-                    dataIndex: 'volume_rank',
-                    key: 'volume_rank',
-                    width: 100,
-                    sorter: (a: any, b: any) => (a.volume_rank || 999999) - (b.volume_rank || 999999),
-                    render: (rank) => rank ? `#${rank}` : '-'
-                  },
-                  {
-                    title: '五日上漲天數',
-                    dataIndex: 'up_days_5',
-                    key: 'up_days_5',
-                    width: 120,
-                    sorter: (a: any, b: any) => (a.up_days_5 || 0) - (b.up_days_5 || 0),
-                    render: (upDays) => (
-                      <Tag color={upDays >= 3 ? 'green' : upDays >= 2 ? 'orange' : 'red'}>
-                        {upDays}/5 天
-                      </Tag>
-                    )
-                  },
-                  {
-                    title: '五日漲跌幅',
-                    dataIndex: 'five_day_change',
-                    key: 'five_day_change',
-                    width: 120,
-                    sorter: (a: any, b: any) => (a.five_day_change || 0) - (b.five_day_change || 0),
-                    render: (change) => (
-                      <span style={{ 
-                        color: change > 0 ? '#52c41a' : change < 0 ? '#f5222d' : '#666'
-                      }}>
-                        {change > 0 ? '+' : ''}{change}%
-                      </span>
-                    )
-                  },
+                  // ⚠️ 以下 3 個欄位後端未提供數據，已隱藏
+                  // {
+                  //   title: '成交量排名',
+                  //   dataIndex: 'volume_rank',
+                  //   key: 'volume_rank',
+                  //   width: 100,
+                  //   sorter: (a: any, b: any) => (a.volume_rank || 999999) - (b.volume_rank || 999999),
+                  //   render: (rank) => rank ? `#${rank}` : '-'
+                  // },
+                  // {
+                  //   title: '五日上漲天數',
+                  //   dataIndex: 'up_days_5',
+                  //   key: 'up_days_5',
+                  //   width: 120,
+                  //   sorter: (a: any, b: any) => (a.up_days_5 || 0) - (b.up_days_5 || 0),
+                  //   render: (upDays) => (
+                  //     <Tag color={upDays >= 3 ? 'green' : upDays >= 2 ? 'orange' : 'red'}>
+                  //       {upDays}/5 天
+                  //     </Tag>
+                  //   )
+                  // },
+                  // {
+                  //   title: '五日漲跌幅',
+                  //   dataIndex: 'five_day_change',
+                  //   key: 'five_day_change',
+                  //   width: 120,
+                  //   sorter: (a: any, b: any) => (a.five_day_change || 0) - (b.five_day_change || 0),
+                  //   render: (change) => (
+                  //     <span style={{
+                  //       color: change > 0 ? '#52c41a' : change < 0 ? '#f5222d' : '#666'
+                  //     }}>
+                  //       {change > 0 ? '+' : ''}{change}%
+                  //     </span>
+                  //   )
+                  // },
                   {
                     title: '操作',
                     key: 'action',
