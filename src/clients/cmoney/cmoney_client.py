@@ -111,23 +111,46 @@ class UpdateNicknameResult:
     error_message: Optional[str] = None
     raw_response: Optional[Dict[str, Any]] = None
 
+
+@dataclass
+class ReactionResult:
+    """互動反應結果"""
+    success: bool
+    article_id: str
+    reaction_type: Optional[int] = None
+    error_message: Optional[str] = None
+
+
+@dataclass
+class CommentResult:
+    """留言結果"""
+    success: bool
+    article_id: str
+    comment_index: Optional[int] = None
+    comment_text: Optional[str] = None
+    error_message: Optional[str] = None
+    raw_response: Optional[Dict[str, Any]] = None
+
 class CMoneyClient:
     """CMoney API 客戶端"""
     
     def __init__(self, login_url: str = "https://social.cmoney.tw/identity/token",
                  api_base_url: str = "https://forumservice.cmoney.tw",
-                 graphql_url: str = "https://social.cmoney.tw/profile/graphql/mutation/member"):
+                 graphql_url: str = "https://social.cmoney.tw/profile/graphql/mutation/member",
+                 forum_ocean_url: str = "https://outpost.cmoney.tw/ForumOcean"):
         """
         初始化 CMoney 客戶端
-        
+
         Args:
             login_url: 登入 API URL
             api_base_url: API 基礎 URL
             graphql_url: GraphQL API URL (用於會員資料更新)
+            forum_ocean_url: ForumOcean API URL (用於互動管理)
         """
         self.login_url = login_url
         self.api_base_url = api_base_url
         self.graphql_url = graphql_url
+        self.forum_ocean_url = forum_ocean_url
         
         # 配置 HTTP 客戶端，增加重試和更好的錯誤處理
         import httpx
@@ -719,6 +742,270 @@ class CMoneyClient:
                 error_message=str(e)
             )
     
+    async def add_article_reaction(self, access_token: str, article_id: str, reaction_type: int) -> ReactionResult:
+        """
+        對文章添加反應 (emoji reaction)
+
+        Args:
+            access_token: 存取 Token
+            article_id: 文章ID
+            reaction_type: 反應類型 (1=讚, 3=哈, 4=賺, 5=哇, 6=嗚嗚, 7=真的嗎, 8=怒)
+
+        Returns:
+            反應結果
+        """
+        try:
+            headers = {
+                "Authorization": f"Bearer {access_token}",
+                "cmoneyapi-trace-context": "engagement-bot",
+                "accept": "application/json"
+            }
+
+            url = f"{self.forum_ocean_url}/api/Interactive/Reaction/{article_id}"
+            params = {"reactionType": reaction_type}
+
+            logger.info(f"對文章 {article_id} 添加反應類型 {reaction_type}")
+
+            response = self.client.post(url, headers=headers, params=params)
+
+            if response.status_code == 204:
+                logger.info(f"成功對文章 {article_id} 添加反應")
+                return ReactionResult(
+                    success=True,
+                    article_id=article_id,
+                    reaction_type=reaction_type
+                )
+            else:
+                error_msg = f"添加反應失敗: HTTP {response.status_code}"
+                logger.error(f"{error_msg} - {response.text}")
+                return ReactionResult(
+                    success=False,
+                    article_id=article_id,
+                    reaction_type=reaction_type,
+                    error_message=f"{error_msg} - {response.text}"
+                )
+
+        except Exception as e:
+            logger.error(f"添加文章反應失敗: {e}")
+            return ReactionResult(
+                success=False,
+                article_id=article_id,
+                reaction_type=reaction_type,
+                error_message=str(e)
+            )
+
+    async def remove_article_reaction(self, access_token: str, article_id: str) -> ReactionResult:
+        """
+        移除對文章的反應
+
+        Args:
+            access_token: 存取 Token
+            article_id: 文章ID
+
+        Returns:
+            反應結果
+        """
+        try:
+            headers = {
+                "Authorization": f"Bearer {access_token}",
+                "cmoneyapi-trace-context": "engagement-bot",
+                "accept": "application/json"
+            }
+
+            url = f"{self.forum_ocean_url}/api/Interactive/RemoveReaction/{article_id}"
+
+            logger.info(f"移除文章 {article_id} 的反應")
+
+            response = self.client.delete(url, headers=headers)
+
+            if response.status_code == 204:
+                logger.info(f"成功移除文章 {article_id} 的反應")
+                return ReactionResult(
+                    success=True,
+                    article_id=article_id
+                )
+            else:
+                error_msg = f"移除反應失敗: HTTP {response.status_code}"
+                logger.error(f"{error_msg} - {response.text}")
+                return ReactionResult(
+                    success=False,
+                    article_id=article_id,
+                    error_message=f"{error_msg} - {response.text}"
+                )
+
+        except Exception as e:
+            logger.error(f"移除文章反應失敗: {e}")
+            return ReactionResult(
+                success=False,
+                article_id=article_id,
+                error_message=str(e)
+            )
+
+    async def create_comment(self, access_token: str, article_id: str, comment_text: str,
+                           multimedia: Optional[List[Dict[str, Any]]] = None) -> CommentResult:
+        """
+        對文章發表留言
+
+        Args:
+            access_token: 存取 Token
+            article_id: 文章ID
+            comment_text: 留言內容
+            multimedia: 多媒體內容 (可選)
+
+        Returns:
+            留言結果
+        """
+        try:
+            headers = {
+                "Authorization": f"Bearer {access_token}",
+                "cmoneyapi-trace-context": "engagement-bot",
+                "accept": "application/json",
+                "Content-Type": "application/json-patch+json"
+            }
+
+            payload = {"text": comment_text}
+            if multimedia:
+                payload["multiMedia"] = multimedia
+
+            url = f"{self.forum_ocean_url}/api/Comment/Create/{article_id}"
+
+            logger.info(f"對文章 {article_id} 發表留言: {comment_text[:50]}...")
+
+            response = self.client.post(url, headers=headers, json=payload)
+
+            if response.status_code == 200:
+                result = response.json()
+                comment_index = result.get("commentIndex")
+                logger.info(f"成功對文章 {article_id} 發表留言，commentIndex={comment_index}")
+                return CommentResult(
+                    success=True,
+                    article_id=article_id,
+                    comment_index=comment_index,
+                    comment_text=comment_text,
+                    raw_response=result
+                )
+            else:
+                error_msg = f"發表留言失敗: HTTP {response.status_code}"
+                logger.error(f"{error_msg} - {response.text}")
+                return CommentResult(
+                    success=False,
+                    article_id=article_id,
+                    comment_text=comment_text,
+                    error_message=f"{error_msg} - {response.text}"
+                )
+
+        except Exception as e:
+            logger.error(f"發表留言失敗: {e}")
+            return CommentResult(
+                success=False,
+                article_id=article_id,
+                comment_text=comment_text,
+                error_message=str(e)
+            )
+
+    async def add_comment_reaction(self, access_token: str, article_id: str,
+                                  comment_index: int, reaction_type: int) -> ReactionResult:
+        """
+        對留言添加反應
+
+        Args:
+            access_token: 存取 Token
+            article_id: 文章ID
+            comment_index: 留言索引
+            reaction_type: 反應類型 (1=讚, 3=哈, 4=賺, 5=哇, 6=嗚嗚, 7=真的嗎, 8=怒)
+
+        Returns:
+            反應結果
+        """
+        try:
+            headers = {
+                "Authorization": f"Bearer {access_token}",
+                "cmoneyapi-trace-context": "engagement-bot",
+                "accept": "application/json"
+            }
+
+            url = f"{self.forum_ocean_url}/api/CommentInteractive/Reaction/{article_id}/{comment_index}"
+            params = {"reactionType": reaction_type}
+
+            logger.info(f"對文章 {article_id} 的留言 {comment_index} 添加反應類型 {reaction_type}")
+
+            response = self.client.post(url, headers=headers, params=params)
+
+            if response.status_code == 204:
+                logger.info(f"成功對留言添加反應")
+                return ReactionResult(
+                    success=True,
+                    article_id=f"{article_id}/{comment_index}",
+                    reaction_type=reaction_type
+                )
+            else:
+                error_msg = f"添加留言反應失敗: HTTP {response.status_code}"
+                logger.error(f"{error_msg} - {response.text}")
+                return ReactionResult(
+                    success=False,
+                    article_id=f"{article_id}/{comment_index}",
+                    reaction_type=reaction_type,
+                    error_message=f"{error_msg} - {response.text}"
+                )
+
+        except Exception as e:
+            logger.error(f"添加留言反應失敗: {e}")
+            return ReactionResult(
+                success=False,
+                article_id=f"{article_id}/{comment_index}",
+                reaction_type=reaction_type,
+                error_message=str(e)
+            )
+
+    async def remove_comment_reaction(self, access_token: str, article_id: str,
+                                     comment_index: int) -> ReactionResult:
+        """
+        移除對留言的反應
+
+        Args:
+            access_token: 存取 Token
+            article_id: 文章ID
+            comment_index: 留言索引
+
+        Returns:
+            反應結果
+        """
+        try:
+            headers = {
+                "Authorization": f"Bearer {access_token}",
+                "cmoneyapi-trace-context": "engagement-bot",
+                "accept": "application/json"
+            }
+
+            url = f"{self.forum_ocean_url}/api/CommentInteractive/RemoveReaction/{article_id}/{comment_index}"
+
+            logger.info(f"移除文章 {article_id} 的留言 {comment_index} 的反應")
+
+            response = self.client.delete(url, headers=headers)
+
+            if response.status_code == 204:
+                logger.info(f"成功移除留言反應")
+                return ReactionResult(
+                    success=True,
+                    article_id=f"{article_id}/{comment_index}"
+                )
+            else:
+                error_msg = f"移除留言反應失敗: HTTP {response.status_code}"
+                logger.error(f"{error_msg} - {response.text}")
+                return ReactionResult(
+                    success=False,
+                    article_id=f"{article_id}/{comment_index}",
+                    error_message=f"{error_msg} - {response.text}"
+                )
+
+        except Exception as e:
+            logger.error(f"移除留言反應失敗: {e}")
+            return ReactionResult(
+                success=False,
+                article_id=f"{article_id}/{comment_index}",
+                error_message=str(e)
+            )
+
     def close(self):
         """關閉客戶端"""
         self.client.close()

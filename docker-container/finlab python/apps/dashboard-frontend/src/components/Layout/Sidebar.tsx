@@ -14,6 +14,11 @@ import {
   PlayCircleOutlined,
   SendOutlined,
   TrophyOutlined,
+  LikeOutlined,
+  CommentOutlined,
+  ThunderboltOutlined,
+  LineChartOutlined,
+  TeamOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 // import type { MenuItem } from '../../types';
@@ -140,6 +145,33 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onRefresh }) => {
           key: '/posting-management/manual-posting',
           label: '手動發文',
           icon: <EditOutlined />,
+        },
+      ],
+    },
+    {
+      key: 'engagement-management',
+      label: '互動管理',
+      icon: <LikeOutlined />,
+      children: [
+        {
+          key: '/engagement-management/kol-selection',
+          label: 'KOL 選擇',
+          icon: <TeamOutlined />,
+        },
+        {
+          key: '/engagement-management/task-config',
+          label: '任務配置',
+          icon: <ThunderboltOutlined />,
+        },
+        {
+          key: '/engagement-management/monitor',
+          label: '執行監控',
+          icon: <CommentOutlined />,
+        },
+        {
+          key: '/engagement-management/analytics',
+          label: '成效分析',
+          icon: <LineChartOutlined />,
         },
       ],
     },
