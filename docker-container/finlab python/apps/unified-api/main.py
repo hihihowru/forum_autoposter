@@ -5381,23 +5381,6 @@ async def create_kol(request: Request):
                 "timestamp": get_current_time().isoformat()
             }
 
-        # 獲取會員資訊（獲取 member_id）
-        logger.info("📝 處理 CMoney 會員 ID...")
-        member_id = member_id_from_user  # 優先使用用戶提供的 member_id
-
-        if not member_id:
-            # 如果用戶沒有提供，嘗試從 CMoney API 獲取
-            try:
-                # 使用 CMoney API 獲取當前用戶的會員資訊
-                # TODO: 實現 get_current_member_info 方法或從 token 解析 member_id
-                member_id = ""  # 暫時設為空，後續可以通過其他 API 獲取
-                logger.info(f"✅ 從 API 獲取會員 ID: {member_id or '(無法獲取)'}")
-            except Exception as member_error:
-                logger.warning(f"⚠️ 從 API 獲取會員資訊失敗: {member_error}")
-                # 不阻斷流程，繼續創建
-        else:
-            logger.info(f"✅ 使用用戶提供的會員 ID: {member_id}")
-
         # Phase 2: AI 生成個性化資料（如果提供了 ai_description）
         ai_generated_profile = {}
         if ai_description and gpt_generator:
@@ -5475,6 +5458,10 @@ async def create_kol(request: Request):
 
             next_serial = int(match.group(1))  # Extract serial from email
             logger.info(f"✅ 從郵箱提取 KOL serial: {next_serial} (email: {email})")
+
+            # 處理 member_id - 如果用戶沒提供，使用 serial 作為 member_id
+            member_id = member_id_from_user if member_id_from_user else str(next_serial)
+            logger.info(f"✅ Member ID 設定為: {member_id} {'(用戶提供)' if member_id_from_user else '(使用 serial)'}")
 
             # Check if serial already exists
             cursor.execute("SELECT serial FROM kol_profiles WHERE serial = %s", (str(next_serial),))
