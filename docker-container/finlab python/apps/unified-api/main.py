@@ -5576,6 +5576,121 @@ async def create_kol(request: Request):
             return_db_connection(conn)
 
 
+@app.post("/api/kol/fix-sequence")
+async def fix_kol_sequence():
+    """
+    修復 kol_profiles ID 序列不同步問題（永久解決方案）
+
+    創建觸發器自動同步序列，防止未來再次發生 duplicate key 錯誤
+
+    Response:
+    - success: bool - 是否修復成功
+    - message: str - 操作訊息
+    - data: dict - 修復前後的狀態資訊
+    """
+    logger.info("收到修復 KOL 序列的請求")
+
+    conn = None
+    try:
+        # 檢查數據庫連接
+        if not db_pool:
+            return {
+                "success": False,
+                "error": "數據庫連接不可用",
+                "timestamp": get_current_time().isoformat()
+            }
+
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            # Step 1: 查詢當前狀況
+            cursor.execute("SELECT MAX(id) FROM kol_profiles")
+            max_id_result = cursor.fetchone()
+            max_id = max_id_result['max'] if max_id_result else 0
+
+            cursor.execute("SELECT last_value FROM kol_profiles_id_seq")
+            seq_result = cursor.fetchone()
+            old_seq_value = seq_result['last_value'] if seq_result else 0
+
+            logger.info(f"📊 當前狀況: max_id={max_id}, seq_value={old_seq_value}")
+
+            # Step 2: 修復當前序列
+            cursor.execute("SELECT setval('kol_profiles_id_seq', %s)", (max_id,))
+            new_seq_result = cursor.fetchone()
+            new_seq_value = new_seq_result['setval'] if new_seq_result else 0
+
+            logger.info(f"✅ 序列已更新: {old_seq_value} → {new_seq_value}")
+
+            # Step 3: 創建觸發器函數
+            cursor.execute("""
+                CREATE OR REPLACE FUNCTION sync_kol_profiles_sequence()
+                RETURNS TRIGGER AS $$
+                BEGIN
+                    PERFORM setval('kol_profiles_id_seq', (SELECT COALESCE(MAX(id), 0) FROM kol_profiles));
+                    RETURN NEW;
+                END;
+                $$ LANGUAGE plpgsql;
+            """)
+            logger.info("✅ 觸發器函數已創建")
+
+            # Step 4: 創建觸發器
+            cursor.execute("DROP TRIGGER IF EXISTS sync_kol_sequence_trigger ON kol_profiles")
+            cursor.execute("""
+                CREATE TRIGGER sync_kol_sequence_trigger
+                    AFTER INSERT ON kol_profiles
+                    FOR EACH STATEMENT
+                    EXECUTE FUNCTION sync_kol_profiles_sequence();
+            """)
+            logger.info("✅ 觸發器已創建")
+
+            # 提交變更
+            conn.commit()
+            logger.info("💾 變更已提交")
+
+            # 驗證觸發器是否存在
+            cursor.execute("""
+                SELECT COUNT(*) as count
+                FROM pg_trigger
+                WHERE tgname = 'sync_kol_sequence_trigger'
+            """)
+            trigger_result = cursor.fetchone()
+            trigger_exists = trigger_result['count'] > 0 if trigger_result else False
+
+            return {
+                "success": True,
+                "message": "KOL ID 序列已永久修復！觸發器已啟用，未來不會再出現 duplicate key 錯誤",
+                "data": {
+                    "before": {
+                        "max_id": max_id,
+                        "sequence_value": old_seq_value,
+                        "is_synced": old_seq_value >= max_id
+                    },
+                    "after": {
+                        "max_id": max_id,
+                        "sequence_value": new_seq_value,
+                        "next_id": new_seq_value + 1,
+                        "is_synced": True,
+                        "trigger_enabled": trigger_exists
+                    }
+                },
+                "timestamp": get_current_time().isoformat()
+            }
+
+    except Exception as e:
+        logger.error(f"❌ 修復序列失敗: {e}")
+        import traceback
+        logger.error(f"❌ 完整錯誤堆疊: {traceback.format_exc()}")
+        if conn:
+            conn.rollback()
+        return {
+            "success": False,
+            "error": f"修復序列失敗: {str(e)}",
+            "timestamp": get_current_time().isoformat()
+        }
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+
 @app.delete("/api/kol/{serial}")
 async def delete_kol(serial: str):
     """
