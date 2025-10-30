@@ -3761,18 +3761,41 @@ async def publish_post(post_id: str):
             if not post:
                 raise ValueError(f"Post {post_id} not found")
 
+            # 🔥 FIX: Get KOL credentials based on kol_serial from post record
+            kol_serial = post.get('kol_serial')
+            if not kol_serial:
+                raise ValueError(f"Post {post_id} missing kol_serial")
+
+            logger.info(f"🔍 Fetching credentials for KOL {kol_serial}")
+
+            # Query kol_profiles for email and password
+            cursor.execute("""
+                SELECT email, password, nickname
+                FROM kol_profiles
+                WHERE serial = %s
+            """, (kol_serial,))
+
+            kol_profile = cursor.fetchone()
+
+            if not kol_profile:
+                raise ValueError(f"KOL {kol_serial} not found in kol_profiles")
+
+            if not kol_profile['email'] or not kol_profile['password']:
+                raise ValueError(f"KOL {kol_serial} missing email or password")
+
+            logger.info(f"✅ Found KOL credentials: {kol_profile['nickname']} ({kol_profile['email']})")
+
             # Get CMoney credentials
             from src.clients.cmoney.cmoney_client import CMoneyClient, LoginCredentials
 
             cmoney_client = CMoneyClient()
-            forum_credentials = get_forum_200_credentials()
             credentials = LoginCredentials(
-                email=forum_credentials["email"],
-                password=forum_credentials["password"]
+                email=kol_profile['email'],
+                password=kol_profile['password']
             )
 
-            # Login
-            logger.info("🔐 登入 CMoney API...")
+            # Login with selected KOL's credentials
+            logger.info(f"🔐 登入 CMoney API as {kol_profile['nickname']} ({kol_profile['email']})...")
             login_result = await cmoney_client.login(credentials)
 
             if not login_result or not login_result.token:
