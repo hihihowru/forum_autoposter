@@ -29,6 +29,7 @@ interface TopicInfo {
   id: string;
   title: string;
   name: string;
+  stock_ids?: string[];  // Related stock codes from trending topic
 }
 
 
@@ -130,14 +131,36 @@ const ManualPostingPage: React.FC = () => {
   // 載入熱門話題
   const loadTrendingTopics = async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/trending`);
-      if (!response.ok) throw new Error('載入熱門話題失敗');
+      // 🔥 FIX: Use Railway backend's trending API (includes stock_ids)
+      const response = await fetch(`${API_BASE}/api/trending?limit=20`);
+      if (!response.ok) {
+        console.warn('Trending API failed, using empty list');
+        setTrendingTopics([]);
+        return;
+      }
       const result = await response.json();
-      const topicsData = result.data || [];
-      setTrendingTopics(topicsData);
+      const topicsArray = result.topics || result.data || [];
+
+      // Transform to expected format with stock_ids
+      const formattedTopics = topicsArray.map((topic: any) => ({
+        id: topic.id || topic.topicId || topic.topic_id || '',
+        title: topic.title || topic.name || '',
+        name: topic.name || topic.title || '',
+        stock_ids: topic.stock_ids || []  // Include related stock codes
+      }));
+
+      setTrendingTopics(formattedTopics);
+      console.log(`✅ Loaded ${formattedTopics.length} trending topics`);
+
+      // Log topics with stock_ids for debugging
+      formattedTopics.forEach((topic: TopicInfo) => {
+        if (topic.stock_ids && topic.stock_ids.length > 0) {
+          console.log(`   📊 ${topic.title} → Stocks: ${topic.stock_ids.join(', ')}`);
+        }
+      });
     } catch (error) {
       console.error('載入熱門話題失敗:', error);
-      throw error;
+      setTrendingTopics([]); // Set empty array instead of throwing
     }
   };
 
@@ -177,12 +200,12 @@ const ManualPostingPage: React.FC = () => {
   // 提交發文
   const submitPost = async (kolSerial: string) => {
     const data = formData[kolSerial];
-    
+
     if (!data.title.trim()) {
       message.error('請輸入標題');
       return;
     }
-    
+
     if (!data.content.trim()) {
       message.error('請輸入內容');
       return;
@@ -190,6 +213,25 @@ const ManualPostingPage: React.FC = () => {
 
     try {
       setSubmitting(prev => ({ ...prev, [kolSerial]: true }));
+
+      // 🔥 FIX: Format commodityTags correctly for CMoney API
+      const commodityTags = data.selectedStocks.map(stockCode => ({
+        type: "Stock",
+        key: stockCode,
+        bullOrBear: 0  // 0 = neutral, 1 = bullish, -1 = bearish
+      }));
+
+      // 🔥 FIX: Format communityTopic correctly (single object, use first selected)
+      const communityTopic = data.selectedTopics.length > 0
+        ? { id: data.selectedTopics[0] }
+        : undefined;
+
+      console.log('📤 Submitting post:', {
+        kol_serial: kolSerial,
+        title: data.title,
+        commodityTags,
+        communityTopic
+      });
 
       const response = await fetch(`${API_BASE}/api/manual-posting`, {
         method: 'POST',
@@ -200,18 +242,19 @@ const ManualPostingPage: React.FC = () => {
           kol_serial: parseInt(kolSerial),
           title: data.title,
           content: data.content,
-          stock_codes: data.selectedStocks,
-          communityTopics: data.selectedTopics
+          text: data.content,  // CMoney uses "text" field
+          commodityTags: commodityTags.length > 0 ? commodityTags : undefined,
+          communityTopic: communityTopic
         })
       });
 
       const result = await response.json();
-      
-      if (result.success) {
-        message.success(`發文成功！Post ID: ${result.post_id}`);
+
+      if (result.success || response.ok) {
+        message.success(`發文成功！Post ID: ${result.post_id || result.id || 'N/A'}`);
         clearForm(kolSerial);
       } else {
-        message.error(`發文失敗: ${result.message}`);
+        message.error(`發文失敗: ${result.message || '未知錯誤'}`);
       }
     } catch (error) {
       console.error('提交發文失敗:', error);
@@ -452,7 +495,9 @@ const ManualPostingPage: React.FC = () => {
                 size="large"
                 options={trendingTopics.map(topic => ({
                   value: topic.id,
-                  label: topic.title
+                  label: topic.stock_ids && topic.stock_ids.length > 0
+                    ? `${topic.title} (${topic.stock_ids.join(', ')})`
+                    : topic.title
                 }))}
               />
             </Col>
