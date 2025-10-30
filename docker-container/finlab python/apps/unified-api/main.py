@@ -2674,7 +2674,34 @@ async def manual_posting(request: Request):
         # 提取參數
         stock_code = body.get('stock_code', '')
         stock_name = body.get('stock_name', stock_code)
-        kol_serial = int(body.get('kol_serial', 200))
+
+        # 🔥 FIX: Validate kol_serial is provided (no default to 200!)
+        kol_serial_raw = body.get('kol_serial')
+        if not kol_serial_raw:
+            logger.error(f"❌ Missing kol_serial in request body: {body}")
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "success": False,
+                    "message": "kol_serial is required. Please select a KOL in step 5.",
+                    "timestamp": get_current_time().isoformat()
+                }
+            )
+
+        try:
+            kol_serial = int(kol_serial_raw)
+            logger.info(f"✅ Using KOL serial: {kol_serial}")
+        except (ValueError, TypeError):
+            logger.error(f"❌ Invalid kol_serial format: {kol_serial_raw}")
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "success": False,
+                    "message": f"Invalid kol_serial format: {kol_serial_raw}. Must be a number.",
+                    "timestamp": get_current_time().isoformat()
+                }
+            )
+
         kol_persona = body.get('kol_persona', 'technical')
         session_id = body.get('session_id')
         trigger_type = body.get('trigger_type', 'custom_stocks')
@@ -6773,16 +6800,41 @@ async def execute_schedule_now(task_id: str, request: Request):
         generated_posts = []
         failed_posts = []
 
-        # Get KOL list (simplified - using fixed KOLs for now)
-        kol_serials = [200, 201, 202]  # TODO: Get from database based on assignment strategy
+        # 🔥 FIX: Get KOL list from database (not hardcoded!)
+        kol_serials = []
+        try:
+            # Fetch active KOLs from database
+            kol_conn = await asyncpg.connect(DATABASE_URL)
+            kol_rows = await kol_conn.fetch("""
+                SELECT kol_serial
+                FROM kol_profiles
+                WHERE is_active = true
+                ORDER BY kol_serial
+            """)
+            kol_serials = [row['kol_serial'] for row in kol_rows]
+            await kol_conn.close()
+            logger.info(f"✅ Fetched {len(kol_serials)} active KOLs from database: {kol_serials}")
+        except Exception as e:
+            logger.error(f"❌ Failed to fetch KOLs from database: {e}")
+            # Fallback: use schedule's selected KOLs if available
+            if schedule_data.get('selected_kols'):
+                kol_serials = schedule_data['selected_kols']
+                logger.warning(f"⚠️ Using schedule's selected KOLs as fallback: {kol_serials}")
+            else:
+                return {
+                    "success": False,
+                    "error": "No KOLs available. Please configure KOLs in the system."
+                }
 
         for stock_code in stock_codes:
             # Select KOL based on assignment strategy
             if kol_assignment == 'random':
                 import random
                 kol_serial = random.choice(kol_serials)
+                logger.info(f"🎲 Random KOL selected: {kol_serial}")
             else:
-                kol_serial = kol_serials[0]  # Default to first KOL
+                kol_serial = kol_serials[0]  # Use first KOL for fixed assignment
+                logger.info(f"📌 Fixed KOL selected: {kol_serial}")
 
             try:
                 # 🔥 FIX: Get actual stock name from stock_mapping (extract company_name from dict)
