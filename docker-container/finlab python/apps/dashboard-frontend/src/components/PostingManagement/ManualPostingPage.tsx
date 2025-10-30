@@ -80,9 +80,12 @@ const ManualPostingPage: React.FC = () => {
     try {
       const response = await fetch(`${API_BASE}/api/kol/list`);
       if (!response.ok) throw new Error('載入 KOL 失敗');
-      const kolsData = await response.json();
+      const result = await response.json();
+
+      // 🔥 FIX: Extract data array from response object
+      const kolsData = result.data || [];
       setKols(kolsData);
-      
+
       // 初始化表單資料
       const initialFormData: { [key: string]: ManualPostingFormData } = {};
       kolsData.forEach((kol: KOLInfo) => {
