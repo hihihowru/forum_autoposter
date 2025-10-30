@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Row, Col, Input, Button, Select, message, Space, Typography, Spin } from 'antd';
-import { 
-  SendOutlined, 
-  ClearOutlined, 
-  UserOutlined
+import { Card, Row, Col, Input, Button, Select, message, Space, Typography, Spin, Table, Tag } from 'antd';
+import {
+  SendOutlined,
+  ClearOutlined,
+  UserOutlined,
+  EditOutlined,
+  CloseOutlined
 } from '@ant-design/icons';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
-const { Option } = Select;
 
 // 類型定義
 interface KOLInfo {
@@ -46,9 +47,12 @@ const ManualPostingPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState<{ [key: string]: boolean }>({});
   const [stockSearchResults, setStockSearchResults] = useState<StockInfo[]>([]);
-  
+
   // 表單狀態
   const [formData, setFormData] = useState<{ [key: string]: ManualPostingFormData }>({});
+
+  // 當前展開的 KOL (只允許一個展開)
+  const [expandedKolSerial, setExpandedKolSerial] = useState<string | null>(null);
 
   // API 基礎 URL - 使用統一的 API 配置
   const API_BASE = import.meta.env.DEV ? 'http://localhost:8001' : 'https://forumautoposter-production.up.railway.app';
@@ -225,6 +229,33 @@ const ManualPostingPage: React.FC = () => {
     updateFormData(kolSerial, 'selectedTopics', []);
   };
 
+  // 切換 KOL 表單展開/收起
+  const toggleKolForm = (kolSerial: string) => {
+    if (expandedKolSerial === kolSerial) {
+      setExpandedKolSerial(null); // 收起
+    } else {
+      setExpandedKolSerial(kolSerial); // 展開
+    }
+  };
+
+  // 獲取人設標籤顏色
+  const getPersonaColor = (persona: string) => {
+    const colorMap: { [key: string]: string } = {
+      '技術派': 'blue',
+      '總經派': 'green',
+      '消息派': 'orange',
+      '散戶派': 'purple',
+      '地方派': 'cyan',
+      '八卦派': 'magenta',
+      '爆料派': 'red',
+      '新聞派': 'geekblue',
+      '數據派': 'lime',
+      '短線派': 'gold',
+      '價值派': 'volcano'
+    };
+    return colorMap[persona] || 'default';
+  };
+
 
   if (loading) {
     return (
@@ -235,6 +266,63 @@ const ManualPostingPage: React.FC = () => {
     );
   }
 
+  // 表格列定義
+  const columns = [
+    {
+      title: 'Serial',
+      dataIndex: 'serial',
+      key: 'serial',
+      width: 80,
+      render: (serial: string) => <Text strong>#{serial}</Text>
+    },
+    {
+      title: 'KOL 名稱',
+      dataIndex: 'nickname',
+      key: 'nickname',
+      render: (nickname: string) => (
+        <Space>
+          <UserOutlined />
+          <Text>{nickname}</Text>
+        </Space>
+      )
+    },
+    {
+      title: '人設',
+      dataIndex: 'persona',
+      key: 'persona',
+      render: (persona: string) => (
+        <Tag color={getPersonaColor(persona)}>{persona}</Tag>
+      )
+    },
+    {
+      title: '狀態',
+      dataIndex: 'status',
+      key: 'status',
+      render: (status: string) => (
+        <Tag color={status === 'active' ? 'green' : 'default'}>
+          {status === 'active' ? '啟用' : '停用'}
+        </Tag>
+      )
+    },
+    {
+      title: '操作',
+      key: 'action',
+      width: 120,
+      render: (_: any, record: KOLInfo) => (
+        <Button
+          type={expandedKolSerial === record.serial ? 'default' : 'primary'}
+          icon={expandedKolSerial === record.serial ? <CloseOutlined /> : <EditOutlined />}
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleKolForm(record.serial);
+          }}
+        >
+          {expandedKolSerial === record.serial ? '收起' : '發文'}
+        </Button>
+      )
+    }
+  ];
+
   return (
     <div style={{ padding: '24px', background: '#f5f5f5', minHeight: '100vh' }}>
       {/* 頁面標題 */}
@@ -243,103 +331,134 @@ const ManualPostingPage: React.FC = () => {
           <SendOutlined style={{ marginRight: '8px', color: '#1890ff' }} />
           手動發文管理
         </Title>
-        <Text type="secondary">類似水軍操作軟體，支援多KOL同時發文</Text>
+        <Text type="secondary">
+          點擊「發文」按鈕展開編輯區，類似水軍操作工具
+        </Text>
       </Card>
 
-
-      {/* KOL 發文區域 */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-        {kols.map(kol => (
-          <Card
-            key={kol.serial}
-            title={
-              <Space>
-                <UserOutlined />
-                <Text strong>{kol.nickname}</Text>
-                <Text type="secondary">(KOL-{kol.serial}) - {kol.persona}</Text>
-              </Space>
+      {/* KOL 列表表格 */}
+      <Card>
+        <Table
+          columns={columns}
+          dataSource={kols}
+          rowKey="serial"
+          pagination={{ pageSize: 10, showSizeChanger: true }}
+          onRow={(record) => ({
+            onClick: () => toggleKolForm(record.serial),
+            style: {
+              cursor: 'pointer',
+              background: expandedKolSerial === record.serial ? '#e6f7ff' : undefined
             }
-            extra={
-              <Space>
-                <Button
-                  type="primary"
-                  icon={<SendOutlined />}
-                  loading={submitting[kol.serial]}
-                  onClick={() => submitPost(kol.serial)}
-                >
-                  送出
-                </Button>
-                <Button
-                  icon={<ClearOutlined />}
-                  onClick={() => clearForm(kol.serial)}
-                >
-                  清空
-                </Button>
-              </Space>
-            }
-          >
-            <Row gutter={[16, 16]}>
-              {/* 標題 */}
-              <Col span={24}>
-                <Text strong>標題:</Text>
-                <Input
-                  value={formData[kol.serial]?.title || ''}
-                  onChange={(e) => updateFormData(kol.serial, 'title', e.target.value)}
-                  placeholder="輸入標題..."
-                  style={{ marginTop: '8px' }}
-                />
-              </Col>
+          })}
+        />
+      </Card>
 
-              {/* 內容 */}
-              <Col span={24}>
-                <Text strong>內容:</Text>
-                <TextArea
-                  value={formData[kol.serial]?.content || ''}
-                  onChange={(e) => updateFormData(kol.serial, 'content', e.target.value)}
-                  placeholder="輸入內容..."
-                  rows={4}
-                  style={{ marginTop: '8px' }}
-                />
-              </Col>
+      {/* 展開的發文表單 */}
+      {expandedKolSerial && formData[expandedKolSerial] && (
+        <Card
+          style={{ marginTop: '24px' }}
+          title={
+            <Space>
+              <EditOutlined style={{ color: '#1890ff' }} />
+              <Text strong>
+                {kols.find(k => k.serial === expandedKolSerial)?.nickname || ''}
+                {' '}的發文編輯區
+              </Text>
+              <Tag color={getPersonaColor(kols.find(k => k.serial === expandedKolSerial)?.persona || '')}>
+                {kols.find(k => k.serial === expandedKolSerial)?.persona || ''}
+              </Tag>
+            </Space>
+          }
+          extra={
+            <Space>
+              <Button
+                type="primary"
+                icon={<SendOutlined />}
+                loading={submitting[expandedKolSerial]}
+                onClick={() => submitPost(expandedKolSerial)}
+                size="large"
+              >
+                送出發文
+              </Button>
+              <Button
+                icon={<ClearOutlined />}
+                onClick={() => clearForm(expandedKolSerial)}
+              >
+                清空
+              </Button>
+              <Button
+                icon={<CloseOutlined />}
+                onClick={() => setExpandedKolSerial(null)}
+              >
+                收起
+              </Button>
+            </Space>
+          }
+        >
+          <Row gutter={[16, 16]}>
+            {/* 標題 */}
+            <Col span={24}>
+              <Text strong style={{ fontSize: '14px' }}>標題:</Text>
+              <Input
+                value={formData[expandedKolSerial]?.title || ''}
+                onChange={(e) => updateFormData(expandedKolSerial, 'title', e.target.value)}
+                placeholder="輸入標題..."
+                size="large"
+                style={{ marginTop: '8px' }}
+              />
+            </Col>
 
-              {/* 股票標籤 */}
-              <Col span={12}>
-                <Text strong>股票標籤:</Text>
-                <Select
-                  mode="multiple"
-                  value={formData[kol.serial]?.selectedStocks || []}
-                  onChange={(value) => updateFormData(kol.serial, 'selectedStocks', value)}
-                  placeholder="搜尋股票代號或名稱..."
-                  style={{ width: '100%', marginTop: '8px' }}
-                  showSearch
-                  filterOption={false}
-                  onSearch={searchStocks}
-                  options={stockSearchResults.map(stock => ({
-                    value: stock.code,
-                    label: `${stock.code} ${stock.name}`
-                  }))}
-                />
-              </Col>
+            {/* 內容 */}
+            <Col span={24}>
+              <Text strong style={{ fontSize: '14px' }}>內容:</Text>
+              <TextArea
+                value={formData[expandedKolSerial]?.content || ''}
+                onChange={(e) => updateFormData(expandedKolSerial, 'content', e.target.value)}
+                placeholder="輸入內容..."
+                rows={6}
+                style={{ marginTop: '8px' }}
+              />
+            </Col>
 
-              {/* 熱門話題 */}
-              <Col span={12}>
-                <Text strong>熱門話題:</Text>
-                <Select
-                  mode="multiple"
-                  value={formData[kol.serial]?.selectedTopics || []}
-                  onChange={(value) => updateFormData(kol.serial, 'selectedTopics', value)}
-                  placeholder="選擇熱門話題..."
-                  style={{ width: '100%', marginTop: '8px' }}
-                  options={trendingTopics.map(topic => ({
-                    value: topic.id,
-                    label: topic.title
-                  }))}
-                />
-              </Col>
-            </Row>
-          </Card>
-        ))}
-      </div>
+            {/* 股票標籤 */}
+            <Col span={12}>
+              <Text strong style={{ fontSize: '14px' }}>股票標籤:</Text>
+              <Select
+                mode="multiple"
+                value={formData[expandedKolSerial]?.selectedStocks || []}
+                onChange={(value) => updateFormData(expandedKolSerial, 'selectedStocks', value)}
+                placeholder="搜尋股票代號或名稱..."
+                style={{ width: '100%', marginTop: '8px' }}
+                size="large"
+                showSearch
+                filterOption={false}
+                onSearch={searchStocks}
+                options={stockSearchResults.map(stock => ({
+                  value: stock.code,
+                  label: `${stock.code} ${stock.name}`
+                }))}
+              />
+            </Col>
+
+            {/* 熱門話題 */}
+            <Col span={12}>
+              <Text strong style={{ fontSize: '14px' }}>熱門話題:</Text>
+              <Select
+                mode="multiple"
+                value={formData[expandedKolSerial]?.selectedTopics || []}
+                onChange={(value) => updateFormData(expandedKolSerial, 'selectedTopics', value)}
+                placeholder="選擇熱門話題..."
+                style={{ width: '100%', marginTop: '8px' }}
+                size="large"
+                options={trendingTopics.map(topic => ({
+                  value: topic.id,
+                  label: topic.title
+                }))}
+              />
+            </Col>
+          </Row>
+        </Card>
+      )}
     </div>
   );
 };
