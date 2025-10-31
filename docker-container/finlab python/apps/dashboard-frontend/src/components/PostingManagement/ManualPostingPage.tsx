@@ -167,14 +167,22 @@ const ManualPostingPage: React.FC = () => {
 
   // 搜尋股票
   const searchStocks = async (query: string) => {
-    if (!query) {
+    // Add minimum length check to prevent 422 errors
+    if (!query || query.trim().length < 2) {
       setStockSearchResults(stocks);
       return stocks;
     }
 
     try {
-      const response = await fetch(`${API_BASE}/api/search-stocks-by-keywords?keyword=${encodeURIComponent(query)}`);
-      if (!response.ok) throw new Error('搜尋股票失敗');
+      const trimmedQuery = query.trim();
+      const response = await fetch(`${API_BASE}/api/search-stocks-by-keywords?keyword=${encodeURIComponent(trimmedQuery)}`);
+
+      if (!response.ok) {
+        console.warn(`Stock search failed with ${response.status}, using local stock list`);
+        setStockSearchResults(stocks);
+        return stocks;
+      }
+
       const result = await response.json();
       const data = result.data || [];
       setStockSearchResults(data);
@@ -226,14 +234,10 @@ const ManualPostingPage: React.FC = () => {
         ? { id: data.selectedTopics[0] }
         : undefined;
 
-      console.log('📤 Submitting post:', {
-        kol_serial: kolSerial,
-        title: data.title,
-        commodityTags,
-        communityTopic
-      });
+      console.log('📤 Step 1: Creating draft post...');
 
-      const response = await fetch(`${API_BASE}/api/manual-posting`, {
+      // Step 1: Create draft post
+      const draftResponse = await fetch(`${API_BASE}/api/manual-posting`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -248,16 +252,50 @@ const ManualPostingPage: React.FC = () => {
         })
       });
 
-      const result = await response.json();
+      const draftResult = await draftResponse.json();
 
-      if (result.success || response.ok) {
-        message.success(`發文成功！Post ID: ${result.post_id || result.id || 'N/A'}`);
+      if (!draftResult.success || !draftResult.post_id) {
+        message.error(`建立草稿失敗: ${draftResult.message || '未知錯誤'}`);
+        return;
+      }
+
+      console.log(`✅ Draft created: ${draftResult.post_id}`);
+      message.loading({ content: '正在發布到 CMoney...', key: 'publishing', duration: 0 });
+
+      // Step 2: Publish draft to CMoney
+      console.log('📤 Step 2: Publishing to CMoney...');
+      const publishResponse = await fetch(`${API_BASE}/api/posts/${draftResult.post_id}/publish`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+
+      const publishResult = await publishResponse.json();
+
+      message.destroy('publishing');
+
+      if (publishResult.success && publishResult.post_url) {
+        message.success({
+          content: (
+            <div>
+              <div>發文成功！</div>
+              <a href={publishResult.post_url} target="_blank" rel="noopener noreferrer">
+                查看文章
+              </a>
+            </div>
+          ),
+          duration: 5
+        });
         clearForm(kolSerial);
+        console.log(`✅ Published to CMoney: ${publishResult.post_url}`);
       } else {
-        message.error(`發文失敗: ${result.message || '未知錯誤'}`);
+        message.error(`發布到 CMoney 失敗: ${publishResult.error || publishResult.message || '未知錯誤'}`);
+        console.error('Publish error:', publishResult);
       }
     } catch (error) {
       console.error('提交發文失敗:', error);
+      message.destroy('publishing');
       message.error('提交發文失敗: ' + (error as Error).message);
     } finally {
       setSubmitting(prev => ({ ...prev, [kolSerial]: false }));
