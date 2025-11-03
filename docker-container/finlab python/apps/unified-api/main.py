@@ -2855,8 +2855,17 @@ async def manual_posting(request: Request):
         else:
             logger.info("ℹ️  Serper 服務未初始化，跳過新聞搜尋")
 
-        # 使用 GPT 生成內容
-        if gpt_generator:
+        # 🔥 FIX: Check if user provided custom title and content (for manual posting)
+        custom_title = body.get('title')
+        custom_content = body.get('content')
+
+        if custom_title and custom_content:
+            # User provided custom content - use it directly, skip GPT generation
+            logger.info(f"✅ 使用用戶自定義內容: title={custom_title[:30]}..., content_length={len(custom_content)}")
+            title = custom_title
+            content = custom_content
+        elif gpt_generator:
+            # No custom content - generate with GPT
             logger.info(f"使用 GPT 生成器生成內容: stock_code={stock_code}, kol={kol_profile.get('nickname')}, model={chosen_model_id}")
             try:
                 gpt_result = gpt_generator.generate_stock_analysis(
@@ -2972,11 +2981,28 @@ async def manual_posting(request: Request):
         # 準備數據庫寫入數據
         now = get_current_time()
 
-        # 生成商品標籤
-        commodity_tags_data = [
-            {"type": "Market", "key": "TWA00", "bullOrBear": 0},
-            {"type": "Stock", "key": stock_code, "bullOrBear": 0}
-        ]
+        # 🔥 FIX: Use commodityTags from request if provided (for manual posting)
+        custom_commodity_tags = body.get('commodityTags')
+        if custom_commodity_tags:
+            # User provided custom commodityTags - use them directly
+            logger.info(f"✅ 使用用戶自定義 commodityTags: {custom_commodity_tags}")
+            commodity_tags_data = custom_commodity_tags
+        else:
+            # No custom tags - generate default tags
+            logger.info(f"生成預設 commodityTags: stock_code={stock_code}")
+            commodity_tags_data = [
+                {"type": "Market", "key": "TWA00", "bullOrBear": 0},
+                {"type": "Stock", "key": stock_code, "bullOrBear": 0}
+            ]
+
+        # 🔥 FIX: Extract communityTopic from request if provided (for manual posting)
+        custom_community_topic = body.get('communityTopic')
+        topic_id = None
+        topic_title = None
+        if custom_community_topic:
+            topic_id = custom_community_topic.get('id')
+            topic_title = custom_community_topic.get('title') or body.get('topic_title')
+            logger.info(f"✅ 使用用戶自定義 communityTopic: id={topic_id}, title={topic_title}")
 
         # 生成參數記錄
         full_triggers_config_from_request = body.get('full_triggers_config', {})
@@ -3019,13 +3045,15 @@ async def manual_posting(request: Request):
                     kol_serial, kol_nickname, kol_persona,
                     stock_code, stock_name,
                     title, content, content_md,
-                    status, commodity_tags, generation_params, alternative_versions, trigger_type, generation_mode
+                    status, commodity_tags, generation_params, alternative_versions, trigger_type, generation_mode,
+                    topic_id, topic_title
                 ) VALUES (
                     %s, %s, %s, %s,
                     %s, %s, %s,
                     %s, %s,
                     %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s
+                    %s, %s, %s, %s, %s, %s,
+                    %s, %s
                 )
             """
 
@@ -3042,7 +3070,9 @@ async def manual_posting(request: Request):
                 json.dumps(generation_params, ensure_ascii=False),
                 alternative_versions_json,  # 添加替代版本
                 trigger_type,  # 添加 trigger_type
-                generation_mode  # 🔥 NEW: 添加 generation_mode
+                generation_mode,  # 🔥 NEW: 添加 generation_mode
+                topic_id,  # 🔥 FIX: Add topic_id
+                topic_title  # 🔥 FIX: Add topic_title
             ))
 
             conn.commit()
@@ -3843,8 +3873,19 @@ async def publish_post(post_id: str):
             if post.get('topic_id'):
                 article_data.communityTopic = {"id": post['topic_id']}
 
-            # Add commodity tags (stock tags) if exists
-            if post.get('stock_code') and post['stock_code'] != '0000':
+            # 🔥 FIX: Use commodity_tags from database if exists (user's custom tags)
+            if post.get('commodity_tags'):
+                # Parse JSON string to list if needed
+                import json
+                commodity_tags_from_db = post['commodity_tags']
+                if isinstance(commodity_tags_from_db, str):
+                    commodity_tags_from_db = json.loads(commodity_tags_from_db)
+
+                logger.info(f"✅ 使用資料庫中的 commodityTags: {commodity_tags_from_db}")
+                article_data.commodity_tags = commodity_tags_from_db
+            elif post.get('stock_code') and post['stock_code'] != '0000':
+                # Fallback: generate from stock_code if no custom tags
+                logger.info(f"生成預設 commodityTags from stock_code: {post['stock_code']}")
                 article_data.commodity_tags = [
                     {
                         "type": "Stock",
