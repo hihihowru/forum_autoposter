@@ -1218,17 +1218,13 @@ const KOLManagementPage: React.FC = () => {
               <Form.Item
                 name="email"
                 label="CMoney 登入郵箱"
-                tooltip="郵箱格式必須為 forum_XXX@cmoney.com.tw，其中 XXX 是數字（例如：forum_200@cmoney.com.tw），這個數字將成為 KOL 序號"
+                tooltip="支援兩種格式：1) forum_XXX@cmoney.com.tw（XXX 為 KOL 序號）2) 其他郵箱格式（系統自動從 1000 開始分配序號）"
                 rules={[
                   { required: true, message: '請輸入郵箱' },
-                  { type: 'email', message: '請輸入有效的郵箱' },
-                  {
-                    pattern: /^forum_\d+@cmoney\.com\.tw$/,
-                    message: '郵箱格式必須為 forum_XXX@cmoney.com.tw（例如：forum_200@cmoney.com.tw）'
-                  }
+                  { type: 'email', message: '請輸入有效的郵箱' }
                 ]}
               >
-                <Input placeholder="forum_200@cmoney.com.tw" />
+                <Input placeholder="forum_200@cmoney.com.tw 或 your_email@cmoney.com.tw" />
               </Form.Item>
             </Col>
             <Col span={12}>
@@ -1266,18 +1262,18 @@ const KOLManagementPage: React.FC = () => {
             <Col span={12}>
               <Form.Item
                 name="nickname"
-                label="期望的 KOL 暱稱"
-                rules={[{ required: true, message: '請輸入暱稱' }]}
-                tooltip="系統將嘗試在 CMoney 更新此暱稱，如果暱稱已被使用將會失敗"
+                label="KOL 暱稱 (選填)"
+                tooltip="留空則使用 CMoney 帳號現有暱稱；若填寫，系統將嘗試更新 CMoney 暱稱"
               >
                 <Space.Compact style={{ width: '100%' }}>
-                  <Input placeholder="例如：股市達人小明" style={{ width: 'calc(100% - 80px)' }} />
+                  <Input placeholder="留空使用現有暱稱，或輸入新暱稱" style={{ width: 'calc(100% - 80px)' }} />
                   <Button
                     onClick={handleTestNickname}
                     loading={testingNickname}
                     type={testNicknameResult?.success ? 'primary' : 'default'}
                     danger={testNicknameResult?.success === false}
                     style={{ width: '80px' }}
+                    disabled={!createForm.getFieldValue('nickname')}
                   >
                     {testNicknameResult?.success === true ? '✅' : testNicknameResult?.success === false ? '❌' : '測試'}
                   </Button>
