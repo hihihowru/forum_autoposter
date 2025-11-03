@@ -2995,14 +2995,20 @@ async def manual_posting(request: Request):
                 {"type": "Stock", "key": stock_code, "bullOrBear": 0}
             ]
 
-        # 🔥 FIX: Extract communityTopic from request if provided (for manual posting)
+        # 🔥 FIX: Extract topic from request (supports both workflows)
+        # 1. Check for communityTopic object (手動發文 manual posting)
+        # 2. Fall back to direct topic_id/topic_title fields (發文生成器 batch generation)
         custom_community_topic = body.get('communityTopic')
-        topic_id = None
-        topic_title = None
         if custom_community_topic:
             topic_id = custom_community_topic.get('id')
             topic_title = custom_community_topic.get('title') or body.get('topic_title')
-            logger.info(f"✅ 使用用戶自定義 communityTopic: id={topic_id}, title={topic_title}")
+            logger.info(f"✅ 使用 communityTopic (手動發文): id={topic_id}, title={topic_title}")
+        else:
+            # Batch generation sends topic_id and topic_title directly
+            topic_id = body.get('topic_id')
+            topic_title = body.get('topic_title')
+            if topic_id:
+                logger.info(f"✅ 使用 topic_id/topic_title (發文生成器): id={topic_id}, title={topic_title}")
 
         # 生成參數記錄
         full_triggers_config_from_request = body.get('full_triggers_config', {})
