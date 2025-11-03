@@ -485,7 +485,7 @@ const KOLManagementPage: React.FC = () => {
       const payload = {
         email: values.email,
         password: values.password,
-        nickname: values.nickname,
+        nickname: values.nickname || undefined,  // 🔥 FIX: Send undefined if empty (don't send empty string)
         member_id: values.member_id || '',
         ai_description: values.ai_description || '',
         model_id: values.model_id || 'gpt-4o-mini',
@@ -1542,10 +1542,10 @@ const KOLManagementPage: React.FC = () => {
               <Col span={12}>
                 <Form.Item
                   name="nickname"
-                  label="暱稱 (Nickname)"
-                  rules={[{ required: true, message: '請輸入暱稱' }]}
+                  label="暱稱 (Nickname) - 選填"
+                  tooltip="留空則使用 CMoney 現有暱稱"
                 >
-                  <Input />
+                  <Input placeholder="留空使用現有暱稱" />
                 </Form.Item>
               </Col>
               <Col span={12}>
