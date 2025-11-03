@@ -5437,12 +5437,12 @@ async def create_kol(request: Request):
         logger.info(f"📝 收到創建 KOL 請求: email={email}, nickname={nickname}, member_id={member_id_from_user or '(未提供)'}")
         logger.info(f"📝 Prompt 欄位: persona={bool(prompt_persona)}, style={bool(prompt_style)}, guardrails={bool(prompt_guardrails)}, skeleton={bool(prompt_skeleton)}")
 
-        # 驗證必填欄位
-        if not email or not password or not nickname:
+        # 驗證必填欄位 (nickname 改為選填)
+        if not email or not password:
             logger.error("❌ 缺少必填欄位")
             return {
                 "success": False,
-                "error": "缺少必填欄位: email, password, nickname",
+                "error": "缺少必填欄位: email, password",
                 "timestamp": get_current_time().isoformat()
             }
 
@@ -5454,8 +5454,11 @@ async def create_kol(request: Request):
                 "timestamp": get_current_time().isoformat()
             }
 
-        # Phase 1: 使用 CMoney API 登入並更新暱稱
-        logger.info(f"📝 Phase 1: 嘗試使用 {email} 登入 CMoney 並更新暱稱為 {nickname}")
+        # Phase 1: 使用 CMoney API 登入 (暱稱更新為選填)
+        if nickname:
+            logger.info(f"📝 Phase 1: 嘗試使用 {email} 登入 CMoney 並更新暱稱為 {nickname}")
+        else:
+            logger.info(f"📝 Phase 1: 嘗試使用 {email} 登入 CMoney (不更新暱稱，使用現有暱稱)")
 
         # 將 src 路徑加入 Python path
         src_path = '/app/src'
@@ -5479,31 +5482,37 @@ async def create_kol(request: Request):
                 "timestamp": get_current_time().isoformat()
             }
 
-        # 嘗試更新暱稱
-        try:
-            nickname_result = await cmoney_client.update_nickname(access_token.token, nickname)
+        # 嘗試更新暱稱 (僅當提供暱稱時)
+        actual_nickname = nickname  # Default to provided nickname
+        if nickname:
+            try:
+                nickname_result = await cmoney_client.update_nickname(access_token.token, nickname)
 
-            if not nickname_result.success:
-                logger.warning(f"⚠️ 暱稱更新失敗: {nickname_result.error_message}")
+                if not nickname_result.success:
+                    logger.warning(f"⚠️ 暱稱更新失敗: {nickname_result.error_message}")
+                    return {
+                        "success": False,
+                        "error": f"暱稱更新失敗: {nickname_result.error_message}",
+                        "phase": "nickname_update",
+                        "detail": "可能是暱稱已被使用，請嘗試其他暱稱",
+                        "timestamp": get_current_time().isoformat()
+                    }
+
+                logger.info(f"✅ 暱稱更新成功: {nickname}")
+                actual_nickname = nickname_result.new_nickname or nickname
+
+            except Exception as nickname_error:
+                logger.error(f"❌ 暱稱更新異常: {nickname_error}")
                 return {
                     "success": False,
-                    "error": f"暱稱更新失敗: {nickname_result.error_message}",
+                    "error": f"暱稱更新異常: {str(nickname_error)}",
                     "phase": "nickname_update",
-                    "detail": "可能是暱稱已被使用，請嘗試其他暱稱",
                     "timestamp": get_current_time().isoformat()
                 }
-
-            logger.info(f"✅ 暱稱更新成功: {nickname}")
-            actual_nickname = nickname_result.new_nickname or nickname
-
-        except Exception as nickname_error:
-            logger.error(f"❌ 暱稱更新異常: {nickname_error}")
-            return {
-                "success": False,
-                "error": f"暱稱更新異常: {str(nickname_error)}",
-                "phase": "nickname_update",
-                "timestamp": get_current_time().isoformat()
-            }
+        else:
+            # 不更新暱稱，使用 CMoney 帳號現有暱稱
+            logger.info(f"⏭️  跳過暱稱更新，將使用 CMoney 帳號現有暱稱")
+            actual_nickname = f"KOL-{email.split('@')[0]}"  # Temporary placeholder
 
         # Phase 2: AI 生成個性化資料（如果提供了 ai_description）
         ai_generated_profile = {}
@@ -5566,22 +5575,32 @@ async def create_kol(request: Request):
         # 準備寫入數據庫的資料
         conn = get_db_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-            # 🔥 FIX: Extract serial from email (format: forum_XXX@cmoney.com.tw)
+            # 🔥 FIX: Extract serial from email (支援兩種格式)
+            # 1. forum_XXX@cmoney.com.tw → 使用 XXX 作為 serial
+            # 2. 其他格式 → 從 1000 開始分配
             import re
             email_pattern = r'forum_(\d+)@cmoney\.com\.tw'
             match = re.match(email_pattern, email)
 
-            if not match:
-                logger.error(f"❌ 郵箱格式錯誤: {email}，應為 forum_XXX@cmoney.com.tw")
-                return {
-                    "success": False,
-                    "error": f"郵箱格式錯誤，應為 forum_XXX@cmoney.com.tw 格式（例如：forum_200@cmoney.com.tw）",
-                    "phase": "validation",
-                    "timestamp": get_current_time().isoformat()
-                }
+            if match:
+                # 格式 1: forum_XXX@cmoney.com.tw
+                next_serial = int(match.group(1))
+                logger.info(f"✅ 從郵箱提取 KOL serial: {next_serial} (email: {email})")
+            else:
+                # 格式 2: 其他格式，從 1000 開始分配
+                logger.info(f"📧 郵箱不符合 forum_XXX 格式，從 1000 開始分配 serial: {email}")
 
-            next_serial = int(match.group(1))  # Extract serial from email
-            logger.info(f"✅ 從郵箱提取 KOL serial: {next_serial} (email: {email})")
+                # 查找已使用的最大 serial (>= 1000)
+                cursor.execute("""
+                    SELECT MAX(CAST(serial AS INTEGER)) as max_serial
+                    FROM kol_profiles
+                    WHERE CAST(serial AS INTEGER) >= 1000
+                """)
+                result = cursor.fetchone()
+                max_serial = result['max_serial'] if result and result['max_serial'] else 999
+
+                next_serial = max_serial + 1
+                logger.info(f"✅ 分配新 serial: {next_serial} (從 {max_serial} 遞增)")
 
             # 處理 member_id - 如果用戶沒提供，使用 serial 作為 member_id
             member_id = member_id_from_user if member_id_from_user else str(next_serial)
