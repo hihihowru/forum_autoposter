@@ -3795,11 +3795,12 @@ async def publish_post(post_id: str):
             logger.info(f"🔍 Fetching credentials for KOL {kol_serial}")
 
             # Query kol_profiles for email and password
+            # 🔥 FIX: Cast kol_serial to string (serial column is VARCHAR)
             cursor.execute("""
                 SELECT email, password, nickname
                 FROM kol_profiles
                 WHERE serial = %s
-            """, (kol_serial,))
+            """, (str(kol_serial),))
 
             kol_profile = cursor.fetchone()
 
