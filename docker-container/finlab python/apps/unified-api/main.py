@@ -2565,18 +2565,44 @@ async def create_posting(request: Request):
         body = await request.json()
         logger.info(f"貼文內容: {body}")
 
+        # 🔥 Validate kol_serial is provided
+        kol_serial_raw = body.get('kol_serial')
+        if not kol_serial_raw:
+            logger.error(f"❌ Missing kol_serial in /api/posting request: {body}")
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "success": False,
+                    "message": "kol_serial is required",
+                    "timestamp": get_current_time().isoformat()
+                }
+            )
+
+        try:
+            kol_serial = int(kol_serial_raw)
+        except (ValueError, TypeError):
+            logger.error(f"❌ Invalid kol_serial format: {kol_serial_raw}")
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "success": False,
+                    "message": f"Invalid kol_serial format: {kol_serial_raw}",
+                    "timestamp": get_current_time().isoformat()
+                }
+            )
+
         # 生成唯一的 post_id
         import uuid
         post_id = str(uuid.uuid4())
-        
+
         # 準備插入數據
         post_data = {
             'post_id': post_id,
             'created_at': get_current_time(),
             'updated_at': get_current_time(),
             'session_id': body.get('session_id', 1),
-            'kol_serial': body.get('kol_serial', 200),
-            'kol_nickname': body.get('kol_nickname', 'KOL-200'),
+            'kol_serial': kol_serial,
+            'kol_nickname': body.get('kol_nickname', f'KOL-{kol_serial}'),
             'kol_persona': body.get('kol_persona', '分析師'),
             'stock_code': body.get('stock_code', ''),
             'stock_name': body.get('stock_name', ''),
