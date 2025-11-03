@@ -120,8 +120,16 @@ const ManualPostingPage: React.FC = () => {
         name: info.company_name || code,
         industry: info.industry || '未分類'
       }));
-      setStocks(stocksArray);
-      setStockSearchResults(stocksArray); // 初始化搜尋結果
+
+      // 🔥 FIX: Add TWA00 大盤 at the beginning
+      const allStocks = [
+        { code: 'TWA00', name: '台灣加權指數 (大盤)', industry: '指數' },
+        ...stocksArray
+      ];
+
+      setStocks(allStocks);
+      setStockSearchResults(allStocks); // 初始化搜尋結果包含所有股票
+      console.log(`✅ Loaded ${allStocks.length} stocks (including TWA00)`);
     } catch (error) {
       console.error('載入股票失敗:', error);
       throw error;
@@ -167,31 +175,51 @@ const ManualPostingPage: React.FC = () => {
 
   // 搜尋股票
   const searchStocks = async (query: string) => {
-    // Add minimum length check to prevent 422 errors
-    if (!query || query.trim().length < 2) {
+    // 🔥 FIX: If empty query, show all stocks
+    if (!query || query.trim().length === 0) {
       setStockSearchResults(stocks);
       return stocks;
     }
 
-    try {
-      const trimmedQuery = query.trim();
-      const response = await fetch(`${API_BASE}/api/search-stocks-by-keywords?keyword=${encodeURIComponent(trimmedQuery)}`);
+    const trimmedQuery = query.trim().toLowerCase();
 
-      if (!response.ok) {
-        console.warn(`Stock search failed with ${response.status}, using local stock list`);
-        setStockSearchResults(stocks);
-        return stocks;
+    // 🔥 FIX: Use local search for better UX (immediate results)
+    // Search by code or name
+    const localResults = stocks.filter(stock =>
+      stock.code.toLowerCase().includes(trimmedQuery) ||
+      stock.name.toLowerCase().includes(trimmedQuery)
+    );
+
+    setStockSearchResults(localResults);
+    console.log(`🔍 Local search: "${query}" → ${localResults.length} results`);
+
+    // 🔥 Optional: Try API search in background (for more results)
+    if (trimmedQuery.length >= 2) {
+      try {
+        const response = await fetch(`${API_BASE}/api/search-stocks-by-keywords?keyword=${encodeURIComponent(trimmedQuery)}`);
+
+        if (response.ok) {
+          const result = await response.json();
+          const apiResults = result.data || [];
+
+          // Merge API results with local results (deduplicate)
+          const mergedResults = [...localResults];
+          apiResults.forEach((apiStock: StockInfo) => {
+            if (!mergedResults.some(s => s.code === apiStock.code)) {
+              mergedResults.push(apiStock);
+            }
+          });
+
+          setStockSearchResults(mergedResults);
+          console.log(`✅ API search: "${query}" → ${mergedResults.length} total results`);
+        }
+      } catch (error) {
+        // Keep local results if API fails
+        console.warn('API search failed, using local results:', error);
       }
-
-      const result = await response.json();
-      const data = result.data || [];
-      setStockSearchResults(data);
-      return data;
-    } catch (error) {
-      console.error('搜尋股票失敗:', error);
-      setStockSearchResults(stocks);
-      return stocks;
     }
+
+    return localResults;
   };
 
   // 更新表單資料
