@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
-import { Card, Row, Col, Collapse, Tag, Typography, Space, Input, InputNumber } from 'antd';
-import { 
-  UserOutlined, 
+import { Card, Row, Col, Collapse, Tag, Typography, Space, Input, InputNumber, Select } from 'antd';
+import {
+  UserOutlined,
   RobotOutlined
 } from '@ant-design/icons';
 import { KOLSettingsProps } from '../../types/kol-types';
 
 const { TextArea } = Input;
+const { Option } = Select;
 
 const { Panel } = Collapse;
 const { Text, Paragraph } = Typography;
@@ -420,12 +421,55 @@ const KOLSettings: React.FC<KOLSettingsProps> = ({
               <Card size="small" title="模型設定" style={{ marginBottom: '16px' }}>
                 {isEditMode ? (
                   <Space direction="vertical" size="small" style={{ width: '100%' }}>
-                    <Input
+                    <Select
                       value={kolInfo.model_id}
-                      onChange={(e) => onKolInfoChange?.('model_id', e.target.value)}
-                      placeholder="模型 ID"
-                      style={{ fontSize: '12px' }}
-                    />
+                      onChange={(value) => onKolInfoChange?.('model_id', value)}
+                      placeholder="選擇模型"
+                      style={{ width: '100%', fontSize: '12px' }}
+                    >
+                      <Option value="o3">
+                        <Space>
+                          <span>o3</span>
+                          <Tag color="cyan">🧠 推理</Tag>
+                        </Space>
+                      </Option>
+                      <Option value="o3-mini">
+                        <Space>
+                          <span>o3-mini</span>
+                          <Tag color="blue">推理</Tag>
+                        </Space>
+                      </Option>
+                      <Option value="gpt-4o-mini">
+                        <Space>
+                          <span>gpt-4o-mini</span>
+                          <Tag color="green">推薦</Tag>
+                        </Space>
+                      </Option>
+                      <Option value="gpt-4o">
+                        <Space>
+                          <span>gpt-4o</span>
+                          <Tag color="lime">多模態</Tag>
+                        </Space>
+                      </Option>
+                      <Option value="gpt-4-turbo">
+                        <Space>
+                          <span>gpt-4-turbo</span>
+                          <Tag color="gold">穩定</Tag>
+                        </Space>
+                      </Option>
+                      <Option value="gpt-4">
+                        <Space>
+                          <span>gpt-4</span>
+                          <Tag color="default">經典</Tag>
+                        </Space>
+                      </Option>
+                      <Option value="gpt-3.5-turbo">
+                        <Space>
+                          <span>gpt-3.5-turbo</span>
+                          <Tag color="default">經濟</Tag>
+                        </Space>
+                      </Option>
+                    </Select>
                     <InputNumber
                       value={kolInfo.model_temp}
                       onChange={(value) => onKolInfoChange?.('model_temp', value)}
