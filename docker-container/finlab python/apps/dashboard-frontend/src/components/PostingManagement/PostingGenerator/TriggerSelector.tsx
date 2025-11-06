@@ -2044,14 +2044,24 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
         <Card title="股票代號列表" size="small" style={{ marginTop: 16 }}>
           <StockCodeListInput
             value={value.stock_codes || []}
-            onChange={(codes) => onChange({
-              ...value,
-              stock_codes: codes
-            })}
-            onStockNamesChange={(names) => onChange({
-              ...value,
-              stock_names: names
-            })}
+            onChange={(codes) => {
+              // 🔥 FIX: When codes change, also update names from mapping
+              const names = codes.map(code =>
+                getStockNameMapping()[code] || `股票${code}`
+              );
+              onChange({
+                ...value,
+                stock_codes: codes,
+                stock_names: names
+              });
+            }}
+            onStockNamesChange={(names) => {
+              // 🔥 FIX: Update names separately if component provides them
+              onChange({
+                ...value,
+                stock_names: names
+              });
+            }}
           />
         </Card>
       )}
@@ -2062,10 +2072,16 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
           <CustomStockInput
             value={value.stock_codes || []}
             onChange={async (codes) => {
-              // Update stock codes
+              // 🔥 FIX: Build stock names array alongside stock codes
+              const stockNames = codes.map(code =>
+                getStockNameMapping()[code] || `股票${code}`
+              );
+
+              // 🔥 FIX: Update both stock codes AND stock names
               onChange({
                 ...value,
-                stock_codes: codes
+                stock_codes: codes,
+                stock_names: stockNames
               });
 
               // Fetch stock details and populate stockCountResult table
