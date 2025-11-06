@@ -754,8 +754,10 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
   // 單個股票選擇
   const handleStockSelection = (stockCode: string, isSelected: boolean) => {
     const currentStocks = value.stock_codes || [];
+    const currentNames = value.stock_names || [];
     let newSelectedStocks: string[];
-    
+    let newSelectedNames: string[];
+
     if (isSelected) {
       // 檢查是否已達到最大選擇數量
       const maxSelection = value.stockCountLimit || 20;
@@ -763,25 +765,33 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
         message.warning(`最多只能選擇 ${maxSelection} 支股票`);
         return;
       }
-      
+
       // 添加股票
       if (!currentStocks.includes(stockCode)) {
         newSelectedStocks = [...currentStocks, stockCode];
-        message.success(`已選擇: ${stockCode}`);
+        // 🔥 FIX: Also add stock name from companyNameMapping
+        const stockName = companyNameMapping[stockCode] || `股票${stockCode}`;
+        newSelectedNames = [...currentNames, stockName];
+        message.success(`已選擇: ${stockName}(${stockCode})`);
       } else {
         newSelectedStocks = currentStocks;
+        newSelectedNames = currentNames;
         message.info(`股票 ${stockCode} 已經被選擇`);
       }
     } else {
       // 移除股票
+      const indexToRemove = currentStocks.indexOf(stockCode);
       newSelectedStocks = currentStocks.filter(code => code !== stockCode);
+      // 🔥 FIX: Also remove corresponding stock name
+      newSelectedNames = currentNames.filter((_, index) => index !== indexToRemove);
       message.info(`已取消選擇: ${stockCode}`);
     }
-    
-    // 更新配置
+
+    // 🔥 FIX: Update both stock_codes AND stock_names
     onChange({
       ...value,
-      stock_codes: newSelectedStocks
+      stock_codes: newSelectedStocks,
+      stock_names: newSelectedNames
     });
   };
 
