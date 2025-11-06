@@ -1012,7 +1012,7 @@ const KOLManagementPage: React.FC = () => {
         okText="確認創建"
         cancelText="返回修改"
         width={800}
-        confirmLoading={saving}
+        confirmLoading={creating}
       >
         <Alert
           message="請檢查並完善所有欄位"
