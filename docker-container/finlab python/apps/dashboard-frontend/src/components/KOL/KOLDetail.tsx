@@ -70,9 +70,8 @@ const KOLDetail: React.FC = () => {
     if (!serial) return;
 
     try {
-      // Call Railway API directly for KOL posts endpoint
-      const RAILWAY_API_URL = import.meta.env.VITE_RAILWAY_API_URL || 'https://forumautoposter-production.up.railway.app';
-      const response = await axios.get(`${RAILWAY_API_URL}/api/dashboard/kols/${serial}/posts`, {
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+      const response = await axios.get(`${API_BASE_URL}/api/kol/${serial}/posts`, {
         params: { page, page_size: pageSize }
       });
 
@@ -81,7 +80,7 @@ const KOLDetail: React.FC = () => {
       }
     } catch (err: any) {
       console.error('獲取發文歷史失敗:', err);
-      message.error('獲取發文歷史失敗');
+      // Don't show error, it's handled in parent
     }
   };
 
@@ -111,12 +110,40 @@ const KOLDetail: React.FC = () => {
     }
   }, [serial]);
 
-  // 刷新數據
-  const handleRefresh = () => {
-    fetchKOLDetail();
-    fetchPosts();
-    fetchInteractions();
-    message.success('數據已刷新');
+  // 刷新數據 (包含刷新互動數據)
+  const handleRefresh = async () => {
+    if (!serial) return;
+
+    const hideLoading = message.loading('正在刷新互動數據...', 0);
+    try {
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+
+      // 1. 先刷新所有文章的互動數據
+      const refreshResponse = await axios.post(`${API_BASE_URL}/api/kol/${serial}/refresh-interactions`);
+
+      if (refreshResponse.data && refreshResponse.data.success) {
+        message.success(
+          `成功更新 ${refreshResponse.data.updated_count} 篇文章的互動數據${
+            refreshResponse.data.failed_count > 0
+              ? `，${refreshResponse.data.failed_count} 篇失敗`
+              : ''
+          }`
+        );
+      } else {
+        message.warning('部分互動數據刷新失敗');
+      }
+
+      // 2. 重新載入所有數據
+      await fetchKOLDetail();
+      await fetchPosts();
+      await fetchInteractions();
+
+    } catch (error: any) {
+      console.error('刷新失敗:', error);
+      message.error(error.response?.data?.error || '刷新互動數據失敗');
+    } finally {
+      hideLoading();
+    }
   };
 
   // 返回 KOL 列表

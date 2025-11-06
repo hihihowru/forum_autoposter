@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Row, Col, Statistic, Select, Spin, Alert, message } from 'antd';
 import { Line } from '@ant-design/charts';
-import { 
-  LikeOutlined, 
+import {
+  LikeOutlined,
   BarChartOutlined
 } from '@ant-design/icons';
 import { InteractionChartProps, InteractionTrend } from '../../types/kol-types';
-import api from '../../services/api';
+import axios from 'axios';
 
 const { Option } = Select;
 
@@ -22,19 +22,27 @@ const InteractionChart: React.FC<InteractionChartProps> = ({
   // 載入互動數據
   const fetchInteractionData = async (timeframe: string) => {
     if (!memberId) return;
-    
+
     setChartLoading(true);
     try {
-      const response = await api.get(`/api/dashboard/kols/${memberId}/interactions`, {
-        params: { timeframe }
-      });
-      
-      if (response.data.success) {
-        setInteractionData(response.data.data);
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+      const response = await axios.get(`${API_BASE_URL}/api/kol/${memberId}/stats`);
+
+      if (response.data && response.data.success) {
+        // 使用 interaction_trend 數據
+        const trendData = response.data.data.interaction_trend || [];
+        setInteractionData({
+          interaction_trend: trendData,
+          interaction_summary: {
+            avg_likes_per_post: response.data.data.core_metrics?.avg_likes || 0,
+            avg_comments_per_post: response.data.data.core_metrics?.avg_comments || 0,
+            avg_interaction_rate: response.data.data.core_metrics?.avg_interaction_rate || 0
+          }
+        });
       }
     } catch (err: any) {
       console.error('獲取互動數據失敗:', err);
-      message.error('獲取互動數據失敗');
+      // Don't show error message, just log it
     } finally {
       setChartLoading(false);
     }
