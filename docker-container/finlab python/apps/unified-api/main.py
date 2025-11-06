@@ -5430,30 +5430,34 @@ async def get_kol_stats(serial: str):
             """, (int(serial),))
             core_metrics = cursor.fetchone()
 
-            # 2. 發文趨勢（最近30天，按日分組）
+            # 2. 發文趨勢（最近3個月，按日分組）
             cursor.execute("""
                 SELECT
                     DATE(created_at) as date,
                     COUNT(*) as count
                 FROM post_records
                 WHERE kol_serial = %s
-                  AND created_at >= CURRENT_DATE - INTERVAL '30 days'
+                  AND created_at >= CURRENT_DATE - INTERVAL '3 months'
                 GROUP BY DATE(created_at)
                 ORDER BY DATE(created_at) ASC
             """, (int(serial),))
             posting_trend = cursor.fetchall()
 
-            # 3. 互動趨勢（最近30天，按日分組）
+            # 3. 互動趨勢（最近3個月，按日分組）
             cursor.execute("""
                 SELECT
                     DATE(created_at) as date,
-                    COALESCE(SUM(likes), 0) as likes,
-                    COALESCE(SUM(comments), 0) as comments,
-                    COALESCE(SUM(shares), 0) as shares
+                    COUNT(*) as post_count,
+                    COALESCE(SUM(likes), 0) as total_likes,
+                    COALESCE(SUM(comments), 0) as total_comments,
+                    COALESCE(SUM(shares), 0) as total_shares,
+                    COALESCE(AVG(likes), 0) as avg_likes,
+                    COALESCE(AVG(comments), 0) as avg_comments,
+                    COALESCE(AVG(shares), 0) as avg_shares
                 FROM post_records
                 WHERE kol_serial = %s
                   AND status = 'published'
-                  AND created_at >= CURRENT_DATE - INTERVAL '30 days'
+                  AND created_at >= CURRENT_DATE - INTERVAL '3 months'
                 GROUP BY DATE(created_at)
                 ORDER BY DATE(created_at) ASC
             """, (int(serial),))
