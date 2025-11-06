@@ -5248,6 +5248,198 @@ async def get_kol_interactions(serial: str):
             return_db_connection(conn)
 
 
+@app.get("/api/kol/{serial}/stats")
+async def get_kol_stats(serial: str):
+    """獲取 KOL 的完整統計數據（包含圖表所需數據）"""
+    logger.info(f"收到 get_kol_stats 請求 - Serial: {serial}")
+
+    conn = None
+    try:
+        if not db_pool:
+            logger.warning("數據庫連接不可用")
+            return {
+                "success": False,
+                "error": "數據庫連接不可用"
+            }
+
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            # 1. 核心指標
+            cursor.execute("""
+                SELECT
+                    COUNT(*) as total_posts,
+                    COUNT(CASE WHEN status = 'published' THEN 1 END) as published_posts,
+                    COUNT(CASE WHEN status = 'draft' THEN 1 END) as draft_posts,
+                    COALESCE(AVG(CASE WHEN status = 'published' THEN likes END), 0) as avg_likes,
+                    COALESCE(AVG(CASE WHEN status = 'published' THEN comments END), 0) as avg_comments,
+                    COALESCE(AVG(CASE WHEN status = 'published' THEN shares END), 0) as avg_shares,
+                    COALESCE(SUM(CASE WHEN status = 'published' THEN likes + comments + shares END), 0) as total_interactions
+                FROM post_records
+                WHERE kol_serial = %s
+            """, (int(serial),))
+            core_metrics = cursor.fetchone()
+
+            # 2. 發文趨勢（最近30天，按日分組）
+            cursor.execute("""
+                SELECT
+                    DATE(created_at) as date,
+                    COUNT(*) as count
+                FROM post_records
+                WHERE kol_serial = %s
+                  AND created_at >= CURRENT_DATE - INTERVAL '30 days'
+                GROUP BY DATE(created_at)
+                ORDER BY DATE(created_at) ASC
+            """, (int(serial),))
+            posting_trend = cursor.fetchall()
+
+            # 3. 互動趨勢（最近30天，按日分組）
+            cursor.execute("""
+                SELECT
+                    DATE(created_at) as date,
+                    COALESCE(SUM(likes), 0) as likes,
+                    COALESCE(SUM(comments), 0) as comments,
+                    COALESCE(SUM(shares), 0) as shares
+                FROM post_records
+                WHERE kol_serial = %s
+                  AND status = 'published'
+                  AND created_at >= CURRENT_DATE - INTERVAL '30 days'
+                GROUP BY DATE(created_at)
+                ORDER BY DATE(created_at) ASC
+            """, (int(serial),))
+            interaction_trend = cursor.fetchall()
+
+            # 4. Top 10 表現最佳文章
+            cursor.execute("""
+                SELECT
+                    post_id,
+                    title,
+                    likes,
+                    comments,
+                    shares,
+                    (likes + comments + shares) as total_interactions,
+                    created_at,
+                    cmoney_post_url
+                FROM post_records
+                WHERE kol_serial = %s
+                  AND status = 'published'
+                ORDER BY (likes + comments + shares) DESC
+                LIMIT 10
+            """, (int(serial),))
+            top_posts = cursor.fetchall()
+
+            # 5. Bottom 10 表現最差文章
+            cursor.execute("""
+                SELECT
+                    post_id,
+                    title,
+                    likes,
+                    comments,
+                    shares,
+                    (likes + comments + shares) as total_interactions,
+                    created_at,
+                    cmoney_post_url
+                FROM post_records
+                WHERE kol_serial = %s
+                  AND status = 'published'
+                ORDER BY (likes + comments + shares) ASC
+                LIMIT 10
+            """, (int(serial),))
+            bottom_posts = cursor.fetchall()
+
+            # 6. 話題統計（Topic）
+            cursor.execute("""
+                SELECT
+                    topic_title,
+                    COUNT(*) as count,
+                    COALESCE(AVG(likes + comments + shares), 0) as avg_interaction
+                FROM post_records
+                WHERE kol_serial = %s
+                  AND status = 'published'
+                  AND topic_title IS NOT NULL
+                GROUP BY topic_title
+                ORDER BY count DESC
+                LIMIT 20
+            """, (int(serial),))
+            topic_stats = cursor.fetchall()
+
+            # 7. 股票統計（Stock）
+            cursor.execute("""
+                SELECT
+                    stock_code,
+                    stock_name,
+                    COUNT(*) as count,
+                    COALESCE(AVG(likes + comments + shares), 0) as avg_interaction
+                FROM post_records
+                WHERE kol_serial = %s
+                  AND status = 'published'
+                  AND stock_code IS NOT NULL
+                  AND stock_code != '0000'
+                GROUP BY stock_code, stock_name
+                ORDER BY count DESC
+                LIMIT 20
+            """, (int(serial),))
+            stock_stats = cursor.fetchall()
+
+            # 8. 時間熱力圖（小時 + 星期）
+            cursor.execute("""
+                SELECT
+                    EXTRACT(HOUR FROM created_at) as hour,
+                    EXTRACT(DOW FROM created_at) as day_of_week,
+                    COALESCE(AVG(likes + comments + shares), 0) as avg_interaction,
+                    COUNT(*) as count
+                FROM post_records
+                WHERE kol_serial = %s
+                  AND status = 'published'
+                GROUP BY EXTRACT(HOUR FROM created_at), EXTRACT(DOW FROM created_at)
+                ORDER BY day_of_week, hour
+            """, (int(serial),))
+            time_heatmap = cursor.fetchall()
+
+            # 9. 成長趨勢（月度統計，最近6個月）
+            cursor.execute("""
+                SELECT
+                    TO_CHAR(created_at, 'YYYY-MM') as month,
+                    COUNT(*) as count,
+                    COALESCE(SUM(likes + comments + shares), 0) as total_interactions
+                FROM post_records
+                WHERE kol_serial = %s
+                  AND status = 'published'
+                  AND created_at >= CURRENT_DATE - INTERVAL '6 months'
+                GROUP BY TO_CHAR(created_at, 'YYYY-MM')
+                ORDER BY month ASC
+            """, (int(serial),))
+            growth_trend = cursor.fetchall()
+
+            logger.info(f"查詢到完整統計數據 - Serial: {serial}")
+
+            return {
+                "success": True,
+                "data": {
+                    "core_metrics": dict(core_metrics) if core_metrics else {},
+                    "posting_trend": [dict(row) for row in posting_trend],
+                    "interaction_trend": [dict(row) for row in interaction_trend],
+                    "top_posts": [dict(row) for row in top_posts],
+                    "bottom_posts": [dict(row) for row in bottom_posts],
+                    "topic_stats": [dict(row) for row in topic_stats],
+                    "stock_stats": [dict(row) for row in stock_stats],
+                    "time_heatmap": [dict(row) for row in time_heatmap],
+                    "growth_trend": [dict(row) for row in growth_trend]
+                }
+            }
+
+    except Exception as e:
+        logger.error(f"查詢 KOL 統計數據失敗: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {
+            "success": False,
+            "error": str(e)
+        }
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+
 @app.post("/api/kol/test-login")
 async def test_kol_login(request: Request):
     """
@@ -5889,6 +6081,120 @@ async def delete_kol(serial: str):
     finally:
         if conn:
             return_db_connection(conn)
+
+@app.put("/api/kol/{serial}")
+async def update_kol(serial: str, request: Request):
+    """
+    更新 KOL 所有欄位
+
+    Parameters:
+    - serial: KOL 序號
+    - request body: 任何 kol_profiles 表中的可更新欄位
+    """
+    logger.info(f"收到更新 KOL 請求: serial={serial}")
+
+    conn = None
+    try:
+        data = await request.json()
+        logger.info(f"接收到更新數據: {data}")
+
+        # 檢查數據庫連接
+        if not db_pool:
+            logger.warning("數據庫連接不可用")
+            return {
+                "success": False,
+                "error": "數據庫連接不可用",
+                "timestamp": get_current_time().isoformat()
+            }
+
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            # 檢查 KOL 是否存在
+            cursor.execute("SELECT serial, nickname FROM kol_profiles WHERE serial = %s", (serial,))
+            existing_kol = cursor.fetchone()
+
+            if not existing_kol:
+                logger.warning(f"⚠️ KOL serial {serial} 不存在")
+                return {
+                    "success": False,
+                    "error": f"KOL serial {serial} 不存在",
+                    "timestamp": get_current_time().isoformat()
+                }
+
+            # 建立可更新的欄位列表（排除不應手動更新的欄位）
+            excluded_fields = ['id', 'serial', 'created_time', 'last_updated']
+
+            # 特別處理 JSONB 欄位
+            jsonb_fields = [
+                'content_types', 'content_style_probabilities',
+                'analysis_depth_probabilities', 'content_length_probabilities'
+            ]
+
+            # 建立 UPDATE SQL
+            update_fields = []
+            params = []
+
+            for key, value in data.items():
+                if key not in excluded_fields and value is not None:
+                    import json
+                    if key in jsonb_fields:
+                        # JSONB 欄位需要序列化
+                        if isinstance(value, (dict, list)):
+                            update_fields.append(f"{key} = %s")
+                            params.append(json.dumps(value))
+                        else:
+                            update_fields.append(f"{key} = %s")
+                            params.append(value)
+                    else:
+                        update_fields.append(f"{key} = %s")
+                        params.append(value)
+
+            if not update_fields:
+                return {
+                    "success": False,
+                    "error": "沒有可更新的欄位",
+                    "timestamp": get_current_time().isoformat()
+                }
+
+            # 添加 last_updated
+            update_fields.append("last_updated = NOW()")
+            params.append(serial)
+
+            update_sql = f"""
+                UPDATE kol_profiles
+                SET {', '.join(update_fields)}
+                WHERE serial = %s
+            """
+
+            cursor.execute(update_sql, params)
+            conn.commit()
+
+            logger.info(f"✅ KOL 更新成功: Serial={serial}, 更新欄位={list(data.keys())}")
+
+            # 返回更新後的數據
+            cursor.execute("SELECT * FROM kol_profiles WHERE serial = %s", (serial,))
+            updated_kol = cursor.fetchone()
+
+            return {
+                "success": True,
+                "message": f"KOL 更新成功 (Serial: {serial})",
+                "data": dict(updated_kol) if updated_kol else None,
+                "timestamp": get_current_time().isoformat()
+            }
+
+    except Exception as e:
+        logger.error(f"更新 KOL 失敗: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {
+            "success": False,
+            "error": str(e),
+            "timestamp": get_current_time().isoformat()
+        }
+    finally:
+        if conn:
+            return_db_connection(conn)
+
 
 @app.put("/api/kol/{serial}/personalization")
 async def update_kol_personalization(serial: str, request: Request):
