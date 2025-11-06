@@ -10,6 +10,7 @@ import TrendChart from './TrendChart';
 import { KOLInfo, KOLStatistics, PostHistory as PostHistoryType, InteractionTrend } from '../../types/kol-types';
 import api from '../../services/api';
 import axios from 'axios';
+import { getApiBaseUrl } from '../../config/api';
 
 const KOLDetail: React.FC = () => {
   const { serial } = useParams<{ serial: string }>();
@@ -37,7 +38,7 @@ const KOLDetail: React.FC = () => {
     setError(null);
 
     try {
-      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+      const API_BASE_URL = getApiBaseUrl();
 
       // Fetch KOL detail from unified API
       const response = await axios.get(`${API_BASE_URL}/api/kol/${serial}`);
@@ -69,7 +70,7 @@ const KOLDetail: React.FC = () => {
     if (!serial) return;
 
     try {
-      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+      const API_BASE_URL = getApiBaseUrl();
       const response = await axios.get(`${API_BASE_URL}/api/kol/${serial}/posts`, {
         params: { page, page_size: pageSize }
       });
@@ -88,7 +89,7 @@ const KOLDetail: React.FC = () => {
     if (!serial) return;
 
     try {
-      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+      const API_BASE_URL = getApiBaseUrl();
       const response = await axios.get(`${API_BASE_URL}/api/kol/${serial}/stats`);
 
       if (response.data && response.data.success && response.data.data) {
@@ -114,7 +115,7 @@ const KOLDetail: React.FC = () => {
 
     const hideLoading = message.loading('正在刷新互動數據...', 0);
     try {
-      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+      const API_BASE_URL = getApiBaseUrl();
 
       // 1. 先刷新所有文章的互動數據
       const refreshResponse = await axios.post(`${API_BASE_URL}/api/kol/${serial}/refresh-interactions`);
@@ -178,7 +179,7 @@ const KOLDetail: React.FC = () => {
 
     setSaving(true);
     try {
-      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+      const API_BASE_URL = getApiBaseUrl();
       const response = await axios.put(`${API_BASE_URL}/api/kol/${serial}`, editingKolInfo);
 
       if (response.data && response.data.success) {

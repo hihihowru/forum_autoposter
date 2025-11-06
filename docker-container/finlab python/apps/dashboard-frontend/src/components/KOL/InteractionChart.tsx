@@ -7,6 +7,7 @@ import {
 } from '@ant-design/icons';
 import { InteractionChartProps, InteractionTrend } from '../../types/kol-types';
 import axios from 'axios';
+import { getApiBaseUrl } from '../../config/api';
 
 const { Option } = Select;
 
@@ -25,7 +26,7 @@ const InteractionChart: React.FC<InteractionChartProps> = ({
 
     setChartLoading(true);
     try {
-      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+      const API_BASE_URL = getApiBaseUrl();
       const response = await axios.get(`${API_BASE_URL}/api/kol/${memberId}/stats`);
 
       if (response.data && response.data.success) {
