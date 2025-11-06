@@ -129,14 +129,11 @@ interface KOLProfile {
 const KOLManagementPage: React.FC = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [kolProfiles, setKolProfiles] = useState<KOLProfile[]>([]);
-  const [selectedKOL, setSelectedKOL] = useState<KOLProfile | null>(null);
-  const [modalVisible, setModalVisible] = useState(false);
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [reviewModalVisible, setReviewModalVisible] = useState(false);
   const [aiGeneratedProfile, setAiGeneratedProfile] = useState<any>(null);
-  const [form] = Form.useForm();
   const [createForm] = Form.useForm();
   const [confirmForm] = Form.useForm();
   const [confirmModalVisible, setConfirmModalVisible] = useState(false);
@@ -203,13 +200,6 @@ const KOLManagementPage: React.FC = () => {
     }
   };
 
-  // 選擇KOL
-  const handleSelectKOL = (kol: KOLProfile) => {
-    setSelectedKOL(kol);
-    form.setFieldsValue(kol);
-    setModalVisible(true);
-  };
-
   // 查看KOL詳情
   const handleViewKOL = (kol: KOLProfile) => {
     // 使用 serial 導航到詳情頁
@@ -262,54 +252,6 @@ const KOLManagementPage: React.FC = () => {
         }
       },
     });
-  };
-
-  // 保存KOL設定
-  const handleSave = async () => {
-    try {
-      const values = await form.validateFields();
-      setSaving(true);
-
-      const response = await axios.put(`${API_BASE_URL}/api/kol/${selectedKOL?.serial}/personalization`, {
-        content_style_probabilities: values.content_style_probabilities,
-        analysis_depth_probabilities: values.analysis_depth_probabilities,
-        content_length_probabilities: values.content_length_probabilities
-      });
-
-      // Show success modal with details
-      Modal.success({
-        title: '保存成功',
-        content: (
-          <div>
-            <p>{response.data.message || 'KOL 個人化設定已成功保存'}</p>
-            <p style={{ marginTop: 8, fontSize: '12px', color: '#666' }}>
-              KOL: {selectedKOL?.nickname} (Serial: {selectedKOL?.serial})
-            </p>
-          </div>
-        ),
-        onOk: () => {
-          setModalVisible(false);
-          loadKOLProfiles();
-        }
-      });
-    } catch (error: any) {
-      console.error('保存設定失敗:', error);
-
-      // Show error modal with details
-      Modal.error({
-        title: '保存失敗',
-        content: (
-          <div>
-            <p>KOL 個人化設定保存失敗</p>
-            <p style={{ marginTop: 8, fontSize: '12px', color: '#ff4d4f' }}>
-              錯誤訊息: {error.response?.data?.error || error.message || '未知錯誤'}
-            </p>
-          </div>
-        )
-      });
-    } finally {
-      setSaving(false);
-    }
   };
 
   // 打開創建 KOL Modal
@@ -479,7 +421,7 @@ const KOLManagementPage: React.FC = () => {
   // 實際執行創建（確認後）
   const proceedWithCreation = async (values: any) => {
     try {
-      setSaving(true);
+      setCreating(true);
       console.log('🚀 開始創建 KOL...');
 
       const payload = {
@@ -557,7 +499,7 @@ const KOLManagementPage: React.FC = () => {
       const errorMsg = error.response?.data?.error || error.message || '創建 KOL 失敗';
       message.error(errorMsg);
     } finally {
-      setSaving(false);
+      setCreating(false);
       console.log('🔚 創建 KOL 流程結束');
     }
   };
@@ -572,36 +514,6 @@ const KOLManagementPage: React.FC = () => {
       message.error('確認失敗');
     }
   };
-
-  // 機率滑塊組件
-  const ProbabilitySlider = ({ 
-    name, 
-    label, 
-    value, 
-    color 
-  }: { 
-    name: string; 
-    label: string; 
-    value: number; 
-    color: string; 
-  }) => (
-    <Form.Item name={name} label={label}>
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-          <Text strong>{label}</Text>
-          <Text style={{ color }}>{(value * 100).toFixed(1)}%</Text>
-        </div>
-        <Slider
-          min={0}
-          max={1}
-          step={0.01}
-          value={value}
-          trackStyle={{ backgroundColor: color }}
-          handleStyle={{ borderColor: color }}
-        />
-      </div>
-    </Form.Item>
-  );
 
   // 表格列定義
   const columns = [
@@ -662,23 +574,16 @@ const KOLManagementPage: React.FC = () => {
     {
       title: '操作',
       key: 'action',
-      width: 220,
+      width: 150,
       render: (_, record: KOLProfile) => (
         <Space size="small">
           <Button
+            type="primary"
             size="small"
             icon={<EyeOutlined />}
             onClick={() => handleViewKOL(record)}
           >
             查看
-          </Button>
-          <Button
-            type="primary"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleSelectKOL(record)}
-          >
-            編輯
           </Button>
           <Button
             danger
@@ -784,400 +689,6 @@ const KOLManagementPage: React.FC = () => {
         />
       </Card>
 
-      {/* KOL編輯Modal */}
-      <Modal
-        title={
-          <div>
-            <UserOutlined style={{ marginRight: 8 }} />
-            {selectedKOL?.nickname} ({selectedKOL?.serial}) - {selectedKOL?.persona}
-          </div>
-        }
-        open={modalVisible}
-        onCancel={() => setModalVisible(false)}
-        width={1000}
-        footer={[
-          <Button key="cancel" onClick={() => setModalVisible(false)}>
-            取消
-          </Button>,
-          <Button 
-            key="save" 
-            type="primary" 
-            icon={<SaveOutlined />}
-            onClick={handleSave}
-            loading={saving}
-          >
-            保存設定
-          </Button>,
-        ]}
-      >
-        <Form form={form} layout="vertical">
-          <Tabs defaultActiveKey="personalization">
-            {/* 個人化設定 */}
-            <TabPane tab="個人化設定" key="personalization">
-              <Alert
-                message="調整KOL的內容生成機率參數"
-                type="info"
-                showIcon
-                style={{ marginBottom: 24 }}
-              />
-              
-              <Row gutter={24}>
-                <Col span={12}>
-                  <Card title="📝 內容風格機率" size="small">
-                    <ProbabilitySlider
-                      name={['content_style_probabilities', 'technical']}
-                      label="技術分析"
-                      value={selectedKOL?.content_style_probabilities?.technical || 0.3}
-                      color="#1890ff"
-                    />
-                    <ProbabilitySlider
-                      name={['content_style_probabilities', 'casual']}
-                      label="輕鬆隨性"
-                      value={selectedKOL?.content_style_probabilities?.casual || 0.4}
-                      color="#52c41a"
-                    />
-                  </Card>
-                </Col>
-                <Col span={12}>
-                  <Card title="📝 內容風格機率 (續)" size="small">
-                    <ProbabilitySlider
-                      name={['content_style_probabilities', 'professional']}
-                      label="專業商務"
-                      value={selectedKOL?.content_style_probabilities?.professional || 0.2}
-                      color="#faad14"
-                    />
-                    <ProbabilitySlider
-                      name={['content_style_probabilities', 'humorous']}
-                      label="幽默風趣"
-                      value={selectedKOL?.content_style_probabilities?.humorous || 0.1}
-                      color="#f5222d"
-                    />
-                  </Card>
-                </Col>
-              </Row>
-
-              <Row gutter={24} style={{ marginTop: 16 }}>
-                <Col span={8}>
-                  <Card title="🔍 分析深度機率" size="small">
-                    <ProbabilitySlider
-                      name={['analysis_depth_probabilities', 'basic']}
-                      label="基礎分析"
-                      value={selectedKOL?.analysis_depth_probabilities?.basic || 0.2}
-                      color="#722ed1"
-                    />
-                    <ProbabilitySlider
-                      name={['analysis_depth_probabilities', 'detailed']}
-                      label="詳細分析"
-                      value={selectedKOL?.analysis_depth_probabilities?.detailed || 0.5}
-                      color="#13c2c2"
-                    />
-                    <ProbabilitySlider
-                      name={['analysis_depth_probabilities', 'comprehensive']}
-                      label="全面分析"
-                      value={selectedKOL?.analysis_depth_probabilities?.comprehensive || 0.3}
-                      color="#eb2f96"
-                    />
-                  </Card>
-                </Col>
-                <Col span={16}>
-                  <Card title="📏 文章長度機率" size="small">
-                    <Row gutter={16}>
-                      <Col span={12}>
-                        <ProbabilitySlider
-                          name={['content_length_probabilities', 'short']}
-                          label="簡短 (100字)"
-                          value={selectedKOL?.content_length_probabilities?.short || 0.1}
-                          color="#fa8c16"
-                        />
-                        <ProbabilitySlider
-                          name={['content_length_probabilities', 'medium']}
-                          label="中等 (200字)"
-                          value={selectedKOL?.content_length_probabilities?.medium || 0.4}
-                          color="#52c41a"
-                        />
-                        <ProbabilitySlider
-                          name={['content_length_probabilities', 'long']}
-                          label="詳細 (400字)"
-                          value={selectedKOL?.content_length_probabilities?.long || 0.3}
-                          color="#1890ff"
-                        />
-                      </Col>
-                      <Col span={12}>
-                        <ProbabilitySlider
-                          name={['content_length_probabilities', 'extended']}
-                          label="深度 (600字)"
-                          value={selectedKOL?.content_length_probabilities?.extended || 0.15}
-                          color="#722ed1"
-                        />
-                        <ProbabilitySlider
-                          name={['content_length_probabilities', 'comprehensive']}
-                          label="全面 (800字)"
-                          value={selectedKOL?.content_length_probabilities?.comprehensive || 0.05}
-                          color="#eb2f96"
-                        />
-                        <ProbabilitySlider
-                          name={['content_length_probabilities', 'thorough']}
-                          label="徹底 (1000字)"
-                          value={selectedKOL?.content_length_probabilities?.thorough || 0.0}
-                          color="#f5222d"
-                        />
-                      </Col>
-                    </Row>
-                  </Card>
-                </Col>
-              </Row>
-            </TabPane>
-
-            {/* 基本設定 */}
-            <TabPane tab="基本設定" key="basic">
-              <Row gutter={24}>
-                <Col span={12}>
-                  <Form.Item name="nickname" label="暱稱">
-                    <Input />
-                  </Form.Item>
-                  <Form.Item name="persona" label="人設">
-                    <Input />
-                  </Form.Item>
-                  <Form.Item name="status" label="狀態">
-                    <Select>
-                      <Option value="active">啟用</Option>
-                      <Option value="inactive">停用</Option>
-                    </Select>
-                  </Form.Item>
-                  <Form.Item name="owner" label="擁有者">
-                    <Input />
-                  </Form.Item>
-                </Col>
-                <Col span={12}>
-                  <Form.Item name="email" label="Email">
-                    <Input />
-                  </Form.Item>
-                  <Form.Item name="member_id" label="會員ID">
-                    <Input />
-                  </Form.Item>
-                  <Form.Item name="target_audience" label="目標受眾">
-                    <Input />
-                  </Form.Item>
-                  <Form.Item name="notes" label="備註">
-                    <TextArea rows={3} />
-                  </Form.Item>
-                </Col>
-              </Row>
-            </TabPane>
-
-            {/* Prompt設定 */}
-            <TabPane tab="Prompt設定" key="prompt">
-              <Form.Item
-                name="prompt_persona"
-                label="Prompt人設"
-                tooltip="定義 KOL 的角色人設，例如：專業分析師、技術派達人、鄉民代表等"
-                initialValue={["技術分析師：專精於技術指標、K線、均線、KD、MACD等分析，善於從圖表找出買賣時機點"]}
-              >
-                <Select
-                  mode="tags"
-                  placeholder="選擇範本或自訂輸入"
-                  maxTagCount={1}
-                  style={{ width: '100%' }}
-                  dropdownRender={(menu) => (
-                    <>
-                      {menu}
-                      <Divider style={{ margin: '8px 0' }} />
-                      <div style={{ padding: '0 8px 4px', fontSize: '12px', color: '#999' }}>
-                        💡 可選擇範本後編輯，或直接輸入自訂內容
-                      </div>
-                    </>
-                  )}
-                >
-                  <Option value="技術分析師：專精於技術指標、K線、均線、KD、MACD等分析，善於從圖表找出買賣時機點">技術分析師 (技術派)</Option>
-                  <Option value="總經分析師：關注宏觀經濟、GDP、利率、匯率、國際局勢，從大環境判斷市場走向">總經分析師 (總經派)</Option>
-                  <Option value="籌碼分析師：專精於分析主力動向、法人買賣、融資融券、股東結構，找出主力布局的股票">籌碼分析師 (籌碼派)</Option>
-                  <Option value="價值投資者：著重基本面分析、EPS、ROE、本益比，尋找被低估的優質公司長期持有">價值投資者 (基本面派)</Option>
-                  <Option value="新聞解讀者：專門追蹤產業新聞、公司公告、政策變化，從新聞事件挖掘投資機會">新聞解讀者 (新聞派)</Option>
-                  <Option value="鄉民風格：輕鬆幽默的論壇用語，常用PTT/Dcard風格，親切接地氣，樂於分享投資經驗">鄉民風格 (論壇派)</Option>
-                </Select>
-              </Form.Item>
-              <Form.Item
-                name="prompt_style"
-                label="Prompt風格"
-                tooltip="定義分析風格和寫作方式"
-                initialValue={["邏輯清晰：論述結構嚴謹，層次分明，因果關係明確，結論有理有據"]}
-              >
-                <Select
-                  mode="tags"
-                  placeholder="選擇範本或自訂輸入"
-                  maxTagCount={1}
-                  style={{ width: '100%' }}
-                >
-                  <Option value="數據導向：所有論述基於數據和指標，提供量化分析，用圖表輔助說明">數據導向 (量化風格)</Option>
-                  <Option value="邏輯清晰：論述結構嚴謹，層次分明，因果關係明確，結論有理有據">邏輯清晰 (理性風格)</Option>
-                  <Option value="專業術語：使用專業術語和技術名詞，適合有一定投資經驗的讀者">專業術語 (學術風格)</Option>
-                  <Option value="白話易懂：避免艱深術語，用生活化的比喻，讓新手也能看懂">白話易懂 (親民風格)</Option>
-                  <Option value="簡潔扼要：重點式說明，不冗贅，快速傳遞核心觀點">簡潔扼要 (精簡風格)</Option>
-                  <Option value="詳細分析：深入剖析，提供完整背景資訊，多角度探討">詳細分析 (深度風格)</Option>
-                </Select>
-              </Form.Item>
-              <Form.Item
-                name="prompt_guardrails"
-                label="Prompt守則"
-                tooltip="設定限制和規範，確保內容合規"
-                initialValue={["不提供具體買賣建議，不明示買進賣出價位，不保證獲利，僅供參考"]}
-              >
-                <Select
-                  mode="tags"
-                  placeholder="選擇範本或自訂輸入"
-                  maxTagCount={1}
-                  style={{ width: '100%' }}
-                >
-                  <Option value="不提供具體買賣建議，不明示買進賣出價位，不保證獲利，僅供參考">標準守則 (合規)</Option>
-                  <Option value="強調風險管理，提醒投資有風險，建議分散投資，不建議重押單一標的">風險警示 (保守)</Option>
-                  <Option value="基於數據分析，不依賴主觀判斷，避免情緒化用詞，理性客觀">理性客觀 (中性)</Option>
-                  <Option value="尊重不同觀點，不批評其他分析方法，鼓勵多元思考">開放態度 (包容)</Option>
-                </Select>
-              </Form.Item>
-              <Form.Item
-                name="prompt_skeleton"
-                label="Prompt骨架"
-                tooltip="定義文章結構模板"
-                initialValue={["【標題】\n1. 當前狀況\n2. 技術分析\n3. 買賣策略\n4. 風險提醒"]}
-              >
-                <Select
-                  mode="tags"
-                  placeholder="選擇範本或自訂輸入"
-                  maxTagCount={1}
-                  style={{ width: '100%' }}
-                >
-                  <Option value="【標題】\n1. 當前狀況\n2. 技術分析\n3. 買賣策略\n4. 風險提醒">技術分析骨架</Option>
-                  <Option value="【標題】\n1. 總經背景\n2. 產業現況\n3. 個股分析\n4. 投資建議">總經分析骨架</Option>
-                  <Option value="【標題】\n1. 主力動向\n2. 法人買賣\n3. 籌碼解讀\n4. 操作策略">籌碼分析骨架</Option>
-                  <Option value="【標題】\n1. 新聞事件\n2. 影響分析\n3. 相關個股\n4. 短期看法">新聞解讀骨架</Option>
-                  <Option value="【標題】\n觀點分享...\n大家覺得呢？">鄉民互動骨架</Option>
-                </Select>
-              </Form.Item>
-            </TabPane>
-
-            {/* 模型設定 */}
-            <TabPane tab="模型設定" key="model">
-              <Row gutter={24}>
-                <Col span={12}>
-                  <Form.Item
-                    name="model_id"
-                    label="模型ID"
-                    tooltip="選擇此 KOL 預設使用的 AI 模型，生成貼文時可選擇是否覆蓋"
-                  >
-                    <Select placeholder="選擇模型 (預設: gpt-4o-mini)" allowClear>
-                      <Option value="gpt-4o-mini">
-                        <Space>
-                          <span>gpt-4o-mini</span>
-                          <Tag color="green">推薦</Tag>
-                          <Text type="secondary" style={{ fontSize: '11px' }}>快速、經濟</Text>
-                        </Space>
-                      </Option>
-                      <Option value="gpt-4o">
-                        <Space>
-                          <span>gpt-4o</span>
-                          <Tag color="blue">高品質</Tag>
-                          <Text type="secondary" style={{ fontSize: '11px' }}>最新模型</Text>
-                        </Space>
-                      </Option>
-                      <Option value="gpt-4-turbo">
-                        <Space>
-                          <span>gpt-4-turbo</span>
-                          <Tag color="purple">進階</Tag>
-                          <Text type="secondary" style={{ fontSize: '11px' }}>較貴、強大</Text>
-                        </Space>
-                      </Option>
-                      <Option value="gpt-4">
-                        <Space>
-                          <span>gpt-4</span>
-                          <Tag color="orange">穩定</Tag>
-                          <Text type="secondary" style={{ fontSize: '11px' }}>經典版本</Text>
-                        </Space>
-                      </Option>
-                      <Option value="gpt-3.5-turbo">
-                        <Space>
-                          <span>gpt-3.5-turbo</span>
-                          <Tag color="default">基礎</Tag>
-                          <Text type="secondary" style={{ fontSize: '11px' }}>低成本</Text>
-                        </Space>
-                      </Option>
-                    </Select>
-                  </Form.Item>
-                  <Form.Item name="model_temp" label="溫度">
-                    <InputNumber min={0} max={2} step={0.1} />
-                  </Form.Item>
-                  <Form.Item name="max_tokens" label="最大Token數">
-                    <InputNumber min={100} max={2000} />
-                  </Form.Item>
-                </Col>
-                <Col span={12}>
-                  <Form.Item name="template_variant" label="模板變體">
-                    <Input />
-                  </Form.Item>
-                  <Form.Item name="signature" label="簽名">
-                    <Input />
-                  </Form.Item>
-                  <Form.Item name="emoji_pack" label="表情包">
-                    <Input />
-                  </Form.Item>
-                </Col>
-              </Row>
-            </TabPane>
-
-            {/* 語氣設定 */}
-            <TabPane tab="語氣設定" key="tone">
-              <Row gutter={24}>
-                <Col span={12}>
-                  <Form.Item name="tone_formal" label="正式程度">
-                    <Slider min={1} max={10} />
-                  </Form.Item>
-                  <Form.Item name="tone_emotion" label="情感程度">
-                    <Slider min={1} max={10} />
-                  </Form.Item>
-                  <Form.Item name="tone_confidence" label="自信程度">
-                    <Slider min={1} max={10} />
-                  </Form.Item>
-                </Col>
-                <Col span={12}>
-                  <Form.Item name="tone_urgency" label="緊急程度">
-                    <Slider min={1} max={10} />
-                  </Form.Item>
-                  <Form.Item name="tone_interaction" label="互動程度">
-                    <Slider min={1} max={10} />
-                  </Form.Item>
-                  <Form.Item name="question_ratio" label="問題比例">
-                    <Slider min={0} max={1} step={0.1} />
-                  </Form.Item>
-                </Col>
-              </Row>
-            </TabPane>
-
-            {/* 統計資料 */}
-            <TabPane tab="統計資料" key="stats">
-              <Descriptions column={2}>
-                <Descriptions.Item label="總貼文數">
-                  {selectedKOL?.total_posts || 0}
-                </Descriptions.Item>
-                <Descriptions.Item label="已發布貼文">
-                  {selectedKOL?.published_posts || 0}
-                </Descriptions.Item>
-                <Descriptions.Item label="平均互動率">
-                  {selectedKOL?.avg_interaction_rate ? `${(selectedKOL.avg_interaction_rate * 100).toFixed(1)}%` : '-'}
-                </Descriptions.Item>
-                <Descriptions.Item label="最佳表現貼文">
-                  {selectedKOL?.best_performing_post || '-'}
-                </Descriptions.Item>
-                <Descriptions.Item label="創建時間">
-                  {selectedKOL?.created_time || '-'}
-                </Descriptions.Item>
-                <Descriptions.Item label="最後更新">
-                  {selectedKOL?.last_updated || '-'}
-                </Descriptions.Item>
-              </Descriptions>
-            </TabPane>
-          </Tabs>
-        </Form>
-      </Modal>
-
       {/* 創建 KOL Modal */}
       <Modal
         title={
@@ -1197,7 +708,7 @@ const KOLManagementPage: React.FC = () => {
             key="create"
             type="primary"
             onClick={handleCreateKOL}
-            loading={saving}
+            loading={creating}
             icon={<SaveOutlined />}
           >
             創建 KOL

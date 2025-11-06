@@ -153,21 +153,22 @@ const KOLDetail: React.FC = () => {
 
     setSaving(true);
     try {
-      const response = await api.put(`/dashboard/kols/${serial}`, editingKolInfo);
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+      const response = await axios.put(`${API_BASE_URL}/api/kol/${serial}`, editingKolInfo);
 
       if (response.data && response.data.success) {
-        setKolInfo(editingKolInfo);
+        setKolInfo(response.data.data || editingKolInfo);
         setIsEditMode(false);
         setEditingKolInfo(null);
         message.success('KOL 設定已成功更新');
         // 重新載入數據以獲取最新狀態
         await fetchKOLDetail();
       } else {
-        message.error('更新失敗，請重試');
+        message.error(response.data.error || '更新失敗，請重試');
       }
     } catch (err: any) {
       console.error('更新 KOL 設定失敗:', err);
-      message.error(err.response?.data?.detail || '更新失敗，請重試');
+      message.error(err.response?.data?.error || err.response?.data?.detail || '更新失敗，請重試');
     } finally {
       setSaving(false);
     }
