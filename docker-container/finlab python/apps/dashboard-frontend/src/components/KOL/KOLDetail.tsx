@@ -71,7 +71,7 @@ const KOLDetail: React.FC = () => {
 
     try {
       const API_BASE_URL = getApiBaseUrl();
-      const response = await axios.get(`${API_BASE_URL}/api/kol/${serial}/posts`, {
+      const response = await axios.get(`${API_BASE_URL}/api/dashboard/kols/${serial}/posts`, {
         params: { page, page_size: pageSize }
       });
 
@@ -84,7 +84,7 @@ const KOLDetail: React.FC = () => {
     }
   };
 
-  // 載入互動數據
+  // 載入互動數據和統計
   const fetchInteractions = async () => {
     if (!serial) return;
 
@@ -93,7 +93,27 @@ const KOLDetail: React.FC = () => {
       const response = await axios.get(`${API_BASE_URL}/api/kol/${serial}/stats`);
 
       if (response.data && response.data.success && response.data.data) {
-        setInteractionTrend(response.data.data.interaction_trend);
+        const statsData = response.data.data;
+
+        // Set interaction trend
+        setInteractionTrend(statsData.interaction_trend || []);
+
+        // Update statistics with complete data
+        setStatistics({
+          total_posts: statsData.core_metrics?.total_posts || 0,
+          published_posts: statsData.core_metrics?.published_posts || 0,
+          draft_posts: statsData.core_metrics?.draft_posts || 0,
+          avg_interaction_rate: statsData.core_metrics?.avg_likes + statsData.core_metrics?.avg_comments + statsData.core_metrics?.avg_shares || 0,
+          avg_likes_per_post: statsData.core_metrics?.avg_likes || 0,
+          avg_comments_per_post: statsData.core_metrics?.avg_comments || 0,
+          avg_shares_per_post: statsData.core_metrics?.avg_shares || 0,
+          best_performing_post: '',
+          total_interactions: statsData.core_metrics?.total_interactions || 0,
+          trend_data: statsData.posting_trend || [],
+          monthly_stats: statsData.growth_trend || [],
+          weekly_stats: [],  // Backend doesn't provide this yet
+          daily_stats: statsData.posting_trend || []
+        });
       }
     } catch (err: any) {
       console.error('獲取互動數據失敗:', err);
@@ -361,17 +381,20 @@ const KOLDetail: React.FC = () => {
             <Row gutter={[16, 16]}>
               <Col span={6}>
                 <Statistic
-                  title="發文總量"
+                  title="生成貼文總量"
                   value={statistics?.total_posts || 0}
                   prefix={<FileTextOutlined />}
                   valueStyle={{ color: '#1890ff' }}
                 />
+                <div style={{ fontSize: '12px', color: '#666', marginTop: '8px' }}>
+                  已發布: {statistics?.published_posts || 0}
+                </div>
               </Col>
               <Col span={6}>
                 <Statistic
                   title="平均互動數"
                   value={statistics?.avg_interaction_rate || 0}
-                  precision={3}
+                  precision={1}
                   prefix={<BarChartOutlined />}
                   valueStyle={{ color: '#52c41a' }}
                 />
