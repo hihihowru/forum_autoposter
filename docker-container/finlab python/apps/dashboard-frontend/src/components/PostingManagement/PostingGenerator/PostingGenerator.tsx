@@ -562,6 +562,11 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
       };
       console.log('🔍 DEBUG: fullTriggersConfig built:', fullTriggersConfig);
 
+      // 🔍 DEBUG: Log trigger_type being sent to API
+      const apiTriggerType = generationConfig.triggers?.triggerConfig?.triggerKey || 'manual';
+      console.log('🔍 DEBUG: trigger_type being sent to API:', apiTriggerType);
+      console.log('🔍 DEBUG: triggerConfig:', generationConfig.triggers?.triggerConfig);
+
       // 🔥 NON-BLOCKING BATCH POSTING - Fire and forget
       // Start batch generation in background without waiting
       PostingManagementAPI.generateBatchPosts({

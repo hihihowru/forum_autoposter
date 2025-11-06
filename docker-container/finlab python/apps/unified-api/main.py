@@ -2745,6 +2745,8 @@ async def manual_posting(request: Request):
         use_kol_default_model = body.get('use_kol_default_model', True)  # 預設使用 KOL 模型
 
         # 🔍 DEBUG: 印出前端傳來的參數
+        logger.info(f"🔍 DEBUG trigger_type: {repr(trigger_type)} (type: {type(trigger_type).__name__})")
+        logger.info(f"🔍 DEBUG posting_type: {repr(posting_type)} (type: {type(posting_type).__name__})")
         logger.info(f"🔍 DEBUG model_id_override: {repr(model_id_override)} (type: {type(model_id_override).__name__})")
         logger.info(f"🔍 DEBUG use_kol_default_model: {repr(use_kol_default_model)} (type: {type(use_kol_default_model).__name__})")
 
