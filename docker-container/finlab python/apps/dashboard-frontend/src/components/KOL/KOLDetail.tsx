@@ -89,9 +89,8 @@ const KOLDetail: React.FC = () => {
     if (!serial) return;
 
     try {
-      // Call Railway API directly for KOL interactions endpoint
-      const RAILWAY_API_URL = import.meta.env.VITE_RAILWAY_API_URL || 'https://forumautoposter-production.up.railway.app';
-      const response = await axios.get(`${RAILWAY_API_URL}/api/dashboard/kols/${serial}/interactions`);
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+      const response = await axios.get(`${API_BASE_URL}/api/kol/${serial}/stats`);
 
       if (response.data && response.data.success && response.data.data) {
         setInteractionTrend(response.data.data.interaction_trend);
