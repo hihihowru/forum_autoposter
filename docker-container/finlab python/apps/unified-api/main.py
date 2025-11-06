@@ -3610,6 +3610,157 @@ async def get_posts(
         if conn:
             return_db_connection(conn)
 
+@app.post("/api/kol/{serial}/refresh-interactions")
+async def refresh_kol_interactions(serial: str):
+    """
+    刷新特定 KOL 的所有貼文互動數據
+    從CMoney API獲取最新的likes, comments, shares等數據並更新到數據庫
+    """
+    logger.info(f"收到 refresh-kol-interactions 請求 - KOL Serial: {serial}")
+
+    if not db_pool:
+        return {"success": False, "error": "數據庫連接不可用", "timestamp": get_current_time().isoformat()}
+
+    conn = None
+    try:
+        # Get connection from pool
+        conn = get_db_connection()
+        conn.rollback()  # Clear any failed transactions
+
+        # Fetch all published posts for this KOL with article_id
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute("""
+                SELECT post_id, cmoney_post_id as article_id, kol_serial, email, password
+                FROM post_records pr
+                LEFT JOIN kol_profiles kp ON pr.kol_serial = kp.serial::integer
+                WHERE pr.kol_serial = %s
+                  AND pr.status = 'published'
+                  AND pr.cmoney_post_id IS NOT NULL
+                ORDER BY pr.created_at DESC
+            """, (int(serial),))
+            posts = cursor.fetchall()
+            conn.commit()
+
+        if not posts:
+            return {
+                "success": True,
+                "updated_count": 0,
+                "failed_count": 0,
+                "total_posts": 0,
+                "message": "No published posts found for this KOL",
+                "timestamp": get_current_time().isoformat()
+            }
+
+        # Get KOL credentials from first post
+        email = posts[0]['email']
+        password = posts[0]['password']
+
+        if not email or not password:
+            return {"success": False, "error": "KOL credentials not found", "timestamp": get_current_time().isoformat()}
+
+        logger.info(f"Found {len(posts)} published posts for KOL {serial}")
+
+        # Login to CMoney to get access token
+        async with httpx.AsyncClient() as client:
+            login_response = await client.post(
+                "https://www.cmoney.tw/member/login/jsonp.aspx",
+                data={"a": email, "b": password, "remember": 0},
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+                timeout=30.0
+            )
+
+            if login_response.status_code != 200:
+                return {"success": False, "error": "CMoney login failed", "timestamp": get_current_time().isoformat()}
+
+            # Extract access token
+            token_data = login_response.json()
+            access_token = token_data.get("Data", {}).get("access_token")
+
+            if not access_token:
+                return {"success": False, "error": "Failed to get access token", "timestamp": get_current_time().isoformat()}
+
+            # Refresh interaction data for each post
+            updated_count = 0
+            failed_count = 0
+
+            for post in posts:
+                article_id = post['article_id']
+                post_id = post['post_id']
+
+                try:
+                    # Fetch interaction data from CMoney
+                    interaction_response = await client.get(
+                        f"https://forumservice.cmoney.tw/api/Article/{article_id}",
+                        headers={
+                            "Authorization": f"Bearer {access_token}",
+                            "X-Version": "2.0",
+                            "accept": "application/json"
+                        },
+                        timeout=15.0
+                    )
+
+                    if interaction_response.status_code == 200:
+                        data = interaction_response.json()
+
+                        # Extract interaction metrics
+                        likes = data.get("ArticleReplyDto", {}).get("SatisfiedCount", 0)
+                        comments = data.get("CommentCount", 0)
+                        shares = data.get("ArticleReplyDto", {}).get("ShareCount", 0)
+                        bookmarks = data.get("ArticleReplyDto", {}).get("CollectedCount", 0)
+
+                        # Extract emoji counts
+                        emojis = data.get("ArticleReplyDto", {}).get("PersonEmotionArticleDetailDto", {})
+                        emoji_data = {
+                            "like": emojis.get("Like", 0),
+                            "dislike": emojis.get("Dislike", 0),
+                            "laugh": emojis.get("Laugh", 0),
+                            "money": emojis.get("Money", 0),
+                            "shock": emojis.get("Shock", 0),
+                            "cry": emojis.get("Cry", 0),
+                            "think": emojis.get("Think", 0),
+                            "angry": emojis.get("Angry", 0)
+                        }
+
+                        # Update database
+                        with conn.cursor() as update_cursor:
+                            update_cursor.execute("""
+                                UPDATE post_records
+                                SET likes = %s, comments = %s, shares = %s, bookmarks = %s,
+                                    emoji_data = %s, last_interaction_update = CURRENT_TIMESTAMP
+                                WHERE post_id = %s
+                            """, (likes, comments, shares, bookmarks, json.dumps(emoji_data), post_id))
+
+                        updated_count += 1
+                        logger.info(f"Updated post {post_id}: {likes} likes, {comments} comments, {shares} shares")
+
+                except Exception as e:
+                    logger.error(f"Failed to update post {post_id}: {e}")
+                    failed_count += 1
+
+            conn.commit()
+
+        logger.info(f"Refresh complete for KOL {serial}: {updated_count} updated, {failed_count} failed")
+
+        return {
+            "success": True,
+            "updated_count": updated_count,
+            "failed_count": failed_count,
+            "total_posts": len(posts),
+            "timestamp": get_current_time().isoformat()
+        }
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"❌ Refresh KOL interactions failed: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {"success": False, "error": str(e), "timestamp": get_current_time().isoformat()}
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+
 @app.post("/api/posts/refresh-all")
 async def refresh_all_interactions():
     """
