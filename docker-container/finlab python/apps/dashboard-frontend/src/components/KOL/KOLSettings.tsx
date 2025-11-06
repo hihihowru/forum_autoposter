@@ -427,6 +427,29 @@ const KOLSettings: React.FC<KOLSettingsProps> = ({
                       placeholder="選擇模型"
                       style={{ width: '100%', fontSize: '12px' }}
                     >
+                      {/* GPT-5 系列 (2025 Responses API) */}
+                      <Option value="gpt-5-nano">
+                        <Space>
+                          <span>gpt-5-nano</span>
+                          <Tag color="orange">輕量</Tag>
+                        </Space>
+                      </Option>
+
+                      {/* GPT-4.1 系列 (2025) */}
+                      <Option value="gpt-4.1">
+                        <Space>
+                          <span>gpt-4.1</span>
+                          <Tag color="purple">1M context</Tag>
+                        </Space>
+                      </Option>
+                      <Option value="gpt-4.1-mini">
+                        <Space>
+                          <span>gpt-4.1-mini</span>
+                          <Tag color="geekblue">經濟</Tag>
+                        </Space>
+                      </Option>
+
+                      {/* o3 系列 (2025 深度推理) */}
                       <Option value="o3">
                         <Space>
                           <span>o3</span>
@@ -439,6 +462,8 @@ const KOLSettings: React.FC<KOLSettingsProps> = ({
                           <Tag color="blue">推理</Tag>
                         </Space>
                       </Option>
+
+                      {/* GPT-4o 系列 (多模態) */}
                       <Option value="gpt-4o-mini">
                         <Space>
                           <span>gpt-4o-mini</span>
@@ -451,6 +476,8 @@ const KOLSettings: React.FC<KOLSettingsProps> = ({
                           <Tag color="lime">多模態</Tag>
                         </Space>
                       </Option>
+
+                      {/* 經典模型 */}
                       <Option value="gpt-4-turbo">
                         <Space>
                           <span>gpt-4-turbo</span>
@@ -466,7 +493,7 @@ const KOLSettings: React.FC<KOLSettingsProps> = ({
                       <Option value="gpt-3.5-turbo">
                         <Space>
                           <span>gpt-3.5-turbo</span>
-                          <Tag color="default">經濟</Tag>
+                          <Tag>基礎</Tag>
                         </Space>
                       </Option>
                     </Select>
