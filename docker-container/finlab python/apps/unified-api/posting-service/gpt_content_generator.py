@@ -94,8 +94,15 @@ class GPTContentGenerator:
             system_prompt = self._inject_parameters(template['system_prompt_template'], params)
             user_prompt = self._inject_parameters(template['user_prompt_template'], params)
 
+            # 🔍 DEBUG: 印出關鍵參數
+            logger.info(f"🔍 DEBUG params keys: {list(params.keys())}")
+            logger.info(f"🔍 DEBUG has_realtime_price: {params.get('has_realtime_price', False)}")
+            logger.info(f"🔍 DEBUG ohlc_summary 長度: {len(params.get('ohlc_summary', ''))} 字")
+            if params.get('ohlc_summary'):
+                logger.info(f"🔍 DEBUG ohlc_summary 前 200 字: {params['ohlc_summary'][:200]}")
             logger.info(f"📝 System Prompt 長度: {len(system_prompt)} 字")
             logger.info(f"📝 User Prompt 長度: {len(user_prompt)} 字")
+            logger.info(f"🔍 DEBUG User Prompt 前 500 字: {user_prompt[:500]}")
 
             # 🔥 判斷是否為 GPT-5 系列
             is_gpt5_model = chosen_model.startswith('gpt-5')
