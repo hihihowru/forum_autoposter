@@ -455,11 +455,11 @@ class GPTContentGenerator:
             change_sign = '+' if price_change >= 0 else ''
             change_str = f"{change_sign}{price_change:.2f} ({change_sign}{price_change_pct:.2f}%)"
 
-            params['price_summary'] = f"""## 即時股價資訊（{timestamp}）
-
-**{stock_name}（{stock_id}）**
+            # 🔥 使用 ohlc_summary 作為變數名（模板中使用這個）
+            params['ohlc_summary'] = f"""即時股價資訊（{timestamp}）：
 - 當前股價：{current_price} 元
 - 漲跌幅：{change_str}
+- 今日開盤：{realtime_price_data.get('open_price', 'N/A')} 元
 - 今日最高：{high_price} 元
 - 今日最低：{low_price} 元
 - 成交量：{volume:,} 張
@@ -473,7 +473,7 @@ class GPTContentGenerator:
             close_price = ohlc_data.get('close', 'N/A')
             change_pct = ohlc_data.get('change_percent', 'N/A')
             volume = ohlc_data.get('volume', 'N/A')
-            params['price_summary'] = f"""價格資訊：
+            params['ohlc_summary'] = f"""價格資訊：
 - 收盤價：{close_price}
 - 漲跌幅：{change_pct}%
 - 成交量：{volume}
@@ -483,7 +483,7 @@ class GPTContentGenerator:
             params['ohlc'] = ohlc_data
             params['has_realtime_price'] = False
         else:
-            params['price_summary'] = ''
+            params['ohlc_summary'] = ''
             params['ohlc'] = {}
             params['price'] = {}
             params['has_realtime_price'] = False
