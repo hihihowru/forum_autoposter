@@ -333,16 +333,14 @@ class GPTContentGenerator:
 【市場數據】
 {news_summary}{ohlc_summary}{tech_summary}
 請分析這檔股票，包含：
-1. 🔥 **務必在文章開頭引用即時股價資訊**（當前價格、漲跌幅、成交量）
-2. 為什麼值得關注
-3. 你的專業看法
-4. 潛在機會和風險
+1. 為什麼值得關注
+2. 你的專業看法
+3. 潛在機會和風險
 
 🔥 重要格式要求：
 - 第一行是標題，簡潔有力（建議 15-25 字）
 - 標題範例：「康舒股價漲停分析」「台積電Q4展望與投資機會」
-- **第一段必須包含即時股價數據（價格、漲跌、成交量）**
-- 內容長度：約 {max_words} 字，提供深入分析'''
+{price_instruction}- 內容長度：約 {max_words} 字，提供深入分析'''
             },
             'interaction': {
                 'id': None,
@@ -371,8 +369,7 @@ class GPTContentGenerator:
 要求：
 - 🔥 第一行是標題，簡潔有力（建議 15-25 字）
 - 標題範例：「康舒股價漲停分析」「台積電Q4展望與投資機會」
-- **開頭必須引用即時股價（價格、漲跌幅）**
-- 內容長度：約 {max_words} 字
+{price_instruction}- 內容長度：約 {max_words} 字
 - 提出單一核心問題
 - 引發讀者思考和互動'''
             },
@@ -403,8 +400,7 @@ class GPTContentGenerator:
 要求：
 - 🔥 第一行是標題，簡潔有力（建議 15-25 字）
 - 標題範例：「康舒股價漲停分析」「台積電Q4展望與投資機會」
-- **開頭段落必須包含即時股價數據（當前價、漲跌幅、成交量）**
-- 目標長度：約 {max_words} 字，提供深入分析
+{price_instruction}- 目標長度：約 {max_words} 字，提供深入分析
 - 充分展現你的個人風格
 - 用你習慣的方式組織內容'''
             }
@@ -479,6 +475,8 @@ class GPTContentGenerator:
             # 支援嵌套參數 {price.current}, {price.change_pct}
             params['price'] = realtime_price_data
             params['has_realtime_price'] = True
+            # 🔥 NEW: Add instruction to include price data (with newline)
+            params['price_instruction'] = '- **開頭必須引用即時股價數據（當前價格、漲跌幅、成交量）**\n'
         # Fallback: OHLC 摘要
         elif ohlc_data:
             close_price = ohlc_data.get('close', 'N/A')
@@ -493,11 +491,15 @@ class GPTContentGenerator:
             # 支援嵌套參數 {ohlc.close}
             params['ohlc'] = ohlc_data
             params['has_realtime_price'] = False
+            # No price instruction for historical data
+            params['price_instruction'] = ''
         else:
             params['ohlc_summary'] = ''
             params['ohlc'] = {}
             params['price'] = {}
             params['has_realtime_price'] = False
+            # No price instruction when no price data
+            params['price_instruction'] = ''
 
         # 技術指標摘要
         if technical_indicators:

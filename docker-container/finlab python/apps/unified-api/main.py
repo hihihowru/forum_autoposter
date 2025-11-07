@@ -2824,25 +2824,35 @@ async def manual_posting(request: Request):
                 'tone_settings': ''
             }
 
-        # 🔥 Phase 1.5: 獲取即時股價資訊
+        # 🔥 Phase 1.5: 獲取即時股價資訊 (可選)
         realtime_price_data = {}
-        try:
-            logger.info(f"💰 開始抓取 {stock_name}({stock_code}) 即時股價...")
-            cmoney_service = get_cmoney_service()
-            realtime_price_data = await cmoney_service.get_realtime_stock_price(
-                stock_code=stock_code,
-                stock_name=stock_name
-            )
+        # 🔥 NEW: Check if enable_realtime_price is True (default: True)
+        enable_realtime_price = body.get('enable_realtime_price', True)
 
-            if realtime_price_data.get('is_realtime'):
-                logger.info(f"✅ 成功獲取即時股價: {stock_name} 當前價格 {realtime_price_data.get('current_price')} 元 ({realtime_price_data.get('price_change_pct'):+.2f}%)")
-            else:
-                logger.warning(f"⚠️  無法獲取即時股價，將使用預設數據")
-        except Exception as price_error:
-            logger.error(f"❌ 獲取即時股價失敗: {price_error}")
+        if enable_realtime_price:
+            try:
+                logger.info(f"💰 開始抓取 {stock_name}({stock_code}) 即時股價...")
+                cmoney_service = get_cmoney_service()
+                realtime_price_data = await cmoney_service.get_realtime_stock_price(
+                    stock_code=stock_code,
+                    stock_name=stock_name
+                )
+
+                if realtime_price_data.get('is_realtime'):
+                    logger.info(f"✅ 成功獲取即時股價: {stock_name} 當前價格 {realtime_price_data.get('current_price')} 元 ({realtime_price_data.get('price_change_pct'):+.2f}%)")
+                else:
+                    logger.warning(f"⚠️  無法獲取即時股價，將使用預設數據")
+            except Exception as price_error:
+                logger.error(f"❌ 獲取即時股價失敗: {price_error}")
+                realtime_price_data = {
+                    "error": str(price_error),
+                    "is_realtime": False
+                }
+        else:
+            logger.info(f"⏭️  跳過即時股價抓取 (enable_realtime_price=False)")
             realtime_price_data = {
-                "error": str(price_error),
-                "is_realtime": False
+                "is_realtime": False,
+                "disabled": True
             }
 
         # 🔥 Phase 2: 調用 Serper API 獲取新聞數據

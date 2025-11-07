@@ -133,7 +133,9 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
       include_hashtag: true,
       // 新增：模型 ID 覆蓋選項
       model_id_override: null,
-      use_kol_default_model: true  // 預設使用 KOL 預設模型
+      use_kol_default_model: true,  // 預設使用 KOL 預設模型
+      // 🔥 新增：即時股價設定
+      enable_realtime_price: true  // 預設啟用即時股價
     },
     tags: {
       tag_mode: 'stock_tags',
@@ -606,7 +608,9 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
         full_triggers_config: fullTriggersConfig,
         // 🔥 FIX: Pass model_id_override and use_kol_default_model from Step 7
         model_id_override: generationConfig.settings?.model_id_override,
-        use_kol_default_model: generationConfig.settings?.use_kol_default_model
+        use_kol_default_model: generationConfig.settings?.use_kol_default_model,
+        // 🔥 NEW: Pass enable_realtime_price from Step 7
+        enable_realtime_price: generationConfig.settings?.enable_realtime_price !== false
       }).then(result => {
         // Silent completion toast (non-blocking)
         if (result.success) {

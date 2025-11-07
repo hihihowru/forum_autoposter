@@ -1,6 +1,6 @@
 import React from 'react';
-import { Card, Typography, Radio, Space, InputNumber, Select, Divider, Tag, Row, Col } from 'antd';
-import { OneToOneOutlined, ClusterOutlined, FileTextOutlined, ClockCircleOutlined, ExperimentOutlined } from '@ant-design/icons';
+import { Card, Typography, Radio, Space, InputNumber, Select, Divider, Tag, Row, Col, Switch } from 'antd';
+import { OneToOneOutlined, ClusterOutlined, FileTextOutlined, ClockCircleOutlined, ExperimentOutlined, DollarOutlined } from '@ant-design/icons';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -28,6 +28,8 @@ interface GenerationSettings {
   // 🔥 新增：新聞連結設定
   include_news_links: boolean; // 是否附加新聞連結
   news_links_count: number; // 附加的新聞連結數量 (1-5)
+  // 🔥 新增：即時股價設定
+  enable_realtime_price: boolean; // 是否包含即時股價資訊
 }
 
 interface GenerationSettingsProps {
@@ -194,6 +196,13 @@ const GenerationSettings: React.FC<GenerationSettingsProps> = ({ value, onChange
       ...value,
       model_id_override: modelId,
       use_kol_default_model: !modelId
+    });
+  };
+
+  const handleEnableRealtimePriceChange = (enable: boolean) => {
+    onChange({
+      ...value,
+      enable_realtime_price: enable
     });
   };
 
@@ -690,6 +699,38 @@ const GenerationSettings: React.FC<GenerationSettingsProps> = ({ value, onChange
           </Space>
         </div>
 
+        <Divider />
+
+        {/* 即時股價設定 */}
+        <div>
+          <Title level={5}>
+            <Space>
+              <DollarOutlined />
+              即時股價資訊
+            </Space>
+          </Title>
+          <Space direction="vertical" style={{ width: '100%' }}>
+            <Space>
+              <Text>包含即時股價：</Text>
+              <Switch
+                checked={value.enable_realtime_price !== false}
+                onChange={handleEnableRealtimePriceChange}
+                checkedChildren="開啟"
+                unCheckedChildren="關閉"
+              />
+              <Tag color={value.enable_realtime_price !== false ? "green" : "default"}>
+                {value.enable_realtime_price !== false ? "已啟用" : "已停用"}
+              </Tag>
+            </Space>
+            <Text type="secondary" style={{ fontSize: '12px', display: 'block', marginTop: '4px' }}>
+              {value.enable_realtime_price !== false
+                ? '✅ 開啟後，GPT 將在貼文中包含即時股價、漲跌幅、成交量等即時數據（使用 CMoney API）'
+                : '❌ 關閉後，貼文將不包含即時股價資訊，僅使用歷史數據和新聞'
+              }
+            </Text>
+          </Space>
+        </div>
+
         {/* 設定摘要 */}
         <Card size="small" style={{ backgroundColor: '#f6ffed', border: '1px solid #b7eb8f' }}>
           <Title level={5} style={{ color: '#52c41a', margin: 0 }}>設定摘要</Title>
@@ -712,6 +753,9 @@ const GenerationSettings: React.FC<GenerationSettingsProps> = ({ value, onChange
             </Text>
             <Text type="secondary">
               • AI 模型：{value.use_kol_default_model !== false ? 'KOL 預設模型' : `批量覆蓋 (${value.model_id_override || '未指定'})`}
+            </Text>
+            <Text type="secondary">
+              • 即時股價：{value.enable_realtime_price !== false ? '✅ 已啟用' : '❌ 已停用'}
             </Text>
           </Space>
         </Card>
