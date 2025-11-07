@@ -41,6 +41,7 @@ class GPTContentGenerator:
                              posting_type: str = "analysis",
                              trigger_type: str = "custom_stocks",
                              serper_analysis: Optional[Dict[str, Any]] = None,
+                             realtime_price_data: Optional[Dict[str, Any]] = None,
                              ohlc_data: Optional[Dict[str, Any]] = None,
                              technical_indicators: Optional[Dict[str, Any]] = None,
                              content_length: str = "medium",
@@ -57,6 +58,7 @@ class GPTContentGenerator:
             posting_type: 發文類型 (analysis/interaction/personalized)
             trigger_type: 觸發器類型
             serper_analysis: Serper新聞分析結果
+            realtime_price_data: CMoney即時股價資訊 (包含 current_price, volume, change等)
             ohlc_data: OHLC價格數據
             technical_indicators: 技術指標數據
             content_length: 內容長度
@@ -85,7 +87,7 @@ class GPTContentGenerator:
             # 🎯 準備參數
             params = self._prepare_template_parameters(
                 kol_profile, stock_id, stock_name, trigger_type,
-                serper_analysis, ohlc_data, technical_indicators, max_words
+                serper_analysis, realtime_price_data, ohlc_data, technical_indicators, max_words
             )
 
             # 🎯 注入參數到模板
@@ -407,6 +409,7 @@ class GPTContentGenerator:
                                      stock_name: str,
                                      trigger_type: str,
                                      serper_analysis: Dict[str, Any],
+                                     realtime_price_data: Optional[Dict[str, Any]],
                                      ohlc_data: Optional[Dict[str, Any]],
                                      technical_indicators: Optional[Dict[str, Any]],
                                      max_words: int) -> Dict[str, Any]:
@@ -438,12 +441,39 @@ class GPTContentGenerator:
         else:
             params['news_summary'] = ''
 
-        # OHLC 摘要
-        if ohlc_data:
+        # 🔥 NEW: 即時股價資訊 (優先使用 CMoney 即時數據)
+        if realtime_price_data and realtime_price_data.get('is_realtime'):
+            current_price = realtime_price_data.get('current_price', 'N/A')
+            price_change = realtime_price_data.get('price_change', 0)
+            price_change_pct = realtime_price_data.get('price_change_pct', 0)
+            volume = realtime_price_data.get('volume', 'N/A')
+            high_price = realtime_price_data.get('high_price', 'N/A')
+            low_price = realtime_price_data.get('low_price', 'N/A')
+            timestamp = realtime_price_data.get('timestamp', '')
+
+            # 格式化漲跌幅
+            change_sign = '+' if price_change >= 0 else ''
+            change_str = f"{change_sign}{price_change:.2f} ({change_sign}{price_change_pct:.2f}%)"
+
+            params['price_summary'] = f"""## 即時股價資訊（{timestamp}）
+
+**{stock_name}（{stock_id}）**
+- 當前股價：{current_price} 元
+- 漲跌幅：{change_str}
+- 今日最高：{high_price} 元
+- 今日最低：{low_price} 元
+- 成交量：{volume:,} 張
+
+"""
+            # 支援嵌套參數 {price.current}, {price.change_pct}
+            params['price'] = realtime_price_data
+            params['has_realtime_price'] = True
+        # Fallback: OHLC 摘要
+        elif ohlc_data:
             close_price = ohlc_data.get('close', 'N/A')
             change_pct = ohlc_data.get('change_percent', 'N/A')
             volume = ohlc_data.get('volume', 'N/A')
-            params['ohlc_summary'] = f"""價格資訊：
+            params['price_summary'] = f"""價格資訊：
 - 收盤價：{close_price}
 - 漲跌幅：{change_pct}%
 - 成交量：{volume}
@@ -451,9 +481,12 @@ class GPTContentGenerator:
 """
             # 支援嵌套參數 {ohlc.close}
             params['ohlc'] = ohlc_data
+            params['has_realtime_price'] = False
         else:
-            params['ohlc_summary'] = ''
+            params['price_summary'] = ''
             params['ohlc'] = {}
+            params['price'] = {}
+            params['has_realtime_price'] = False
 
         # 技術指標摘要
         if technical_indicators:

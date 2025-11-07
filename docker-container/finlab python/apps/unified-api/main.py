@@ -38,6 +38,9 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import asyncio
 import asyncpg  # 🔥 Add asyncpg for KOL Profile query
 
+# 🔥 CMoney Real-time Stock Price Service
+from services.cmoney_realtime import get_cmoney_service
+
 # Timezone utility - Always use Taipei time (GMT+8)
 def get_current_time():
     """Returns current time in Asia/Taipei timezone"""
@@ -2821,6 +2824,27 @@ async def manual_posting(request: Request):
                 'tone_settings': ''
             }
 
+        # 🔥 Phase 1.5: 獲取即時股價資訊
+        realtime_price_data = {}
+        try:
+            logger.info(f"💰 開始抓取 {stock_name}({stock_code}) 即時股價...")
+            cmoney_service = get_cmoney_service()
+            realtime_price_data = await cmoney_service.get_realtime_stock_price(
+                stock_code=stock_code,
+                stock_name=stock_name
+            )
+
+            if realtime_price_data.get('is_realtime'):
+                logger.info(f"✅ 成功獲取即時股價: {stock_name} 當前價格 {realtime_price_data.get('current_price')} 元 ({realtime_price_data.get('price_change_pct'):+.2f}%)")
+            else:
+                logger.warning(f"⚠️  無法獲取即時股價，將使用預設數據")
+        except Exception as price_error:
+            logger.error(f"❌ 獲取即時股價失敗: {price_error}")
+            realtime_price_data = {
+                "error": str(price_error),
+                "is_realtime": False
+            }
+
         # 🔥 Phase 2: 調用 Serper API 獲取新聞數據
         serper_analysis = {}
         if serper_service:
@@ -2877,6 +2901,7 @@ async def manual_posting(request: Request):
                     posting_type=posting_type,  # 🔥 使用 posting_type 決定 prompt 模板
                     trigger_type=trigger_type,  # 🔥 新增
                     serper_analysis=serper_analysis,  # ✅ 傳入真實 Serper 數據
+                    realtime_price_data=realtime_price_data,  # 🔥 NEW: 傳入即時股價資訊
                     ohlc_data=None,  # 🔥 Phase 2 接入
                     technical_indicators=None,  # 🔥 Phase 2 接入
                     content_length="medium",
