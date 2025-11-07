@@ -21,8 +21,9 @@ class CMoneyRealtimeService:
     """Service for fetching real-time stock price data from CMoney API"""
 
     def __init__(self, email: Optional[str] = None, password: Optional[str] = None):
-        self.email = email or os.getenv("CMONEY_EMAIL")
-        self.password = password or os.getenv("CMONEY_PASSWORD")
+        # 🔥 Use FORUM_200 credentials (already set in Railway)
+        self.email = email or os.getenv("FORUM_200_EMAIL")
+        self.password = password or os.getenv("FORUM_200_PASSWORD")
         self.bearer_token = None
         self.user_guid = None
         self.token_expires_at = None
@@ -36,7 +37,7 @@ class CMoneyRealtimeService:
         """Login and get Bearer token"""
 
         if not self.email or not self.password:
-            logger.error("❌ CMoney credentials not set (CMONEY_EMAIL, CMONEY_PASSWORD)")
+            logger.error("❌ CMoney credentials not set (FORUM_200_EMAIL, FORUM_200_PASSWORD)")
             return False
 
         headers = {
