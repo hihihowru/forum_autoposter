@@ -7423,12 +7423,12 @@ async def execute_schedule_now(task_id: str, request: Request):
             database_url = os.getenv("DATABASE_URL")
             kol_conn = await asyncpg.connect(database_url)
             kol_rows = await kol_conn.fetch("""
-                SELECT kol_serial
+                SELECT serial
                 FROM kol_profiles
-                WHERE is_active = true
-                ORDER BY kol_serial
+                WHERE status = 'active'
+                ORDER BY serial
             """)
-            kol_serials = [row['kol_serial'] for row in kol_rows]
+            kol_serials = [row['serial'] for row in kol_rows]
             await kol_conn.close()
             logger.info(f"✅ Fetched {len(kol_serials)} active KOLs from database: {kol_serials}")
         except Exception as e:
