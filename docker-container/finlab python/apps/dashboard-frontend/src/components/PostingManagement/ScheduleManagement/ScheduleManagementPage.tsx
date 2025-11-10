@@ -93,7 +93,7 @@ const ScheduleManagementPage: React.FC = () => {
   const [configModalVisible, setConfigModalVisible] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState<ScheduleTask | undefined>(undefined);
   const [dailyStats, setDailyStats] = useState<any>(null);
-  const [schedulerEnabled, setSchedulerEnabled] = useState(true);
+  const [schedulerEnabled, setSchedulerEnabled] = useState<boolean | null>(null); // null = loading, true/false = actual state
 
   // Execution modal state
   const [executionModalVisible, setExecutionModalVisible] = useState(false);
@@ -973,16 +973,17 @@ const ScheduleManagementPage: React.FC = () => {
               背景排程器:
             </Text>
             <Switch
-              checked={schedulerEnabled}
+              checked={schedulerEnabled === true}
               onChange={handleSchedulerToggle}
               checkedChildren="開啟"
               unCheckedChildren="關閉"
-              loading={loading}
+              loading={loading || schedulerEnabled === null}
+              disabled={schedulerEnabled === null}
               style={{ minWidth: '60px' }}
             />
-            <Badge 
-              status={schedulerEnabled ? "success" : "default"} 
-              text={schedulerEnabled ? "運行中" : "已停止"}
+            <Badge
+              status={schedulerEnabled === true ? "success" : schedulerEnabled === false ? "default" : "processing"}
+              text={schedulerEnabled === true ? "運行中" : schedulerEnabled === false ? "已停止" : "載入中..."}
               style={{ fontSize: '12px' }}
             />
           </div>
