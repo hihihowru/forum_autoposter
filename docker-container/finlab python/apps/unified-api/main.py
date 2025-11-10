@@ -7418,7 +7418,8 @@ async def execute_schedule_now(task_id: str, request: Request):
         kol_serials = []
         try:
             # Fetch active KOLs from database
-            kol_conn = await asyncpg.connect(DATABASE_URL)
+            database_url = os.getenv("DATABASE_URL")
+            kol_conn = await asyncpg.connect(database_url)
             kol_rows = await kol_conn.fetch("""
                 SELECT kol_serial
                 FROM kol_profiles
@@ -7431,8 +7432,8 @@ async def execute_schedule_now(task_id: str, request: Request):
         except Exception as e:
             logger.error(f"❌ Failed to fetch KOLs from database: {e}")
             # Fallback: use schedule's selected KOLs if available
-            if schedule_data.get('selected_kols'):
-                kol_serials = schedule_data['selected_kols']
+            if schedule.get('selected_kols'):
+                kol_serials = schedule['selected_kols']
                 logger.warning(f"⚠️ Using schedule's selected KOLs as fallback: {kol_serials}")
             else:
                 return {
