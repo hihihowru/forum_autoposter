@@ -6777,11 +6777,13 @@ async def get_scheduler_status():
 
             # Determine overall status based on active tasks
             status = "running" if active_tasks > 0 else "idle"
+            scheduler_running = active_tasks > 0  # 🔥 FIX: Add boolean field for frontend
 
             result = {
                 "success": True,
                 "data": {
                     "status": status,
+                    "scheduler_running": scheduler_running,  # 🔥 FIX: Frontend expects this boolean field
                     "active_tasks": int(active_tasks),
                     "pending_tasks": int(pending_tasks),
                     "next_run": next_run,
