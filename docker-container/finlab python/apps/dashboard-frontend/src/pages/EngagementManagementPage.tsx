@@ -158,7 +158,7 @@ const EngagementManagementPage: React.FC = () => {
 
   const loadConfig = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/reaction-bot/config`);
+      const response = await fetch(`${API_BASE_URL}/api/reaction-bot/config`);
       if (response.ok) {
         const data = await response.json();
         setConfig(data);
@@ -170,7 +170,7 @@ const EngagementManagementPage: React.FC = () => {
 
   const loadKOLProfiles = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/kols`);
+      const response = await fetch(`${API_BASE_URL}/api/kols`);
       if (response.ok) {
         const data = await response.json();
         setKolProfiles(data.kols || []);
@@ -182,7 +182,7 @@ const EngagementManagementPage: React.FC = () => {
 
   const loadBatches = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/reaction-bot/batches?limit=10`);
+      const response = await fetch(`${API_BASE_URL}/api/reaction-bot/batches?limit=10`);
       if (response.ok) {
         const data = await response.json();
         setBatches(data.batches || []);
@@ -194,7 +194,7 @@ const EngagementManagementPage: React.FC = () => {
 
   const loadLogs = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/reaction-bot/logs?limit=50`);
+      const response = await fetch(`${API_BASE_URL}/api/reaction-bot/logs?limit=50`);
       if (response.ok) {
         const data = await response.json();
         setLogs(data.logs || []);
@@ -206,7 +206,7 @@ const EngagementManagementPage: React.FC = () => {
 
   const loadStats = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/reaction-bot/stats?days=7`);
+      const response = await fetch(`${API_BASE_URL}/api/reaction-bot/stats?days=7`);
       if (response.ok) {
         const data = await response.json();
         setDailyStats(data.daily_stats || []);
@@ -221,7 +221,7 @@ const EngagementManagementPage: React.FC = () => {
   const saveConfig = async () => {
     setSaving(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/reaction-bot/config`, {
+      const response = await fetch(`${API_BASE_URL}/api/reaction-bot/config`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config),
@@ -249,7 +249,7 @@ const EngagementManagementPage: React.FC = () => {
 
   const saveConfigField = async (updates: Partial<ReactionBotConfig>) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/reaction-bot/config`, {
+      const response = await fetch(`${API_BASE_URL}/api/reaction-bot/config`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates),
@@ -270,7 +270,7 @@ const EngagementManagementPage: React.FC = () => {
   const testDistribution = async () => {
     try {
       const response = await fetch(
-        `${API_BASE_URL}/reaction-bot/test-distribution?article_count=1000&reaction_percentage=${config.reaction_percentage}`
+        `${API_BASE_URL}/api/reaction-bot/test-distribution?article_count=1000&reaction_percentage=${config.reaction_percentage}`
       );
 
       if (response.ok) {

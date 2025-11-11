@@ -149,31 +149,9 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onRefresh }) => {
       ],
     },
     {
-      key: 'engagement-management',
+      key: '/engagement-management',
       label: '互動管理',
       icon: <LikeOutlined />,
-      children: [
-        {
-          key: '/engagement-management/kol-selection',
-          label: 'KOL 選擇',
-          icon: <TeamOutlined />,
-        },
-        {
-          key: '/engagement-management/task-config',
-          label: '任務配置',
-          icon: <ThunderboltOutlined />,
-        },
-        {
-          key: '/engagement-management/monitor',
-          label: '執行監控',
-          icon: <CommentOutlined />,
-        },
-        {
-          key: '/engagement-management/analytics',
-          label: '成效分析',
-          icon: <LineChartOutlined />,
-        },
-      ],
     },
     // ❌ DISABLED: 互動分析 (entire section - mock data, not helpful)
     // {
