@@ -516,6 +516,80 @@ async def trigger_scheduler():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/fetch-articles/hourly-breakdown", summary="Get hourly article count breakdown")
+async def get_hourly_article_breakdown(
+    hours: int = 24
+):
+    """
+    Get article count breakdown by hour.
+
+    Fetches articles for the specified time range and groups them by hour.
+
+    Args:
+        hours: Number of hours to analyze (default: 24, max: 168)
+
+    Returns:
+        Hourly breakdown of article counts
+    """
+    try:
+        if hours < 1 or hours > 168:
+            raise HTTPException(status_code=400, detail="Hours must be between 1 and 168")
+
+        from article_stream_fetcher import ArticleStreamFetcher
+        from datetime import datetime, timedelta
+
+        fetcher = ArticleStreamFetcher()
+
+        # Fetch all articles for past N hours with hour-by-hour breakdown
+        hourly_stats = []
+        end_time = datetime.now().replace(minute=0, second=0, microsecond=0)
+
+        for i in range(hours):
+            hour_end = end_time - timedelta(hours=i)
+            hour_start = hour_end - timedelta(hours=1)
+
+            # Fetch articles for this specific hour
+            status_code, article_ids = fetcher.fetch_hourly_articles(
+                hours_back=1,  # Not used when custom times provided
+                custom_start_time=hour_start,
+                custom_end_time=hour_end
+            )
+
+            # Format hour label (e.g., "14:00-15:00" or "1h ago")
+            if i == 0:
+                label = "Current hour"
+            elif i == 1:
+                label = "1h ago"
+            else:
+                label = f"{i}h ago"
+
+            hour_label = hour_start.strftime("%H:00")
+
+            hourly_stats.append({
+                "hour": i,
+                "hour_label": hour_label,
+                "time_range": f"{hour_start.strftime('%H:%M')}-{hour_end.strftime('%H:%M')}",
+                "count": len(article_ids) if status_code == 200 else 0,
+                "label": label,
+                "start_time": hour_start.isoformat(),
+                "end_time": hour_end.isoformat()
+            })
+
+        total_articles = sum(stat["count"] for stat in hourly_stats)
+
+        return {
+            "success": True,
+            "total_hours": hours,
+            "total_articles": total_articles,
+            "hourly_breakdown": hourly_stats,
+            "message": f"Fetched breakdown for {hours} hours"
+        }
+
+    except Exception as e:
+        logger.error(f"❌ Error getting hourly breakdown: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/fetch-articles", summary="Fetch new article IDs")
 async def fetch_new_articles(
     hours_back: int = 1
