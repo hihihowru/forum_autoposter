@@ -162,6 +162,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ==================== 註冊 Reaction Bot Routes ====================
+try:
+    from reaction_bot_routes import router as reaction_bot_router
+    app.include_router(reaction_bot_router)
+    logger.info("✅ Reaction Bot routes registered successfully")
+except Exception as e:
+    logger.warning(f"⚠️  Failed to register Reaction Bot routes: {e}")
+
 # ==================== FinLab 初始化 ====================
 
 import finlab
@@ -964,6 +972,36 @@ async def health_check():
             "database_dependent": 11
         }
     }
+
+@app.get("/api/kols")
+async def get_kols():
+    """Get all KOL profiles from database"""
+    logger.info("收到 GET /api/kols 請求")
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute("""
+                SELECT serial, nickname, persona, model_id
+                FROM kol_profiles
+                ORDER BY serial
+            """)
+            kols = cursor.fetchall()
+
+            logger.info(f"✅ 成功獲取 {len(kols)} 個 KOL 資料")
+
+            return {
+                "success": True,
+                "kols": [dict(kol) for kol in kols],
+                "count": len(kols)
+            }
+    except Exception as e:
+        logger.error(f"❌ 獲取 KOL 列表失敗: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch KOL profiles: {str(e)}")
+    finally:
+        if conn:
+            return_db_connection(conn)
 
 @app.get("/api/debug/import-status")
 async def debug_import_status():
