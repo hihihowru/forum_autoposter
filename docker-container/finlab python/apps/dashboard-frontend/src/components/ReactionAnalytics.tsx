@@ -63,27 +63,33 @@ export default function ReactionAnalytics({ apiBaseUrl }: Props) {
         );
       }
 
-      // Fetch reaction stats (from reaction_bot_logs table)
+      // Fetch reaction counts hourly (from reaction_bot_logs table)
       const reactionResponse = await fetch(
-        `${apiBaseUrl}/api/reaction-bot/stats?days=${Math.ceil(hoursDiff / 24)}`
+        `${apiBaseUrl}/api/reaction-bot/reactions/hourly-breakdown?hours=${hoursDiff}`
       );
       if (reactionResponse.ok) {
         const reactionResult = await reactionResponse.json();
 
-        // Process daily stats into hourly format
-        // TODO: Backend needs to return hourly reaction stats
-        const mockReactionData: ReactionData[] = articleData.map((article, index) => ({
-          hour: article.hour,
-          hour_label: article.hour_label,
-          reaction_count: Math.floor(article.count * 0.3), // Mock: 30% reaction rate
-          article_count: article.count,
-          time_range: article.time_range
-        }));
+        // Combine article data with reaction data
+        const combinedData: ReactionData[] = articleData.map((article) => {
+          const reactionHour = reactionResult.hourly_breakdown.find(
+            (r: any) => r.hour === article.hour
+          );
 
-        setReactionData(mockReactionData);
-        const totalReactionsMock = mockReactionData.reduce((sum, d) => sum + d.reaction_count, 0);
-        setTotalReactions(totalReactionsMock);
-        setAvgReactionsPerHour(totalReactionsMock / hoursDiff || 0);
+          return {
+            hour: article.hour,
+            hour_label: article.hour_label,
+            reaction_count: reactionHour?.count || 0,
+            article_count: article.count,
+            time_range: article.time_range
+          };
+        });
+
+        setReactionData(combinedData);
+        setTotalReactions(reactionResult.total_reactions || 0);
+        setAvgReactionsPerHour(
+          reactionResult.total_reactions / reactionResult.total_hours || 0
+        );
       }
 
     } catch (error) {

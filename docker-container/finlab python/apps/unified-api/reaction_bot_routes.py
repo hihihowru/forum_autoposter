@@ -516,6 +516,107 @@ async def trigger_scheduler():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/reactions/hourly-breakdown", summary="Get hourly reaction count breakdown")
+async def get_hourly_reaction_breakdown(
+    hours: int = 24,
+    service: ReactionBotService = Depends(get_reaction_bot_service)
+):
+    """
+    Get reaction count breakdown by hour from reaction_bot_logs.
+
+    Args:
+        hours: Number of hours to analyze (default: 24, max: 168)
+
+    Returns:
+        Hourly breakdown of reaction counts
+    """
+    try:
+        if hours < 1 or hours > 168:
+            raise HTTPException(status_code=400, detail="Hours must be between 1 and 168")
+
+        from datetime import datetime, timedelta
+
+        # Calculate time range
+        end_time = datetime.now().replace(minute=0, second=0, microsecond=0)
+        hourly_stats = []
+
+        # Query reactions for each hour from reaction_bot_logs
+        for i in range(hours):
+            hour_end = end_time - timedelta(hours=i)
+            hour_start = hour_end - timedelta(hours=1)
+
+            # Query database for reactions in this hour
+            conn = None
+            try:
+                from main import get_db_connection, return_db_connection
+                conn = get_db_connection()
+
+                with conn.cursor() as cursor:
+                    cursor.execute("""
+                        SELECT COUNT(*) as reaction_count,
+                               COUNT(CASE WHEN success = true THEN 1 END) as success_count,
+                               COUNT(CASE WHEN success = false THEN 1 END) as failed_count
+                        FROM reaction_bot_logs
+                        WHERE timestamp >= %s AND timestamp < %s
+                    """, (hour_start, hour_end))
+
+                    result = cursor.fetchone()
+                    reaction_count = result[0] if result else 0
+                    success_count = result[1] if result else 0
+                    failed_count = result[2] if result else 0
+
+            except Exception as db_error:
+                logger.warning(f"Database query failed for hour {i}: {db_error}")
+                reaction_count = 0
+                success_count = 0
+                failed_count = 0
+            finally:
+                if conn:
+                    return_db_connection(conn)
+
+            # Format labels
+            if i == 0:
+                label = "Current hour"
+            elif i == 1:
+                label = "1h ago"
+            else:
+                label = f"{i}h ago"
+
+            hour_label = hour_start.strftime("%H:00")
+
+            hourly_stats.append({
+                "hour": i,
+                "hour_label": hour_label,
+                "time_range": f"{hour_start.strftime('%H:%M')}-{hour_end.strftime('%H:%M')}",
+                "count": reaction_count,
+                "success_count": success_count,
+                "failed_count": failed_count,
+                "success_rate": (success_count / reaction_count * 100) if reaction_count > 0 else 0,
+                "label": label,
+                "start_time": hour_start.isoformat(),
+                "end_time": hour_end.isoformat()
+            })
+
+        total_reactions = sum(stat["count"] for stat in hourly_stats)
+        total_success = sum(stat["success_count"] for stat in hourly_stats)
+        total_failed = sum(stat["failed_count"] for stat in hourly_stats)
+
+        return {
+            "success": True,
+            "total_hours": hours,
+            "total_reactions": total_reactions,
+            "total_success": total_success,
+            "total_failed": total_failed,
+            "overall_success_rate": (total_success / total_reactions * 100) if total_reactions > 0 else 0,
+            "hourly_breakdown": hourly_stats,
+            "message": f"Fetched reaction breakdown for {hours} hours"
+        }
+
+    except Exception as e:
+        logger.error(f"❌ Error getting hourly reaction breakdown: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/fetch-articles/hourly-breakdown", summary="Get hourly article count breakdown")
 async def get_hourly_article_breakdown(
     hours: int = 24
