@@ -36,6 +36,9 @@ import InteractionAnalysisPage from './pages/InteractionAnalysisPage';
 import PerformanceAnalysisPage from './pages/PerformanceAnalysisPage';
 import ManualPostingPage from './components/PostingManagement/ManualPostingPage';
 
+// 互動管理組件
+import EngagementManagementPage from './pages/EngagementManagementPage';
+
 // 系統設置和用戶管理組件
 import SettingsPage from './components/Settings/SettingsPage';
 import UserManagement from './components/UserManagement/UserManagement';
@@ -296,7 +299,29 @@ const App: React.FC = () => {
                   path="/content-management/posts/:postId"
                   element={<PostDetail />}
                 />
-                
+
+                {/* 互動管理路由 */}
+                <Route
+                  path="/engagement-management"
+                  element={<EngagementManagementPage />}
+                />
+                <Route
+                  path="/engagement-management/kol-selection"
+                  element={<EngagementManagementPage />}
+                />
+                <Route
+                  path="/engagement-management/task-config"
+                  element={<EngagementManagementPage />}
+                />
+                <Route
+                  path="/engagement-management/monitor"
+                  element={<EngagementManagementPage />}
+                />
+                <Route
+                  path="/engagement-management/analytics"
+                  element={<EngagementManagementPage />}
+                />
+
                 {/* 系統設置路由 */}
                 <Route
                   path="/settings"

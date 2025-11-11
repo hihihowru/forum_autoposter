@@ -1,0 +1,19 @@
+# Reaction Bot Dependencies
+# Add these to your main requirements.txt
+
+# Scheduler
+apscheduler>=3.10.4
+
+# Data processing
+pandas>=2.0.0
+numpy>=1.24.0
+
+# HTTP requests
+requests>=2.31.0
+
+# Database (if not already installed)
+asyncpg>=0.29.0
+
+# FastAPI (if not already installed)
+fastapi>=0.111.0
+pydantic>=2.0.0
