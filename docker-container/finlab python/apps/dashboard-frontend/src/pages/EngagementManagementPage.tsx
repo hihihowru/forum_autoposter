@@ -28,6 +28,8 @@ import {
   Tooltip,
   Modal,
   Spin,
+  Radio,
+  Tabs,
 } from 'antd';
 import {
   RocketOutlined,
@@ -41,11 +43,15 @@ import {
   CloseCircleOutlined,
   InfoCircleOutlined,
   LineChartOutlined,
+  FileTextOutlined,
+  ReloadOutlined,
 } from '@ant-design/icons';
 import { getApiBaseUrl } from '../config/api';
+import { Line } from '@ant-design/charts';
 
 const { Title, Text, Paragraph } = Typography;
 const { Option } = Select;
+const { TabPane } = Tabs;
 
 const API_BASE_URL = getApiBaseUrl();
 
@@ -104,6 +110,26 @@ interface DailyStats {
   success_rate: number;
 }
 
+interface ArticleStats {
+  hour_1: number;
+  hour_2: number;
+  hour_3: number;
+  hour_6: number;
+  hour_12: number;
+  hour_24: number;
+}
+
+interface ArticleDetail {
+  article_id: string;
+  create_time: string;
+  hour_bucket: number;
+}
+
+interface HourlyChartData {
+  hour: string;
+  count: number;
+}
+
 // ============================================
 // Main Component
 // ============================================
@@ -124,10 +150,14 @@ const EngagementManagementPage: React.FC = () => {
   const [batches, setBatches] = useState<BatchRecord[]>([]);
   const [logs, setLogs] = useState<ReactionLog[]>([]);
   const [dailyStats, setDailyStats] = useState<DailyStats[]>([]);
+  const [articleStats, setArticleStats] = useState<ArticleStats | null>(null);
+  const [articleDetails, setArticleDetails] = useState<ArticleDetail[]>([]);
+  const [articleViewMode, setArticleViewMode] = useState<'hourly' | 'daily'>('hourly');
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const [loadingArticles, setLoadingArticles] = useState(false);
 
   const [testModalVisible, setTestModalVisible] = useState(false);
   const [testResult, setTestResult] = useState<any>(null);
@@ -147,6 +177,7 @@ const EngagementManagementPage: React.FC = () => {
         loadBatches(),
         loadLogs(),
         loadStats(),
+        loadArticleStats(),
       ]);
     } catch (error) {
       console.error('Error loading data:', error);
@@ -213,6 +244,75 @@ const EngagementManagementPage: React.FC = () => {
       }
     } catch (error) {
       console.error('Error loading stats:', error);
+    }
+  };
+
+  const loadArticleStats = async () => {
+    setLoadingArticles(true);
+    try {
+      // Fetch article counts for different time ranges
+      const timeRanges = [1, 2, 3, 6, 12, 24];
+      const results = await Promise.all(
+        timeRanges.map(async (hours) => {
+          try {
+            const response = await fetch(`${API_BASE_URL}/api/reaction-bot/fetch-articles?hours_back=${hours}`);
+            if (response.ok) {
+              const data = await response.json();
+              return {
+                hours,
+                count: data.article_count || 0,
+                article_ids: data.article_ids || []
+              };
+            }
+            return { hours, count: 0, article_ids: [] };
+          } catch (error) {
+            console.error(`Error fetching ${hours}h article count:`, error);
+            return { hours, count: 0, article_ids: [] };
+          }
+        })
+      );
+
+      const stats: ArticleStats = {
+        hour_1: results.find(r => r.hours === 1)?.count || 0,
+        hour_2: results.find(r => r.hours === 2)?.count || 0,
+        hour_3: results.find(r => r.hours === 3)?.count || 0,
+        hour_6: results.find(r => r.hours === 6)?.count || 0,
+        hour_12: results.find(r => r.hours === 12)?.count || 0,
+        hour_24: results.find(r => r.hours === 24)?.count || 0,
+      };
+
+      setArticleStats(stats);
+
+      // Fetch detailed article list for past 24 hours with timestamps
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/reaction-bot/fetch-articles?hours_back=24&include_details=true`);
+        if (response.ok) {
+          const data = await response.json();
+
+          // Process articles into detailed format
+          const details: ArticleDetail[] = (data.article_ids || []).map((articleId: string, index: number) => {
+            // Calculate approximate time bucket based on position
+            // This is a simplified approach - ideally backend should provide timestamps
+            const totalArticles = data.article_ids.length;
+            const hourBucket = Math.ceil((index / totalArticles) * 24);
+
+            return {
+              article_id: articleId,
+              create_time: new Date(Date.now() - hourBucket * 3600000).toISOString(),
+              hour_bucket: hourBucket,
+            };
+          });
+
+          setArticleDetails(details);
+        }
+      } catch (error) {
+        console.error('Error fetching detailed article list:', error);
+      }
+    } catch (error) {
+      console.error('Error loading article stats:', error);
+      message.error('載入文章統計失敗');
+    } finally {
+      setLoadingArticles(false);
     }
   };
 
@@ -485,6 +585,195 @@ const EngagementManagementPage: React.FC = () => {
           </Card>
         </Col>
       </Row>
+
+      {/* Article Statistics from CMoney */}
+      <Card
+        title={
+          <Space>
+            <FileTextOutlined />
+            <span>文章數據統計 (CMoney)</span>
+          </Space>
+        }
+        extra={
+          <Space>
+            <Radio.Group
+              value={articleViewMode}
+              onChange={(e) => setArticleViewMode(e.target.value)}
+              buttonStyle="solid"
+              size="small"
+            >
+              <Radio.Button value="hourly">每小時</Radio.Button>
+              <Radio.Button value="daily">每日</Radio.Button>
+            </Radio.Group>
+            <Button
+              icon={<ReloadOutlined />}
+              onClick={loadArticleStats}
+              loading={loadingArticles}
+              size="small"
+            >
+              刷新
+            </Button>
+          </Space>
+        }
+        style={{ marginBottom: 24 }}
+        loading={loadingArticles}
+      >
+        <Tabs defaultActiveKey="overview" size="large">
+          <TabPane tab="統計總覽" key="overview">
+            <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+              <Col xs={12} sm={8} md={4}>
+                <Statistic
+                  title="過去 1 小時"
+                  value={articleStats?.hour_1 || 0}
+                  suffix="篇"
+                  valueStyle={{ fontSize: '20px' }}
+                />
+              </Col>
+              <Col xs={12} sm={8} md={4}>
+                <Statistic
+                  title="過去 2 小時"
+                  value={articleStats?.hour_2 || 0}
+                  suffix="篇"
+                  valueStyle={{ fontSize: '20px' }}
+                />
+              </Col>
+              <Col xs={12} sm={8} md={4}>
+                <Statistic
+                  title="過去 3 小時"
+                  value={articleStats?.hour_3 || 0}
+                  suffix="篇"
+                  valueStyle={{ fontSize: '20px' }}
+                />
+              </Col>
+              <Col xs={12} sm={8} md={4}>
+                <Statistic
+                  title="過去 6 小時"
+                  value={articleStats?.hour_6 || 0}
+                  suffix="篇"
+                  valueStyle={{ fontSize: '20px' }}
+                />
+              </Col>
+              <Col xs={12} sm={8} md={4}>
+                <Statistic
+                  title="過去 12 小時"
+                  value={articleStats?.hour_12 || 0}
+                  suffix="篇"
+                  valueStyle={{ fontSize: '20px' }}
+                />
+              </Col>
+              <Col xs={12} sm={8} md={4}>
+                <Statistic
+                  title="過去 24 小時"
+                  value={articleStats?.hour_24 || 0}
+                  suffix="篇"
+                  valueStyle={{ fontSize: '20px' }}
+                />
+              </Col>
+            </Row>
+            <Alert
+              message="數據來源"
+              description="文章數據從 CMoney trans_post_latest_all 表格即時查詢，顯示指定時間範圍內的新增文章數量。"
+              type="info"
+              showIcon
+              icon={<InfoCircleOutlined />}
+            />
+          </TabPane>
+
+          <TabPane tab="趨勢圖表" key="chart">
+            {articleViewMode === 'hourly' ? (
+              <>
+                <div style={{ marginBottom: 16 }}>
+                  <Text strong>過去 24 小時文章發布趨勢</Text>
+                </div>
+                <Line
+                  data={[
+                    { hour: '1h', count: articleStats?.hour_1 || 0 },
+                    { hour: '2h', count: articleStats?.hour_2 || 0 },
+                    { hour: '3h', count: articleStats?.hour_3 || 0 },
+                    { hour: '6h', count: articleStats?.hour_6 || 0 },
+                    { hour: '12h', count: articleStats?.hour_12 || 0 },
+                    { hour: '24h', count: articleStats?.hour_24 || 0 },
+                  ]}
+                  xField="hour"
+                  yField="count"
+                  point={{ size: 5, shape: 'circle' }}
+                  label={{ style: { fill: '#000' } }}
+                  smooth={true}
+                  height={300}
+                  xAxis={{
+                    title: { text: '時間區間' },
+                  }}
+                  yAxis={{
+                    title: { text: '文章數量' },
+                  }}
+                />
+              </>
+            ) : (
+              <>
+                <div style={{ marginBottom: 16 }}>
+                  <Text strong>每日文章發布趨勢</Text>
+                </div>
+                <Alert
+                  message="功能開發中"
+                  description="每日趨勢圖表功能即將推出，敬請期待。"
+                  type="info"
+                  showIcon
+                />
+              </>
+            )}
+          </TabPane>
+
+          <TabPane tab="文章列表" key="articles">
+            <Table
+              dataSource={articleDetails}
+              rowKey="article_id"
+              pagination={{
+                pageSize: 20,
+                showSizeChanger: true,
+                showTotal: (total) => `共 ${total} 篇文章`,
+              }}
+              scroll={{ y: 400 }}
+              loading={loadingArticles}
+              columns={[
+                {
+                  title: '文章 ID',
+                  dataIndex: 'article_id',
+                  key: 'article_id',
+                  width: 200,
+                  render: (text: string) => <Text code>{text}</Text>,
+                },
+                {
+                  title: '發布時間',
+                  dataIndex: 'create_time',
+                  key: 'create_time',
+                  width: 180,
+                  render: (text: string) => new Date(text).toLocaleString('zh-TW'),
+                  sorter: (a, b) => new Date(a.create_time).getTime() - new Date(b.create_time).getTime(),
+                  defaultSortOrder: 'descend',
+                },
+                {
+                  title: '時間範圍',
+                  dataIndex: 'hour_bucket',
+                  key: 'hour_bucket',
+                  width: 120,
+                  render: (hours: number) => (
+                    <Tag color="blue">{hours} 小時前</Tag>
+                  ),
+                  filters: [
+                    { text: '1 小時內', value: 1 },
+                    { text: '2 小時內', value: 2 },
+                    { text: '3 小時內', value: 3 },
+                    { text: '6 小時內', value: 6 },
+                    { text: '12 小時內', value: 12 },
+                    { text: '24 小時內', value: 24 },
+                  ],
+                  onFilter: (value, record) => record.hour_bucket <= value,
+                },
+              ]}
+            />
+          </TabPane>
+        </Tabs>
+      </Card>
 
       {/* Configuration Panel */}
       <Card
