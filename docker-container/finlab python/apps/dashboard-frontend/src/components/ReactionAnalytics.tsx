@@ -22,6 +22,8 @@ interface ReactionData {
   reaction_count: number;
   article_count: number;
   time_range: string;
+  start_time?: string;
+  end_time?: string;
 }
 
 interface Props {
@@ -81,7 +83,9 @@ export default function ReactionAnalytics({ apiBaseUrl }: Props) {
             hour_label: article.hour_label,
             reaction_count: reactionHour?.count || 0,
             article_count: article.count,
-            time_range: article.time_range
+            time_range: article.time_range,
+            start_time: article.start_time,
+            end_time: article.end_time
           };
         });
 
@@ -109,7 +113,15 @@ export default function ReactionAnalytics({ apiBaseUrl }: Props) {
     const dailyMap = new Map<string, { articles: number; reactions: number }>();
 
     hourlyData.forEach(item => {
-      const date = dayjs(item.start_time).format('YYYY-MM-DD');
+      // Use start_time if available, otherwise calculate from current time and hour offset
+      let date: string;
+      if (item.start_time) {
+        date = dayjs(item.start_time).format('YYYY-MM-DD');
+      } else {
+        // Fallback: calculate date from hour offset
+        date = dayjs().subtract(item.hour, 'hours').format('YYYY-MM-DD');
+      }
+
       const existing = dailyMap.get(date) || { articles: 0, reactions: 0 };
       dailyMap.set(date, {
         articles: existing.articles + item.article_count,
@@ -121,7 +133,7 @@ export default function ReactionAnalytics({ apiBaseUrl }: Props) {
       date,
       article_count: data.articles,
       reaction_count: data.reactions
-    }));
+    })).sort((a, b) => a.date.localeCompare(b.date));
   };
 
   // Prepare chart data
