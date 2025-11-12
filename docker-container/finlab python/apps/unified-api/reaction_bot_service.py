@@ -375,15 +375,49 @@ class ReactionBotService:
             (success: bool, response: Dict)
         """
         try:
-            # TODO: Integrate with actual CMoney API client
-            # For now, simulate API call
-            # response = await self.cmoney_client.send_reaction(article_id, kol_serial, "like")
+            # Get KOL credentials from database
+            async with self.db.acquire() as conn:
+                kol_row = await conn.fetchrow("""
+                    SELECT email, password_hash, access_token
+                    FROM kol_profiles
+                    WHERE serial = $1
+                """, kol_serial)
 
-            # Simulate success (replace with real API call)
-            await asyncio.sleep(0.1)
-            response = {"success": True, "article_id": article_id}
+                if not kol_row:
+                    logger.error(f"❌ KOL serial {kol_serial} not found")
+                    return False, {"error": f"KOL serial {kol_serial} not found"}
 
-            return True, response
+            # Get access token (login if needed)
+            access_token = await self.cmoney_client.get_or_refresh_token(
+                kol_serial,
+                kol_row['email'],
+                kol_row['password_hash']
+            )
+
+            if not access_token:
+                logger.error(f"❌ Failed to get access token for KOL {kol_serial}")
+                return False, {"error": "Failed to get access token"}
+
+            # Send reaction (type 1 = like)
+            result = await self.cmoney_client.add_article_reaction(
+                access_token=access_token,
+                article_id=article_id,
+                reaction_type=1  # 1 = 讚 (like)
+            )
+
+            if result.success:
+                return True, {
+                    "success": True,
+                    "article_id": article_id,
+                    "kol_serial": kol_serial,
+                    "reaction_type": result.reaction_type
+                }
+            else:
+                logger.error(f"❌ CMoney API reaction failed: {result.error_message}")
+                return False, {
+                    "error": result.error_message,
+                    "article_id": article_id
+                }
 
         except Exception as e:
             logger.error(f"❌ CMoney API error: {e}")

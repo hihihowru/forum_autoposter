@@ -252,6 +252,11 @@ db_pool = None  # Connection pool instead of single connection
 # 🔥 FIX: Parse DATABASE_URL into DB_CONFIG for asyncpg connections
 DB_CONFIG = None
 
+# 🔥 Reaction Bot Service and CMoney Client
+reaction_bot_service = None
+cmoney_reaction_client = None
+asyncpg_pool = None  # AsyncPG pool for reaction bot
+
 def get_db_connection():
     """Get a connection from the pool"""
     if db_pool is None:
@@ -683,7 +688,7 @@ async def update_next_run(schedule_id: str, schedule: Dict, is_post_execution: b
             return_db_connection(conn)
 
 @app.on_event("startup")
-def startup_event():
+async def startup_event():
     """啟動時初始化 FinLab 和數據庫連接"""
     global stock_mapping, db_pool
 
@@ -836,8 +841,51 @@ def startup_event():
         logger.error(traceback.format_exc())
         # Don't crash startup if scheduler fails
 
+    # 🔥 Initialize Reaction Bot Service
+    try:
+        global reaction_bot_service, cmoney_reaction_client, asyncpg_pool
+
+        logger.info("🤖 [Reaction Bot] 正在初始化 Reaction Bot 服務...")
+
+        # Create asyncpg connection pool if DB_CONFIG is available
+        if DB_CONFIG:
+            import asyncpg
+            asyncpg_pool = await asyncpg.create_pool(
+                host=DB_CONFIG['host'],
+                port=DB_CONFIG['port'],
+                database=DB_CONFIG['database'],
+                user=DB_CONFIG['user'],
+                password=DB_CONFIG['password'],
+                min_size=1,
+                max_size=5
+            )
+            logger.info("✅ [Reaction Bot] AsyncPG 連接池創建成功")
+
+            # Initialize CMoney reaction client
+            from cmoney_reaction_client import CMoneyReactionClient
+            cmoney_reaction_client = CMoneyReactionClient()
+            logger.info("✅ [Reaction Bot] CMoney 客戶端初始化成功")
+
+            # Initialize reaction bot service
+            from reaction_bot_service import ReactionBotService
+            reaction_bot_service = ReactionBotService(
+                db_connection=asyncpg_pool,
+                cmoney_client=cmoney_reaction_client
+            )
+            logger.info("✅ [Reaction Bot] Reaction Bot 服務初始化成功")
+        else:
+            logger.warning("⚠️  [Reaction Bot] DB_CONFIG 未設置，Reaction Bot 服務將無法使用")
+
+    except Exception as reaction_bot_error:
+        logger.error(f"❌ [Reaction Bot] 初始化失敗: {reaction_bot_error}")
+        logger.error(traceback.format_exc())
+        reaction_bot_service = None
+        cmoney_reaction_client = None
+        asyncpg_pool = None
+        # Don't crash startup if reaction bot fails
+
 @app.on_event("shutdown")
-def shutdown_event():
+async def shutdown_event():
     """應用關閉時清理資源"""
     try:
         # Shutdown scheduler
@@ -847,6 +895,20 @@ def shutdown_event():
             logger.info("✅ [APScheduler] 排程器已關閉")
     except Exception as e:
         logger.error(f"❌ [APScheduler] 排程器關閉失敗: {e}")
+
+    try:
+        # Close reaction bot resources
+        if cmoney_reaction_client:
+            logger.info("🛑 [Reaction Bot] 正在關閉 CMoney 客戶端...")
+            cmoney_reaction_client.close()
+            logger.info("✅ [Reaction Bot] CMoney 客戶端已關閉")
+
+        if asyncpg_pool:
+            logger.info("🛑 [Reaction Bot] 正在關閉 AsyncPG 連接池...")
+            await asyncpg_pool.close()
+            logger.info("✅ [Reaction Bot] AsyncPG 連接池已關閉")
+    except Exception as e:
+        logger.error(f"❌ [Reaction Bot] 關閉失敗: {e}")
 
 def ensure_finlab_login():
     """確保 FinLab 已登入"""
@@ -1404,6 +1466,74 @@ async def migrate_disable_all_schedules():
         return {
             "success": False,
             "error": str(e),
+            "timestamp": get_current_time().isoformat()
+        }
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+@app.post("/api/database/migrate/add-reaction-bot-tables")
+async def migrate_add_reaction_bot_tables():
+    """
+    Migration: Create reaction bot tables
+
+    Creates all required tables for the reaction bot feature:
+    - reaction_bot_config
+    - reaction_bot_logs
+    - reaction_bot_batches
+    - reaction_bot_article_queue
+    - reaction_bot_stats
+    """
+    logger.info("🔧 開始數據庫遷移: 創建 Reaction Bot 表")
+
+    conn = None
+    try:
+        if not db_pool:
+            return {
+                "success": False,
+                "error": "Database pool not initialized",
+                "timestamp": get_current_time().isoformat()
+            }
+
+        conn = get_db_connection()
+        conn.rollback()  # Clear any failed transactions
+
+        # Read SQL file
+        sql_file_path = os.path.join(os.path.dirname(__file__), 'migrations', 'add_reaction_bot_tables.sql')
+
+        if not os.path.exists(sql_file_path):
+            raise Exception(f"SQL file not found: {sql_file_path}")
+
+        with open(sql_file_path, 'r', encoding='utf-8') as f:
+            sql_content = f.read()
+
+        # Execute SQL
+        with conn.cursor() as cursor:
+            cursor.execute(sql_content)
+            conn.commit()
+
+        logger.info("✅ 數據庫遷移成功: Reaction Bot 表已創建")
+        return {
+            "success": True,
+            "message": "Migration successful: Reaction Bot tables created",
+            "tables_created": [
+                "reaction_bot_config",
+                "reaction_bot_logs",
+                "reaction_bot_batches",
+                "reaction_bot_article_queue",
+                "reaction_bot_stats"
+            ],
+            "timestamp": get_current_time().isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"❌ 數據庫遷移失敗: {e}")
+        if conn:
+            conn.rollback()
+        return {
+            "success": False,
+            "error": str(e),
+            "error_type": type(e).__name__,
             "timestamp": get_current_time().isoformat()
         }
     finally:

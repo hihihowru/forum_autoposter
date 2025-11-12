@@ -76,12 +76,10 @@ class BatchProcessResponse(BaseModel):
 
 async def get_reaction_bot_service():
     """
-    Dependency to get ReactionBotService instance.
-    Note: This should be replaced with actual dependency injection
+    Dependency to get ReactionBotService instance from main app globals.
     """
-    # TODO: Replace with actual DB connection and CMoney client
-    # For now, return None (will be handled in endpoints)
-    return None
+    from main import reaction_bot_service
+    return reaction_bot_service
 
 
 # ============================================
