@@ -615,6 +615,100 @@ async def get_hourly_reaction_breakdown(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/reactions/by-kol", summary="Get reaction statistics grouped by KOL")
+async def get_reactions_by_kol(
+    hours: int = 24
+):
+    """
+    Get reaction statistics grouped by KOL for the specified time range.
+
+    Args:
+        hours: Number of hours to analyze (default: 24, max: 168)
+
+    Returns:
+        Reaction counts per KOL with success/failure breakdown
+    """
+    try:
+        if hours < 1 or hours > 168:
+            raise HTTPException(status_code=400, detail="Hours must be between 1 and 168")
+
+        from datetime import datetime, timedelta
+        from main import get_db_connection, return_db_connection
+
+        start_time = datetime.now() - timedelta(hours=hours)
+
+        conn = None
+        try:
+            conn = get_db_connection()
+
+            with conn.cursor() as cursor:
+                # Get reaction counts grouped by KOL
+                cursor.execute("""
+                    SELECT
+                        kol_serial,
+                        COUNT(*) as total_reactions,
+                        COUNT(CASE WHEN success = true THEN 1 END) as successful_reactions,
+                        COUNT(CASE WHEN success = false THEN 1 END) as failed_reactions,
+                        MIN(timestamp) as first_reaction_time,
+                        MAX(timestamp) as last_reaction_time
+                    FROM reaction_bot_logs
+                    WHERE timestamp >= %s
+                    GROUP BY kol_serial
+                    ORDER BY total_reactions DESC
+                """, (start_time,))
+
+                results = cursor.fetchall()
+
+                kol_stats = []
+                total_reactions = 0
+                total_successful = 0
+                total_failed = 0
+
+                for row in results:
+                    kol_serial = row[0]
+                    total = row[1]
+                    successful = row[2]
+                    failed = row[3]
+                    first_time = row[4]
+                    last_time = row[5]
+
+                    total_reactions += total
+                    total_successful += successful
+                    total_failed += failed
+
+                    success_rate = (successful / total * 100) if total > 0 else 0
+
+                    kol_stats.append({
+                        "kol_serial": kol_serial,
+                        "total_reactions": total,
+                        "successful_reactions": successful,
+                        "failed_reactions": failed,
+                        "success_rate": round(success_rate, 2),
+                        "first_reaction_time": first_time.isoformat() if first_time else None,
+                        "last_reaction_time": last_time.isoformat() if last_time else None
+                    })
+
+        finally:
+            if conn:
+                return_db_connection(conn)
+
+        return {
+            "success": True,
+            "hours_analyzed": hours,
+            "total_kols": len(kol_stats),
+            "total_reactions": total_reactions,
+            "total_successful": total_successful,
+            "total_failed": total_failed,
+            "overall_success_rate": round((total_successful / total_reactions * 100) if total_reactions > 0 else 0, 2),
+            "kol_statistics": kol_stats,
+            "message": f"Fetched reaction statistics for {len(kol_stats)} KOLs over {hours} hours"
+        }
+
+    except Exception as e:
+        logger.error(f"❌ Error getting KOL reaction statistics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/fetch-articles/hourly-breakdown", summary="Get hourly article count breakdown")
 async def get_hourly_article_breakdown(
     hours: int = 24
