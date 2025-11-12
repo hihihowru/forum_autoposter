@@ -30,10 +30,25 @@ class ArticleStreamFetcher:
         Initialize article stream fetcher.
 
         Args:
-            cookie_session: CMoney API session cookie (optional, uses default if not provided)
+            cookie_session: CMoney API session cookie (optional, reads from env if not provided)
         """
-        self.cookie_session = cookie_session or 'eyJhbGciOiJIUzI1NiJ9.eyJkYXRhIjp7InVzZXJuYW1lIjoiZm9ydW10ZWFtIn0sIm5iZiI6MTc2MjgzOTI1OCwiaWF0IjoxNzYyODM5MjU4fQ.2KV6UwSaNLjvdYjLCppy1BJ84hgpMKb1qhLJ_2tpmKg'
+        import os
+
+        # Priority: 1) Parameter, 2) Environment variable, 3) Fallback default
+        self.cookie_session = (
+            cookie_session or
+            os.getenv('CMONEY_ARTICLE_COOKIE') or
+            'eyJhbGciOiJIUzI1NiJ9.eyJkYXRhIjp7InVzZXJuYW1lIjoiZm9ydW10ZWFtIn0sIm5iZiI6MTc2MjgzOTI1OCwiaWF0IjoxNzYyODM5MjU4fQ.2KV6UwSaNLjvdYjLCppy1BJ84hgpMKb1qhLJ_2tpmKg'
+        )
         self.api_url = 'https://anya.cmoney.tw/api/queryResult'
+
+        # Log which source was used (for debugging)
+        if cookie_session:
+            logger.info("✅ ArticleStreamFetcher initialized (using provided cookie)")
+        elif os.getenv('CMONEY_ARTICLE_COOKIE'):
+            logger.info("✅ ArticleStreamFetcher initialized (using env CMONEY_ARTICLE_COOKIE)")
+        else:
+            logger.warning("⚠️ ArticleStreamFetcher using fallback cookie (may expire!)")
 
         logger.info("✅ ArticleStreamFetcher initialized")
 
