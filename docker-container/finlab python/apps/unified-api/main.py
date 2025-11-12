@@ -162,14 +162,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ==================== 註冊 Reaction Bot Routes ====================
-try:
-    from reaction_bot_routes import router as reaction_bot_router
-    app.include_router(reaction_bot_router)
-    logger.info("✅ Reaction Bot routes registered successfully")
-except Exception as e:
-    logger.warning(f"⚠️  Failed to register Reaction Bot routes: {e}")
-
 # ==================== FinLab 初始化 ====================
 
 import finlab
@@ -8010,12 +8002,24 @@ async def start_schedule(task_id: str):
             return_db_connection(conn)
 
 
+# ==================== 註冊 Reaction Bot Routes ====================
+# Register reaction bot router after all dependencies are loaded
+try:
+    from reaction_bot_routes import router as reaction_bot_router
+    app.include_router(reaction_bot_router)
+    logger.info("✅ Reaction Bot routes registered successfully")
+except Exception as e:
+    logger.error(f"❌ Failed to register Reaction Bot routes: {e}")
+    import traceback
+    logger.error(traceback.format_exc())
+
+
 if __name__ == "__main__":
     import uvicorn
-    
+
     # Railway 使用 PORT 環境變數，本地開發使用 8000
     port = int(os.getenv("PORT", 8000))
     host = os.getenv("HOST", "0.0.0.0")
-    
+
     logger.info(f"🚀 啟動 Unified API 服務器: {host}:{port}")
     uvicorn.run(app, host=host, port=port)
