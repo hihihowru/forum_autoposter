@@ -63,10 +63,19 @@ def query_cmoney_db(sql_query: str) -> Tuple[int, pd.DataFrame]:
             return status_code, df
         else:
             logger.error(f"❌ [CMoney Query] Failed with status {status_code}")
+            logger.error(f"❌ [CMoney Query] Response body: {response.text[:500]}")  # First 500 chars
             return status_code, pd.DataFrame()
 
+    except requests.exceptions.Timeout as e:
+        logger.error(f"❌ [CMoney Query] Timeout Error (30s): {e}")
+        logger.error(f"❌ [CMoney Query] Request URL: {url}")
+        return 408, pd.DataFrame()
+    except requests.exceptions.ConnectionError as e:
+        logger.error(f"❌ [CMoney Query] Connection Error: {e}")
+        logger.error(f"❌ [CMoney Query] Cannot reach {url}")
+        return 503, pd.DataFrame()
     except Exception as e:
-        logger.error(f"❌ [CMoney Query] Error: {e}")
+        logger.error(f"❌ [CMoney Query] Unexpected Error: {type(e).__name__}: {e}")
         return 500, pd.DataFrame()
 
 
