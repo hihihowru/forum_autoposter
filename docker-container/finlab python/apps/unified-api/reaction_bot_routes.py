@@ -822,3 +822,308 @@ async def fetch_new_articles(
     except Exception as e:
         logger.error(f"❌ Error fetching articles: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================
+# Hourly Reaction Statistics Endpoints
+# ============================================
+
+@router.post("/hourly-task/run", summary="Run hourly reaction task manually")
+async def run_hourly_task(
+    kol_serials: Optional[List[int]] = None
+):
+    """
+    Manually trigger hourly reaction task.
+
+    This will:
+    1. Fetch past hour articles from Kafka stream
+    2. Use KOL pool to like articles (with rotation)
+    3. Save statistics to hourly_reaction_stats table
+
+    Args:
+        kol_serials: Optional list of KOL serials to use (None = use all active KOLs)
+
+    Returns:
+        Task execution result with statistics
+    """
+    try:
+        from main import get_db_connection, return_db_connection
+        from hourly_reaction_service import HourlyReactionService
+        from cmoney_reaction_client import CMoneyReactionClient
+        from psycopg2 import pool
+        import os
+
+        # Create simple connection pool
+        database_url = os.getenv("DATABASE_URL")
+        if not database_url:
+            raise HTTPException(status_code=500, detail="DATABASE_URL not configured")
+
+        import urllib.parse
+        parsed_url = urllib.parse.urlparse(database_url)
+
+        db_pool = pool.SimpleConnectionPool(
+            minconn=1,
+            maxconn=5,
+            host=parsed_url.hostname,
+            port=parsed_url.port or 5432,
+            database=parsed_url.path[1:],
+            user=parsed_url.username,
+            password=parsed_url.password
+        )
+
+        try:
+            cmoney_client = CMoneyReactionClient()
+            service = HourlyReactionService(db_pool, cmoney_client)
+
+            # Run hourly task
+            await service.run_hourly_task(kol_serials=kol_serials)
+
+            return {
+                "success": True,
+                "message": "Hourly task completed successfully",
+                "kol_serials_used": kol_serials if kol_serials else "all active KOLs"
+            }
+
+        finally:
+            db_pool.closeall()
+
+    except Exception as e:
+        logger.error(f"❌ Error running hourly task: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/hourly-stats", summary="Get hourly reaction statistics")
+async def get_hourly_stats(
+    limit: int = 24,
+    offset: int = 0
+):
+    """
+    Get hourly reaction statistics from hourly_reaction_stats table.
+
+    Args:
+        limit: Maximum number of records to return (default: 24, max: 168)
+        offset: Pagination offset (default: 0)
+
+    Returns:
+        List of hourly statistics records
+    """
+    try:
+        if limit < 1 or limit > 168:
+            raise HTTPException(status_code=400, detail="Limit must be between 1 and 168")
+
+        from main import get_db_connection, return_db_connection
+
+        conn = None
+        try:
+            conn = get_db_connection()
+
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT
+                        id,
+                        hour_start,
+                        hour_end,
+                        total_new_articles,
+                        total_like_attempts,
+                        successful_likes,
+                        unique_articles_liked,
+                        like_success_rate,
+                        kol_pool_serials,
+                        created_at,
+                        updated_at
+                    FROM hourly_reaction_stats
+                    ORDER BY hour_start DESC
+                    LIMIT %s OFFSET %s
+                """, (limit, offset))
+
+                rows = cursor.fetchall()
+
+                stats = []
+                for row in rows:
+                    stats.append({
+                        "id": row[0],
+                        "hour_start": row[1].isoformat() if row[1] else None,
+                        "hour_end": row[2].isoformat() if row[2] else None,
+                        "total_new_articles": row[3],
+                        "total_like_attempts": row[4],
+                        "successful_likes": row[5],
+                        "unique_articles_liked": row[6],
+                        "like_success_rate": float(row[7]) if row[7] else 0,
+                        "kol_pool_serials": row[8],
+                        "created_at": row[9].isoformat() if row[9] else None,
+                        "updated_at": row[10].isoformat() if row[10] else None
+                    })
+
+                # Get total count
+                cursor.execute("SELECT COUNT(*) FROM hourly_reaction_stats")
+                total_count = cursor.fetchone()[0]
+
+        finally:
+            if conn:
+                return_db_connection(conn)
+
+        return {
+            "success": True,
+            "stats": stats,
+            "count": len(stats),
+            "total_count": total_count,
+            "limit": limit,
+            "offset": offset,
+            "message": f"Fetched {len(stats)} hourly statistics records"
+        }
+
+    except Exception as e:
+        logger.error(f"❌ Error getting hourly stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/hourly-stats/latest", summary="Get latest hourly statistics")
+async def get_latest_hourly_stats():
+    """
+    Get the most recent hourly statistics record.
+
+    Returns:
+        Latest hourly statistics record
+    """
+    try:
+        from main import get_db_connection, return_db_connection
+
+        conn = None
+        try:
+            conn = get_db_connection()
+
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT
+                        id,
+                        hour_start,
+                        hour_end,
+                        total_new_articles,
+                        total_like_attempts,
+                        successful_likes,
+                        unique_articles_liked,
+                        like_success_rate,
+                        kol_pool_serials,
+                        article_ids,
+                        created_at,
+                        updated_at
+                    FROM hourly_reaction_stats
+                    ORDER BY hour_start DESC
+                    LIMIT 1
+                """)
+
+                row = cursor.fetchone()
+
+                if not row:
+                    return {
+                        "success": False,
+                        "message": "No statistics records found"
+                    }
+
+                stats = {
+                    "id": row[0],
+                    "hour_start": row[1].isoformat() if row[1] else None,
+                    "hour_end": row[2].isoformat() if row[2] else None,
+                    "total_new_articles": row[3],
+                    "total_like_attempts": row[4],
+                    "successful_likes": row[5],
+                    "unique_articles_liked": row[6],
+                    "like_success_rate": float(row[7]) if row[7] else 0,
+                    "kol_pool_serials": row[8],
+                    "article_ids_count": len(row[9]) if row[9] else 0,
+                    "article_ids_sample": row[9][:10] if row[9] else [],
+                    "created_at": row[10].isoformat() if row[10] else None,
+                    "updated_at": row[11].isoformat() if row[11] else None
+                }
+
+        finally:
+            if conn:
+                return_db_connection(conn)
+
+        return {
+            "success": True,
+            "stats": stats,
+            "message": "Fetched latest hourly statistics"
+        }
+
+    except Exception as e:
+        logger.error(f"❌ Error getting latest hourly stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/hourly-stats/summary", summary="Get hourly statistics summary")
+async def get_hourly_stats_summary(
+    hours: int = 24
+):
+    """
+    Get aggregated summary of hourly statistics.
+
+    Args:
+        hours: Number of hours to include in summary (default: 24, max: 168)
+
+    Returns:
+        Aggregated statistics summary
+    """
+    try:
+        if hours < 1 or hours > 168:
+            raise HTTPException(status_code=400, detail="Hours must be between 1 and 168")
+
+        from main import get_db_connection, return_db_connection
+        from datetime import datetime, timedelta
+
+        cutoff_time = datetime.now() - timedelta(hours=hours)
+
+        conn = None
+        try:
+            conn = get_db_connection()
+
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT
+                        COUNT(*) as total_hours,
+                        SUM(total_new_articles) as total_articles,
+                        SUM(total_like_attempts) as total_attempts,
+                        SUM(successful_likes) as total_success,
+                        SUM(unique_articles_liked) as total_unique_articles,
+                        AVG(like_success_rate) as avg_success_rate,
+                        MIN(hour_start) as earliest_hour,
+                        MAX(hour_start) as latest_hour
+                    FROM hourly_reaction_stats
+                    WHERE hour_start >= %s
+                """, (cutoff_time,))
+
+                row = cursor.fetchone()
+
+                if not row or row[0] == 0:
+                    return {
+                        "success": False,
+                        "message": f"No statistics found for past {hours} hours"
+                    }
+
+                summary = {
+                    "hours_analyzed": hours,
+                    "total_hours_with_data": row[0],
+                    "total_new_articles": row[1] or 0,
+                    "total_like_attempts": row[2] or 0,
+                    "total_successful_likes": row[3] or 0,
+                    "total_unique_articles_liked": row[4] or 0,
+                    "average_success_rate": round(float(row[5]) if row[5] else 0, 2),
+                    "earliest_hour": row[6].isoformat() if row[6] else None,
+                    "latest_hour": row[7].isoformat() if row[7] else None,
+                    "articles_per_hour": round((row[1] or 0) / (row[0] or 1), 2),
+                    "likes_per_hour": round((row[3] or 0) / (row[0] or 1), 2)
+                }
+
+        finally:
+            if conn:
+                return_db_connection(conn)
+
+        return {
+            "success": True,
+            "summary": summary,
+            "message": f"Fetched summary for past {hours} hours"
+        }
+
+    except Exception as e:
+        logger.error(f"❌ Error getting hourly stats summary: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
