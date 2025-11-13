@@ -70,37 +70,73 @@ def query_cmoney_db(sql_query: str) -> Tuple[int, pd.DataFrame]:
         return 500, pd.DataFrame()
 
 
-def fetch_past_hour_articles() -> List[int]:
+def fetch_past_hour_articles(hours: int = 1, article_type: str = 'normal') -> List[int]:
     """
-    抓取過去一小時的新文章 ID
+    從 Kafka 事件流抓取過去 N 小時的新文章 ID（即時資料）
+
+    Args:
+        hours: 回推小時數（預設 1）
+        article_type: 文章類型（預設 'normal'）
 
     Returns:
         List of article IDs (int)
     """
-    # 計算時間範圍（過去一小時）
+    # 計算時間範圍
     now = datetime.now()
-    one_hour_ago = now - timedelta(hours=1)
+    start_time = now - timedelta(hours=hours)
 
-    # 格式化時間為字串（根據 createtime 欄位格式調整）
-    time_filter = one_hour_ago.strftime('%Y-%m-%d %H:%M:%S')
+    # 格式化時間（精確到小時）
+    start_datetime = start_time.strftime('%Y-%m-%d %H:00')
+    end_datetime = now.strftime('%Y-%m-%d %H:00')
 
-    # 構建 SQL 查詢
+    # 構建 SQL 查詢（基於 Kafka 事件流）
     query = f"""
-    SELECT DISTINCT articleid
-    FROM trans_post_latest_all
-    WHERE createtime >= '{time_filter}'
-    AND articleid IS NOT NULL
-    ORDER BY createtime DESC
+    with create_post as (
+        select
+            date_format(timestamp_millis(CAST(CreateTime AS BIGINT)),'yyyy-MM-dd') as ddate,
+            date_format(timestamp_millis(CAST(CreateTime AS BIGINT)),'yyyy-MM-dd HH:mm:ss.SSS') as create_time,
+            ArticleId as articleid,
+            case
+                when Content.askPoint > 0 then 'question'
+                when Content.groupId > 0 then 'group'
+                when Content.newsId > 0 then 'news'
+                when Content.botId > 0 then 'bot'
+                when Content.creatorId = 4426063 then 'report'
+                else Content.articleType
+            end as articletype,
+            coalesce(Content.creatorId, User.Subject.memberId) as memberid,
+            coalesce(Content.appId, User.Subject.appId, get_json_object(User.Application, '$.appId')) as appid
+        from ext_create_article_message
+        where Content.articleType = '{article_type}'
+            and kafka_event_date between to_date('{start_datetime}') and to_date('{end_datetime}')
+            and (date_format(timestamp_millis(CAST(CreateTime AS BIGINT)),'yyyy-MM-dd HH:00') >= '{start_datetime}'
+                 and date_format(timestamp_millis(CAST(CreateTime AS BIGINT)),'yyyy-MM-dd HH:00') < '{end_datetime}')
+    )
+
+    select DISTINCT create_action.articleid, create_action.create_time
+    from create_post as create_action
+    left join (
+        select
+            ArticleId as articleid,
+            OriginalValue.content.creatorId as memberid,
+            to_date(kafka_event_date) as delete_date
+        from ext_delete_article_message_struct
+        where kafka_event_date between to_date('{start_datetime}') and to_date('{end_datetime}')
+    ) as delete_action
+        on create_action.articleid = delete_action.articleid
+        and create_action.memberid = delete_action.memberid
+    where delete_action.delete_date is null
+    order by create_action.create_time DESC
     """
 
-    logger.info(f"🔍 [Fetch Articles] Querying articles since {time_filter}")
+    logger.info(f"🔍 [Fetch Articles] Querying Kafka events from {start_datetime} to {end_datetime} (past {hours} hours)")
 
     status_code, df = query_cmoney_db(query)
 
     if status_code == 200 and not df.empty:
         # 轉換為整數列表
         article_ids = df['articleid'].astype(int).tolist()
-        logger.info(f"✅ [Fetch Articles] Found {len(article_ids)} new articles")
+        logger.info(f"✅ [Fetch Articles] Found {len(article_ids)} new articles from Kafka stream")
         return article_ids
     else:
         logger.warning(f"⚠️  [Fetch Articles] No articles found or query failed")
@@ -110,6 +146,17 @@ def fetch_past_hour_articles() -> List[int]:
 def test_query():
     """測試查詢功能"""
     try:
+        # 先檢查資料表結構（前 5 筆的所有欄位）
+        query_structure = """
+        SELECT *
+        FROM trans_post_latest_all
+        LIMIT 5
+        """
+        status_code, structure_data = query_cmoney_db(query_structure)
+        print(f"=== Table Structure (first 5 rows, all columns) ===")
+        print(f"Columns: {structure_data.columns.tolist()}")
+        print(structure_data.head())
+
         # 測試查詢（limit 10 筆）
         query = """
         SELECT articleid, createtime, title
@@ -117,12 +164,68 @@ def test_query():
         LIMIT 10
         """
         status_code, data = query_cmoney_db(query)
-        print(f"Status Code: {status_code}")
+        print(f"\nStatus Code: {status_code}")
         print(f"Data:\n{data}")
 
-        # 測試過去一小時文章
-        article_ids = fetch_past_hour_articles()
-        print(f"\nPast hour articles: {article_ids}")
+        # 查詢最新的文章時間
+        query_latest = """
+        SELECT articleid, createtime, title
+        FROM trans_post_latest_all
+        WHERE createtime IS NOT NULL
+        ORDER BY createtime DESC
+        LIMIT 20
+        """
+        status_code, latest_data = query_cmoney_db(query_latest)
+        print(f"\n=== Latest 20 Articles (by createtime) ===")
+        print(latest_data)
+
+        # 檢查最新文章的時間是否是今天
+        if not latest_data.empty:
+            latest_time = pd.to_datetime(latest_data.iloc[0]['createtime'])
+            print(f"\n最新文章時間 (createtime): {latest_time}")
+            print(f"現在時間: {datetime.now()}")
+            time_diff = datetime.now() - latest_time
+            print(f"時間差: {time_diff}")
+
+        # 查詢按 ddate 排序的最新文章
+        query_ddate = """
+        SELECT articleid, createtime, ddate, title
+        FROM trans_post_latest_all
+        WHERE ddate IS NOT NULL
+        ORDER BY ddate DESC
+        LIMIT 10
+        """
+        status_code, ddate_data = query_cmoney_db(query_ddate)
+        print(f"\n=== Latest 10 Articles (by ddate) ===")
+        print(ddate_data)
+
+        # 測試過去一小時文章（使用新的 Kafka 資料流）
+        print(f"\n{'='*60}")
+        print(f"Testing Kafka Stream (Real-time Data)")
+        print(f"{'='*60}")
+
+        article_ids = fetch_past_hour_articles(hours=1)
+        print(f"\n✅ Past 1 hour articles (Kafka): {article_ids[:10] if len(article_ids) > 10 else article_ids}")
+        print(f"Total count: {len(article_ids)}")
+
+        # 測試過去 3 小時文章
+        article_ids_3h = fetch_past_hour_articles(hours=3)
+        print(f"\n✅ Past 3 hours articles (Kafka): {article_ids_3h[:10] if len(article_ids_3h) > 10 else article_ids_3h}")
+        print(f"Total count: {len(article_ids_3h)}")
+
+        # 測試過去 24 小時
+        now = datetime.now()
+        one_day_ago = now - timedelta(hours=24)
+        time_filter = one_day_ago.strftime('%Y-%m-%d %H:%M:%S')
+
+        query_24h = f"""
+        SELECT COUNT(DISTINCT articleid) as count
+        FROM trans_post_latest_all
+        WHERE createtime >= '{time_filter}'
+        AND articleid IS NOT NULL
+        """
+        status_code, count_data = query_cmoney_db(query_24h)
+        print(f"\nPast 24 hours article count: {count_data}")
 
     except Exception as err_msg:
         print(f"Error: {str(err_msg)}")
