@@ -37,24 +37,25 @@ cd "/Users/willchen/Documents/autoposter/forum_autoposter/docker-container/finla
 
 #### 1. 確認文章可以抓取（Kafka 資料流）
 ```bash
-curl "https://forum-autoposter-backend-production.up.railway.app/api/reaction-bot/fetch-articles?hours_back=1"
+curl "https://forumautoposter-production.up.railway.app/api/reaction-bot/fetch-articles?hours_back=1"
 ```
 **預期：** 應該看到 2000+ 篇文章
+**注意：** Railway 需要等待最新代碼部署後才能測試（約 2-3 分鐘）
 
 #### 2. 執行每小時任務（這是重點！）
 ```bash
-curl -X POST "https://forum-autoposter-backend-production.up.railway.app/api/reaction-bot/hourly-task/run"
+curl -X POST "https://forumautoposter-production.up.railway.app/api/reaction-bot/hourly-task/run"
 ```
 **注意：** 這個任務會執行 5-10 分鐘
 
 #### 3. 查看最新統計
 ```bash
-curl "https://forum-autoposter-backend-production.up.railway.app/api/reaction-bot/hourly-stats/latest"
+curl "https://forumautoposter-production.up.railway.app/api/reaction-bot/hourly-stats/latest"
 ```
 
 #### 4. 查看統計摘要
 ```bash
-curl "https://forum-autoposter-backend-production.up.railway.app/api/reaction-bot/hourly-stats/summary?hours=24"
+curl "https://forumautoposter-production.up.railway.app/api/reaction-bot/hourly-stats/summary?hours=24"
 ```
 
 ---
