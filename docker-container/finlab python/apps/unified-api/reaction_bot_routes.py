@@ -27,7 +27,7 @@ class ConfigUpdateRequest(BaseModel):
     enabled: Optional[bool] = None
     reaction_percentage: Optional[int] = Field(None, ge=0, le=1000, description="Percentage (100=1x, 200=2x)")
     selected_kol_serials: Optional[List[int]] = None
-    distribution_algorithm: Optional[str] = Field(None, regex="^(poisson|uniform|weighted)$")
+    distribution_algorithm: Optional[str] = Field(None, pattern="^(poisson|uniform|weighted)$")
     min_delay_seconds: Optional[float] = Field(None, ge=0.1, le=10.0)
     max_delay_seconds: Optional[float] = Field(None, ge=0.1, le=10.0)
     max_reactions_per_kol_per_hour: Optional[int] = Field(None, ge=1, le=1000)
