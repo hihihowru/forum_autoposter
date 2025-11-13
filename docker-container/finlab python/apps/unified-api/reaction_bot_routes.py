@@ -1051,6 +1051,69 @@ async def get_latest_hourly_stats():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/debug/db-tables", summary="List all database tables")
+async def list_db_tables():
+    """
+    List all database tables with row counts (for debugging).
+
+    Returns:
+        List of tables with their row counts and sample columns
+    """
+    try:
+        from main import get_db_connection, return_db_connection
+
+        conn = None
+        try:
+            conn = get_db_connection()
+
+            with conn.cursor() as cursor:
+                # Get all tables
+                cursor.execute("""
+                    SELECT table_name
+                    FROM information_schema.tables
+                    WHERE table_schema = 'public'
+                    ORDER BY table_name
+                """)
+
+                tables_data = []
+                for (table_name,) in cursor.fetchall():
+                    # Get row count
+                    cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
+                    count = cursor.fetchone()[0]
+
+                    # Get column names
+                    cursor.execute(f"""
+                        SELECT column_name
+                        FROM information_schema.columns
+                        WHERE table_name = '{table_name}'
+                        ORDER BY ordinal_position
+                        LIMIT 5
+                    """)
+                    columns = [row[0] for row in cursor.fetchall()]
+
+                    tables_data.append({
+                        "table_name": table_name,
+                        "row_count": count,
+                        "status": "has_data" if count > 0 else "empty",
+                        "sample_columns": columns
+                    })
+
+        finally:
+            if conn:
+                return_db_connection(conn)
+
+        return {
+            "success": True,
+            "tables": tables_data,
+            "total_tables": len(tables_data),
+            "message": f"Found {len(tables_data)} tables"
+        }
+
+    except Exception as e:
+        logger.error(f"❌ Error listing tables: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/hourly-stats/summary", summary="Get hourly statistics summary")
 async def get_hourly_stats_summary(
     hours: int = 24
