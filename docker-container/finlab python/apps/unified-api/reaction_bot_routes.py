@@ -783,7 +783,7 @@ async def get_hourly_article_breakdown(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/fetch-articles", summary="Fetch new article IDs")
+@router.get("/fetch-articles", summary="Fetch new article IDs")
 async def fetch_new_articles(
     hours_back: int = 1
 ):
