@@ -1051,6 +1051,98 @@ async def get_latest_hourly_stats():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/hourly-task/backfill", summary="Backfill past 7 days hourly statistics")
+async def backfill_hourly_stats(
+    days: int = 7,
+    use_simulation: bool = False
+):
+    """
+    Backfill hourly reaction statistics for past N days.
+
+    This will:
+    1. Try to fetch real article data from CMoney Kafka (if use_simulation=False)
+    2. If queries timeout (>8 min), automatically switch to simulation
+    3. Save statistics to hourly_reaction_stats table
+
+    Args:
+        days: Number of days to backfill (default: 7, max: 30)
+        use_simulation: Force use simulation data instead of real queries
+
+    Returns:
+        Backfill result with statistics
+    """
+    try:
+        if days < 1 or days > 30:
+            raise HTTPException(status_code=400, detail="Days must be between 1 and 30")
+
+        from main import get_db_connection, return_db_connection
+        from hourly_reaction_service import HourlyReactionService
+        from cmoney_reaction_client import CMoneyReactionClient
+        from psycopg2 import pool
+        import os
+
+        # Create simple connection pool
+        database_url = os.getenv("DATABASE_URL")
+        if not database_url:
+            raise HTTPException(status_code=500, detail="DATABASE_URL not configured")
+
+        import urllib.parse
+        parsed_url = urllib.parse.urlparse(database_url)
+
+        db_pool = pool.SimpleConnectionPool(
+            minconn=1,
+            maxconn=5,
+            host=parsed_url.hostname,
+            port=parsed_url.port or 5432,
+            database=parsed_url.path[1:],
+            user=parsed_url.username,
+            password=parsed_url.password
+        )
+
+        try:
+            cmoney_client = CMoneyReactionClient()
+            service = HourlyReactionService(db_pool, cmoney_client)
+
+            # Create table if not exists
+            service.create_hourly_stats_table()
+
+            # Import backfill functions
+            import sys
+            sys.path.append(os.path.dirname(__file__))
+
+            if use_simulation:
+                from backfill_hourly_stats import backfill_with_simulation
+                backfill_with_simulation(service, days=days)
+                mode = "simulation"
+            else:
+                from backfill_hourly_stats import backfill_with_real_data
+                import asyncio
+                success = await backfill_with_real_data(service, days=days)
+
+                if not success:
+                    # Switch to simulation
+                    from backfill_hourly_stats import backfill_with_simulation
+                    backfill_with_simulation(service, days=days)
+                    mode = "simulation (auto-switched due to timeouts)"
+                else:
+                    mode = "real data"
+
+            return {
+                "success": True,
+                "message": f"Backfill completed using {mode}",
+                "days_backfilled": days,
+                "hours_backfilled": days * 24,
+                "mode": mode
+            }
+
+        finally:
+            db_pool.closeall()
+
+    except Exception as e:
+        logger.error(f"❌ Error in backfill: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/debug/db-tables", summary="List all database tables")
 async def list_db_tables():
     """
