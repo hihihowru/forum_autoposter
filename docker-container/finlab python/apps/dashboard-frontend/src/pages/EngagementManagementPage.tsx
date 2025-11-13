@@ -250,63 +250,52 @@ const EngagementManagementPage: React.FC = () => {
   const loadArticleStats = async () => {
     setLoadingArticles(true);
     try {
-      // Fetch article counts for different time ranges
-      const timeRanges = [1, 2, 3, 6, 12, 24];
-      const results = await Promise.all(
-        timeRanges.map(async (hours) => {
-          try {
-            const response = await fetch(`${API_BASE_URL}/api/reaction-bot/fetch-articles?hours_back=${hours}`);
-            if (response.ok) {
-              const data = await response.json();
-              return {
-                hours,
-                count: data.article_count || 0,
-                article_ids: data.article_ids || []
-              };
-            }
-            return { hours, count: 0, article_ids: [] };
-          } catch (error) {
-            console.error(`Error fetching ${hours}h article count:`, error);
-            return { hours, count: 0, article_ids: [] };
-          }
-        })
-      );
+      // Fetch hourly statistics from database (already collected by backend cronjob)
+      const response = await fetch(`${API_BASE_URL}/api/reaction-bot/hourly-stats?limit=24`);
+      if (response.ok) {
+        const data = await response.json();
+        const hourlyStats = data.stats || [];
 
-      const stats: ArticleStats = {
-        hour_1: results.find(r => r.hours === 1)?.count || 0,
-        hour_2: results.find(r => r.hours === 2)?.count || 0,
-        hour_3: results.find(r => r.hours === 3)?.count || 0,
-        hour_6: results.find(r => r.hours === 6)?.count || 0,
-        hour_12: results.find(r => r.hours === 12)?.count || 0,
-        hour_24: results.find(r => r.hours === 24)?.count || 0,
-      };
+        // Aggregate stats for different time ranges
+        const now = new Date();
+        const stats: ArticleStats = {
+          hour_1: 0,
+          hour_2: 0,
+          hour_3: 0,
+          hour_6: 0,
+          hour_12: 0,
+          hour_24: 0,
+        };
 
-      setArticleStats(stats);
+        hourlyStats.forEach((stat: any) => {
+          const hourStart = new Date(stat.hour_start);
+          const hoursAgo = (now.getTime() - hourStart.getTime()) / (1000 * 60 * 60);
 
-      // Fetch detailed article list for past 24 hours with timestamps
-      try {
-        const response = await fetch(`${API_BASE_URL}/api/reaction-bot/fetch-articles?hours_back=24&include_details=true`);
-        if (response.ok) {
-          const data = await response.json();
+          const articleCount = stat.total_new_articles || 0;
 
-          // Process articles into detailed format
-          const details: ArticleDetail[] = (data.article_ids || []).map((articleId: string, index: number) => {
-            // Calculate approximate time bucket based on position
-            // This is a simplified approach - ideally backend should provide timestamps
-            const totalArticles = data.article_ids.length;
-            const hourBucket = Math.ceil((index / totalArticles) * 24);
+          if (hoursAgo <= 1) stats.hour_1 += articleCount;
+          if (hoursAgo <= 2) stats.hour_2 += articleCount;
+          if (hoursAgo <= 3) stats.hour_3 += articleCount;
+          if (hoursAgo <= 6) stats.hour_6 += articleCount;
+          if (hoursAgo <= 12) stats.hour_12 += articleCount;
+          if (hoursAgo <= 24) stats.hour_24 += articleCount;
+        });
 
-            return {
-              article_id: articleId,
-              create_time: new Date(Date.now() - hourBucket * 3600000).toISOString(),
-              hour_bucket: hourBucket,
-            };
-          });
+        setArticleStats(stats);
 
-          setArticleDetails(details);
-        }
-      } catch (error) {
-        console.error('Error fetching detailed article list:', error);
+        // Process hourly stats into article details
+        const details: ArticleDetail[] = hourlyStats.map((stat: any) => {
+          const hourStart = new Date(stat.hour_start);
+          return {
+            hour: hourStart.getHours(),
+            count: stat.total_new_articles || 0,
+            time: hourStart.toISOString(),
+          };
+        });
+
+        setArticleDetails(details);
+      } else {
+        message.error('載入每小時統計失敗');
       }
     } catch (error) {
       console.error('Error loading article stats:', error);
