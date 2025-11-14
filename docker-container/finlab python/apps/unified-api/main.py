@@ -4512,6 +4512,7 @@ async def get_trending_topics(limit: int = Query(10, description="返回結果�
             # 🔥 FIX: Fetch topic details to get relatedStockSymbols
             stock_ids = []
             topic_description = None
+            pinned_article_context = None
             try:
                 logger.info(f"🔍 Fetching details for topic: {topic_id}")
                 topic_detail = await cmoney_client.get_topic_detail(access_token, topic_id)
@@ -4529,6 +4530,30 @@ async def get_trending_topics(limit: int = Query(10, description="返回結果�
                 topic_description = topic_detail.get('description') or topic_detail.get('name')
 
                 logger.info(f"✅ Topic {topic_id} has {len(stock_ids)} related stocks: {stock_ids}")
+
+                # 🔥 NEW: Fetch pinned article for better context
+                try:
+                    pinned_article = await cmoney_client.get_topic_pinned_article(access_token, topic_id)
+                    if pinned_article.get('has_pinned'):
+                        article_text = pinned_article.get('text', '')
+
+                        # 🔥 If pinned article doesn't have full text, fetch using article ID
+                        if not article_text or len(article_text) < 50:
+                            article_id = pinned_article.get('article_id')
+                            if article_id:
+                                logger.info(f"📄 Pinned article incomplete, fetching full content for article {article_id}")
+                                article_detail = await cmoney_client.get_article_detail(access_token, article_id)
+                                if article_detail:
+                                    article_text = article_detail.get('text', article_text)
+
+                        pinned_article_context = {
+                            'title': pinned_article.get('title', ''),
+                            'text': article_text[:1000]  # Limit to 1000 chars for better context
+                        }
+                        logger.info(f"📌 Found pinned article for topic {topic_id}: {pinned_article.get('title', 'N/A')} ({len(article_text)} chars)")
+                except Exception as pe:
+                    logger.warning(f"⚠️ Could not fetch pinned article for topic {topic_id}: {pe}")
+
             except Exception as e:
                 logger.warning(f"⚠️ Failed to fetch details for topic {topic_id}: {e}")
                 # Fallback: try to extract from raw_data if available
@@ -4553,10 +4578,11 @@ async def get_trending_topics(limit: int = Query(10, description="返回結果�
                 "content": topic_description,
                 "stock_ids": stock_ids,
                 "category": "市場熱議",
-                "engagement_score": engagement_score
+                "engagement_score": engagement_score,
+                "pinned_article": pinned_article_context  # 🔥 NEW: Include pinned article context
             })
 
-            logger.info(f"📊 解析話題: {topic_title} | 相關股票: {stock_ids}")
+            logger.info(f"📊 解析話題: {topic_title} | 相關股票: {stock_ids} | 置頂文章: {'有' if pinned_article_context else '無'}")
 
         result = {
             "topics": topics,

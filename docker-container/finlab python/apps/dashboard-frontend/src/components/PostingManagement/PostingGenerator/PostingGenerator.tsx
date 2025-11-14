@@ -392,43 +392,45 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
         
         // 為每個選中的話題生成貼文
         for (const topic of selectedTopics) {
+          // 🔥 FIX: ALWAYS generate pure topic post first
+          const randomKolSerialPure = isRandomAssignment && kolSerials.length > 0
+            ? kolSerials[Math.floor(Math.random() * kolSerials.length)]
+            : kolSerials[0] || '201';
+
+          const pureTopicPost = {
+            stock_code: `TOPIC_${topic.id}`,
+            stock_name: topic.title,
+            kol_serial: randomKolSerialPure,
+            session_id: session.id,
+            topic_id: topic.id,
+            topic_title: topic.title,
+            has_trending_topic: true
+          };
+          console.log('➕ 添加純話題貼文:', pureTopicPost);
+          postsToGenerate.push(pureTopicPost);
+
+          // 🔥 Then generate stock posts if topic has related stocks
           if (topic.stock_ids && topic.stock_ids.length > 0) {
             // 有股票的話題：為每個股票生成一篇貼文
             for (const stockId of topic.stock_ids) {
               const stockName = stockId === 'TWA00' ? '台指期' : `股票${stockId}`;
               // 隨機派發模式：為每個貼文隨機分配 KOL
-              const randomKolSerial = isRandomAssignment && kolSerials.length > 0 
+              const randomKolSerial = isRandomAssignment && kolSerials.length > 0
                 ? kolSerials[Math.floor(Math.random() * kolSerials.length)]
                 : kolSerials[0] || '201';
-              
+
               const postData = {
                 stock_code: stockId,
                 stock_name: stockName,
                 kol_serial: randomKolSerial,
                 session_id: session.id,
                 topic_id: topic.id,
-                topic_title: topic.title
+                topic_title: topic.title,
+                has_trending_topic: true
               };
-              console.log('➕ 添加話題貼文:', postData);
+              console.log('➕ 添加話題×股票貼文:', postData);
               postsToGenerate.push(postData);
             }
-          } else {
-            // 純話題：生成一篇貼文
-            // 隨機派發模式：為每個貼文隨機分配 KOL
-            const randomKolSerial = isRandomAssignment && kolSerials.length > 0 
-              ? kolSerials[Math.floor(Math.random() * kolSerials.length)]
-              : kolSerials[0] || '201';
-            
-            const postData = {
-              stock_code: `TOPIC_${topic.id}`,
-              stock_name: topic.title,
-              kol_serial: randomKolSerial,
-              session_id: session.id,
-              topic_id: topic.id,
-              topic_title: topic.title
-            };
-            console.log('➕ 添加純話題貼文:', postData);
-            postsToGenerate.push(postData);
           }
         }
       } else if (batchMode.generation_strategy === 'one_kol_one_stock') {

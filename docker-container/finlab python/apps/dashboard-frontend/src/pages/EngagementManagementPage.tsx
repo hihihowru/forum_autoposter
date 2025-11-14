@@ -94,10 +94,13 @@ interface ReactionLog {
   id: number;
   article_id: string;
   kol_serial: number;
-  reaction_type: string;
+  kol_nickname: string;
+  reaction_type: number;
   success: boolean;
-  timestamp: string;
-  error_message?: string;
+  http_status_code: number | null;
+  error_message: string | null;
+  attempted_at: string;
+  response_time_ms: number;
 }
 
 interface DailyStats {
@@ -147,20 +150,14 @@ const EngagementManagementPage: React.FC = () => {
   });
 
   const [kolProfiles, setKolProfiles] = useState<KOLProfile[]>([]);
-  const [batches, setBatches] = useState<BatchRecord[]>([]);
   const [logs, setLogs] = useState<ReactionLog[]>([]);
-  const [dailyStats, setDailyStats] = useState<DailyStats[]>([]);
   const [articleStats, setArticleStats] = useState<ArticleStats | null>(null);
-  const [articleDetails, setArticleDetails] = useState<ArticleDetail[]>([]);
-  const [articleViewMode, setArticleViewMode] = useState<'hourly' | 'daily'>('hourly');
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [processing, setProcessing] = useState(false);
   const [loadingArticles, setLoadingArticles] = useState(false);
 
-  const [testModalVisible, setTestModalVisible] = useState(false);
-  const [testResult, setTestResult] = useState<any>(null);
+  const [lastRunTime, setLastRunTime] = useState<string | null>(null);
 
   // ========== Data Fetching ==========
 
@@ -174,9 +171,7 @@ const EngagementManagementPage: React.FC = () => {
       await Promise.all([
         loadConfig(),
         loadKOLProfiles(),
-        loadBatches(),
         loadLogs(),
-        loadStats(),
         loadArticleStats(),
       ]);
     } catch (error) {
@@ -211,18 +206,6 @@ const EngagementManagementPage: React.FC = () => {
     }
   };
 
-  const loadBatches = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/reaction-bot/batches?limit=10`);
-      if (response.ok) {
-        const data = await response.json();
-        setBatches(data.batches || []);
-      }
-    } catch (error) {
-      console.error('Error loading batches:', error);
-    }
-  };
-
   const loadLogs = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/reaction-bot/logs?limit=50`);
@@ -235,67 +218,51 @@ const EngagementManagementPage: React.FC = () => {
     }
   };
 
-  const loadStats = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/reaction-bot/stats?days=7`);
-      if (response.ok) {
-        const data = await response.json();
-        setDailyStats(data.daily_stats || []);
-      }
-    } catch (error) {
-      console.error('Error loading stats:', error);
-    }
-  };
-
   const loadArticleStats = async () => {
     setLoadingArticles(true);
     try {
-      // Fetch hourly statistics from database (already collected by backend cronjob)
-      const response = await fetch(`${API_BASE_URL}/api/reaction-bot/hourly-stats?limit=24`);
-      if (response.ok) {
-        const data = await response.json();
-        const hourlyStats = data.stats || [];
+      // Fetch stats for each time period using summary endpoint
+      const timeRanges = [1, 2, 3, 6, 12, 24];
+      const stats: ArticleStats = {
+        hour_1: 0,
+        hour_2: 0,
+        hour_3: 0,
+        hour_6: 0,
+        hour_12: 0,
+        hour_24: 0,
+      };
 
-        // Aggregate stats for different time ranges
-        const now = new Date();
-        const stats: ArticleStats = {
-          hour_1: 0,
-          hour_2: 0,
-          hour_3: 0,
-          hour_6: 0,
-          hour_12: 0,
-          hour_24: 0,
-        };
+      // Fetch all time ranges in parallel
+      const responses = await Promise.all(
+        timeRanges.map(hours =>
+          fetch(`${API_BASE_URL}/api/reaction-bot/hourly-stats/summary?hours=${hours}`)
+        )
+      );
 
-        hourlyStats.forEach((stat: any) => {
-          const hourStart = new Date(stat.hour_start);
-          const hoursAgo = (now.getTime() - hourStart.getTime()) / (1000 * 60 * 60);
+      // Process responses
+      for (let i = 0; i < timeRanges.length; i++) {
+        const response = responses[i];
+        const hours = timeRanges[i];
 
-          const articleCount = stat.total_new_articles || 0;
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.summary) {
+            const key = `hour_${hours}` as keyof ArticleStats;
+            stats[key] = data.summary.total_new_articles || 0;
+          }
+        }
+      }
 
-          if (hoursAgo <= 1) stats.hour_1 += articleCount;
-          if (hoursAgo <= 2) stats.hour_2 += articleCount;
-          if (hoursAgo <= 3) stats.hour_3 += articleCount;
-          if (hoursAgo <= 6) stats.hour_6 += articleCount;
-          if (hoursAgo <= 12) stats.hour_12 += articleCount;
-          if (hoursAgo <= 24) stats.hour_24 += articleCount;
-        });
+      setArticleStats(stats);
+      setArticleDetails([]); // Clear article details as we don't need them anymore
 
-        setArticleStats(stats);
-
-        // Process hourly stats into article details
-        const details: ArticleDetail[] = hourlyStats.map((stat: any) => {
-          const hourStart = new Date(stat.hour_start);
-          return {
-            hour: hourStart.getHours(),
-            count: stat.total_new_articles || 0,
-            time: hourStart.toISOString(),
-          };
-        });
-
-        setArticleDetails(details);
-      } else {
-        message.error('載入每小時統計失敗');
+      // Get last run time from 1-hour summary
+      const lastHourResponse = await fetch(`${API_BASE_URL}/api/reaction-bot/hourly-stats/summary?hours=1`);
+      if (lastHourResponse.ok) {
+        const lastHourData = await lastHourResponse.json();
+        if (lastHourData.success && lastHourData.summary && lastHourData.summary.latest_hour) {
+          setLastRunTime(lastHourData.summary.latest_hour);
+        }
       }
     } catch (error) {
       console.error('Error loading article stats:', error);
@@ -354,131 +321,60 @@ const EngagementManagementPage: React.FC = () => {
     }
   };
 
-  // ========== Test Distribution ==========
-
-  const testDistribution = async () => {
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/reaction-bot/test-distribution?article_count=1000&reaction_percentage=${config.reaction_percentage}`
-      );
-
-      if (response.ok) {
-        const result = await response.json();
-        setTestResult(result);
-        setTestModalVisible(true);
-      } else {
-        message.error('測試失敗');
-      }
-    } catch (error) {
-      console.error('Error testing distribution:', error);
-      message.error('測試失敗');
-    }
-  };
-
-  // ========== Calculate Stats ==========
+  // ========== Calculate Stats from Logs ==========
 
   const calculateOverallStats = () => {
-    const totalBatches = batches.length;
-    const totalReactions = batches.reduce((sum, b) => sum + b.reactions_sent, 0);
-    const totalFailed = batches.reduce((sum, b) => sum + b.reactions_failed, 0);
-    const successRate = totalReactions + totalFailed > 0
-      ? (totalReactions / (totalReactions + totalFailed) * 100).toFixed(1)
+    const totalReactions = logs.length;
+    const successfulReactions = logs.filter(log => log.success).length;
+    const failedReactions = logs.filter(log => !log.success).length;
+    const successRate = totalReactions > 0
+      ? ((successfulReactions / totalReactions) * 100).toFixed(1)
       : '0.0';
 
-    return { totalBatches, totalReactions, totalFailed, successRate };
+    return {
+      totalBatches: 0, // Not used anymore
+      totalReactions: successfulReactions,
+      totalFailed: failedReactions,
+      successRate
+    };
   };
 
   const overallStats = calculateOverallStats();
 
   // ========== Table Columns ==========
 
-  const batchColumns = [
-    {
-      title: '批次 ID',
-      dataIndex: 'batch_id',
-      key: 'batch_id',
-      width: 200,
-      render: (text: string) => <Text code>{text}</Text>,
-    },
-    {
-      title: '文章數',
-      dataIndex: 'article_count',
-      key: 'article_count',
-      width: 100,
-    },
-    {
-      title: '反應總數',
-      dataIndex: 'total_reactions',
-      key: 'total_reactions',
-      width: 120,
-    },
-    {
-      title: '已發送',
-      dataIndex: 'reactions_sent',
-      key: 'reactions_sent',
-      width: 100,
-      render: (value: number) => <Text type="success">{value}</Text>,
-    },
-    {
-      title: '失敗',
-      dataIndex: 'reactions_failed',
-      key: 'reactions_failed',
-      width: 100,
-      render: (value: number) => value > 0 ? <Text type="danger">{value}</Text> : <Text>{value}</Text>,
-    },
-    {
-      title: '狀態',
-      dataIndex: 'status',
-      key: 'status',
-      width: 120,
-      render: (status: string) => {
-        const colorMap: Record<string, string> = {
-          completed: 'success',
-          processing: 'processing',
-          pending: 'default',
-          failed: 'error',
-        };
-        return <Tag color={colorMap[status] || 'default'}>{status}</Tag>;
-      },
-    },
-    {
-      title: '創建時間',
-      dataIndex: 'created_at',
-      key: 'created_at',
-      width: 180,
-      render: (text: string) => new Date(text).toLocaleString('zh-TW'),
-    },
-  ];
-
   const logColumns = [
     {
       title: '文章 ID',
       dataIndex: 'article_id',
       key: 'article_id',
-      width: 150,
+      width: 120,
       render: (text: string) => <Text code>{text}</Text>,
     },
     {
       title: 'KOL',
-      dataIndex: 'kol_serial',
-      key: 'kol_serial',
-      width: 100,
-      render: (serial: number) => {
-        const kol = kolProfiles.find(k => k.serial === serial);
-        return kol ? kol.nickname : `KOL ${serial}`;
-      },
+      dataIndex: 'kol_nickname',
+      key: 'kol_nickname',
+      width: 120,
+      render: (nickname: string, record: ReactionLog) => (
+        <Text>{nickname || `KOL ${record.kol_serial}`}</Text>
+      ),
     },
     {
       title: '反應類型',
       dataIndex: 'reaction_type',
       key: 'reaction_type',
-      width: 100,
+      width: 80,
+      render: (type: number) => {
+        const types: Record<number, string> = { 1: '讚', 2: '噓' };
+        return types[type] || `類型 ${type}`;
+      },
     },
     {
       title: '狀態',
       dataIndex: 'success',
       key: 'success',
-      width: 100,
+      width: 80,
       render: (success: boolean) =>
         success ? (
           <Tag icon={<CheckCircleOutlined />} color="success">成功</Tag>
@@ -488,16 +384,31 @@ const EngagementManagementPage: React.FC = () => {
     },
     {
       title: '時間',
-      dataIndex: 'timestamp',
-      key: 'timestamp',
-      width: 180,
+      dataIndex: 'attempted_at',
+      key: 'attempted_at',
+      width: 160,
       render: (text: string) => new Date(text).toLocaleString('zh-TW'),
+    },
+    {
+      title: '回應時間',
+      dataIndex: 'response_time_ms',
+      key: 'response_time_ms',
+      width: 90,
+      render: (ms: number) => <Text>{ms} ms</Text>,
+    },
+    {
+      title: '錯誤',
+      dataIndex: 'error_message',
+      key: 'error_message',
+      width: 200,
+      render: (error: string | null) =>
+        error ? <Text type="danger" style={{ fontSize: 12 }}>{error}</Text> : <Text type="secondary">-</Text>,
     },
   ];
 
   // ========== Render ==========
 
-  if (loading && batches.length === 0) {
+  if (loading && logs.length === 0) {
     return (
       <div style={{ textAlign: 'center', padding: '100px 0' }}>
         <Spin size="large" />
@@ -530,6 +441,13 @@ const EngagementManagementPage: React.FC = () => {
               prefix={config.enabled ? <PlayCircleOutlined /> : <PauseCircleOutlined />}
               valueStyle={{ color: config.enabled ? '#3f8600' : '#cf1322' }}
             />
+            {lastRunTime && (
+              <div style={{ marginTop: 8 }}>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  最後執行: {new Date(lastRunTime).toLocaleString('zh-TW')}
+                </Text>
+              </div>
+            )}
             <div style={{ marginTop: 16 }}>
               <Switch
                 checked={config.enabled}
@@ -580,188 +498,79 @@ const EngagementManagementPage: React.FC = () => {
         title={
           <Space>
             <FileTextOutlined />
-            <span>文章數據統計 (CMoney)</span>
+            <span>文章數據統計 (從資料庫)</span>
           </Space>
         }
         extra={
-          <Space>
-            <Radio.Group
-              value={articleViewMode}
-              onChange={(e) => setArticleViewMode(e.target.value)}
-              buttonStyle="solid"
-              size="small"
-            >
-              <Radio.Button value="hourly">每小時</Radio.Button>
-              <Radio.Button value="daily">每日</Radio.Button>
-            </Radio.Group>
-            <Button
-              icon={<ReloadOutlined />}
-              onClick={loadArticleStats}
-              loading={loadingArticles}
-              size="small"
-            >
-              刷新
-            </Button>
-          </Space>
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={loadArticleStats}
+            loading={loadingArticles}
+            size="small"
+          >
+            刷新
+          </Button>
         }
         style={{ marginBottom: 24 }}
         loading={loadingArticles}
       >
-        <Tabs defaultActiveKey="overview" size="large">
-          <TabPane tab="統計總覽" key="overview">
-            <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-              <Col xs={12} sm={8} md={4}>
-                <Statistic
-                  title="過去 1 小時"
-                  value={articleStats?.hour_1 || 0}
-                  suffix="篇"
-                  valueStyle={{ fontSize: '20px' }}
-                />
-              </Col>
-              <Col xs={12} sm={8} md={4}>
-                <Statistic
-                  title="過去 2 小時"
-                  value={articleStats?.hour_2 || 0}
-                  suffix="篇"
-                  valueStyle={{ fontSize: '20px' }}
-                />
-              </Col>
-              <Col xs={12} sm={8} md={4}>
-                <Statistic
-                  title="過去 3 小時"
-                  value={articleStats?.hour_3 || 0}
-                  suffix="篇"
-                  valueStyle={{ fontSize: '20px' }}
-                />
-              </Col>
-              <Col xs={12} sm={8} md={4}>
-                <Statistic
-                  title="過去 6 小時"
-                  value={articleStats?.hour_6 || 0}
-                  suffix="篇"
-                  valueStyle={{ fontSize: '20px' }}
-                />
-              </Col>
-              <Col xs={12} sm={8} md={4}>
-                <Statistic
-                  title="過去 12 小時"
-                  value={articleStats?.hour_12 || 0}
-                  suffix="篇"
-                  valueStyle={{ fontSize: '20px' }}
-                />
-              </Col>
-              <Col xs={12} sm={8} md={4}>
-                <Statistic
-                  title="過去 24 小時"
-                  value={articleStats?.hour_24 || 0}
-                  suffix="篇"
-                  valueStyle={{ fontSize: '20px' }}
-                />
-              </Col>
-            </Row>
-            <Alert
-              message="數據來源"
-              description="文章數據從 CMoney trans_post_latest_all 表格即時查詢，顯示指定時間範圍內的新增文章數量。"
-              type="info"
-              showIcon
-              icon={<InfoCircleOutlined />}
+        <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+          <Col xs={12} sm={8} md={4}>
+            <Statistic
+              title="過去 1 小時"
+              value={articleStats?.hour_1 || 0}
+              suffix="篇"
+              valueStyle={{ fontSize: '20px' }}
             />
-          </TabPane>
-
-          <TabPane tab="趨勢圖表" key="chart">
-            {articleViewMode === 'hourly' ? (
-              <>
-                <div style={{ marginBottom: 16 }}>
-                  <Text strong>過去 24 小時文章發布趨勢</Text>
-                </div>
-                <Line
-                  data={[
-                    { hour: '1h', count: articleStats?.hour_1 || 0 },
-                    { hour: '2h', count: articleStats?.hour_2 || 0 },
-                    { hour: '3h', count: articleStats?.hour_3 || 0 },
-                    { hour: '6h', count: articleStats?.hour_6 || 0 },
-                    { hour: '12h', count: articleStats?.hour_12 || 0 },
-                    { hour: '24h', count: articleStats?.hour_24 || 0 },
-                  ]}
-                  xField="hour"
-                  yField="count"
-                  point={{ size: 5, shape: 'circle' }}
-                  label={{ style: { fill: '#000' } }}
-                  smooth={true}
-                  height={300}
-                  xAxis={{
-                    title: { text: '時間區間' },
-                  }}
-                  yAxis={{
-                    title: { text: '文章數量' },
-                  }}
-                />
-              </>
-            ) : (
-              <>
-                <div style={{ marginBottom: 16 }}>
-                  <Text strong>每日文章發布趨勢</Text>
-                </div>
-                <Alert
-                  message="功能開發中"
-                  description="每日趨勢圖表功能即將推出，敬請期待。"
-                  type="info"
-                  showIcon
-                />
-              </>
-            )}
-          </TabPane>
-
-          <TabPane tab="文章列表" key="articles">
-            <Table
-              dataSource={articleDetails}
-              rowKey="article_id"
-              pagination={{
-                pageSize: 20,
-                showSizeChanger: true,
-                showTotal: (total) => `共 ${total} 篇文章`,
-              }}
-              scroll={{ y: 400 }}
-              loading={loadingArticles}
-              columns={[
-                {
-                  title: '文章 ID',
-                  dataIndex: 'article_id',
-                  key: 'article_id',
-                  width: 200,
-                  render: (text: string) => <Text code>{text}</Text>,
-                },
-                {
-                  title: '發布時間',
-                  dataIndex: 'create_time',
-                  key: 'create_time',
-                  width: 180,
-                  render: (text: string) => new Date(text).toLocaleString('zh-TW'),
-                  sorter: (a, b) => new Date(a.create_time).getTime() - new Date(b.create_time).getTime(),
-                  defaultSortOrder: 'descend',
-                },
-                {
-                  title: '時間範圍',
-                  dataIndex: 'hour_bucket',
-                  key: 'hour_bucket',
-                  width: 120,
-                  render: (hours: number) => (
-                    <Tag color="blue">{hours} 小時前</Tag>
-                  ),
-                  filters: [
-                    { text: '1 小時內', value: 1 },
-                    { text: '2 小時內', value: 2 },
-                    { text: '3 小時內', value: 3 },
-                    { text: '6 小時內', value: 6 },
-                    { text: '12 小時內', value: 12 },
-                    { text: '24 小時內', value: 24 },
-                  ],
-                  onFilter: (value, record) => record.hour_bucket <= value,
-                },
-              ]}
+          </Col>
+          <Col xs={12} sm={8} md={4}>
+            <Statistic
+              title="過去 2 小時"
+              value={articleStats?.hour_2 || 0}
+              suffix="篇"
+              valueStyle={{ fontSize: '20px' }}
             />
-          </TabPane>
-        </Tabs>
+          </Col>
+          <Col xs={12} sm={8} md={4}>
+            <Statistic
+              title="過去 3 小時"
+              value={articleStats?.hour_3 || 0}
+              suffix="篇"
+              valueStyle={{ fontSize: '20px' }}
+            />
+          </Col>
+          <Col xs={12} sm={8} md={4}>
+            <Statistic
+              title="過去 6 小時"
+              value={articleStats?.hour_6 || 0}
+              suffix="篇"
+              valueStyle={{ fontSize: '20px' }}
+            />
+          </Col>
+          <Col xs={12} sm={8} md={4}>
+            <Statistic
+              title="過去 12 小時"
+              value={articleStats?.hour_12 || 0}
+              suffix="篇"
+              valueStyle={{ fontSize: '20px' }}
+            />
+          </Col>
+          <Col xs={12} sm={8} md={4}>
+            <Statistic
+              title="過去 24 小時"
+              value={articleStats?.hour_24 || 0}
+              suffix="篇"
+              valueStyle={{ fontSize: '20px' }}
+            />
+          </Col>
+        </Row>
+        <Alert
+          message="數據來源"
+          description="文章數據由本地 Mac 每小時從 CMoney 抓取並儲存至 PostgreSQL 資料庫，顯示指定時間範圍內的新增文章數量。"
+          type="info"
+          showIcon
+          icon={<InfoCircleOutlined />}
+        />
       </Card>
 
       {/* Configuration Panel */}
@@ -931,49 +740,7 @@ const EngagementManagementPage: React.FC = () => {
               </Text>
             </div>
           </Col>
-
-          {/* Test Distribution Button */}
-          <Col xs={24} lg={12}>
-            <div>
-              <Space style={{ marginBottom: 12 }}>
-                <ThunderboltOutlined />
-                <Text strong>測試分佈</Text>
-              </Space>
-              <Button
-                block
-                icon={<LineChartOutlined />}
-                onClick={testDistribution}
-              >
-                測試 Poisson 分佈 (1000 篇文章)
-              </Button>
-            </div>
-          </Col>
         </Row>
-      </Card>
-
-      {/* Batch History */}
-      <Card
-        title={
-          <Space>
-            <ThunderboltOutlined />
-            <span>批次執行記錄</span>
-          </Space>
-        }
-        extra={
-          <Button onClick={loadBatches} icon={<ThunderboltOutlined />}>
-            刷新
-          </Button>
-        }
-        style={{ marginBottom: 24 }}
-      >
-        <Table
-          columns={batchColumns}
-          dataSource={batches}
-          rowKey="id"
-          pagination={{ pageSize: 10 }}
-          scroll={{ x: 1000 }}
-          size="small"
-        />
       </Card>
 
       {/* Activity Logs */}
@@ -999,76 +766,6 @@ const EngagementManagementPage: React.FC = () => {
           size="small"
         />
       </Card>
-
-      {/* Test Distribution Modal */}
-      <Modal
-        title="Poisson 分佈測試結果"
-        visible={testModalVisible}
-        onCancel={() => setTestModalVisible(false)}
-        footer={[
-          <Button key="close" onClick={() => setTestModalVisible(false)}>
-            關閉
-          </Button>,
-        ]}
-        width={700}
-      >
-        {testResult && (
-          <div>
-            <Row gutter={[16, 16]}>
-              <Col span={8}>
-                <Statistic title="文章總數" value={testResult.article_count} />
-              </Col>
-              <Col span={8}>
-                <Statistic title="反應總數" value={testResult.total_reactions} />
-              </Col>
-              <Col span={8}>
-                <Statistic
-                  title="反應倍數"
-                  value={testResult.reaction_percentage}
-                  suffix="%"
-                />
-              </Col>
-            </Row>
-
-            <Divider />
-
-            <Title level={5}>統計數據</Title>
-            <Row gutter={[16, 16]}>
-              <Col span={12}>
-                <Text>零反應文章：{testResult.statistics.zero_reactions}</Text>
-              </Col>
-              <Col span={12}>
-                <Text>有反應文章：{testResult.statistics.with_reactions}</Text>
-              </Col>
-              <Col span={12}>
-                <Text>最大反應數：{testResult.statistics.max_reactions}</Text>
-              </Col>
-              <Col span={12}>
-                <Text>最小反應數：{testResult.statistics.min_reactions}</Text>
-              </Col>
-              <Col span={12}>
-                <Text>平均反應數：{testResult.statistics.avg_reactions}</Text>
-              </Col>
-            </Row>
-
-            <Divider />
-
-            <Title level={5}>反應數分佈直方圖</Title>
-            <div>
-              {Object.entries(testResult.histogram || {}).map(([count, freq]: any) => (
-                <div key={count} style={{ marginBottom: 8 }}>
-                  <Text>{count} 個反應：</Text>
-                  <Progress
-                    percent={(freq / testResult.article_count) * 100}
-                    format={() => `${freq} 篇`}
-                    strokeColor="#1890ff"
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </Modal>
     </div>
   );
 };

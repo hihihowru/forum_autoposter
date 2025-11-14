@@ -709,23 +709,36 @@ const ScheduleManagementPage: React.FC = () => {
       key: 'trigger_type',
       width: 120,
       render: (triggerConfig: any, record: ScheduleTask) => {
+        // 🔥 觸發器類型映射 - 與發文生成器步驟一保持一致（共14種觸發器）
         const triggerTypeMap: Record<string, { text: string; color: string }> = {
-          // 熱門話題
-          'trending_topics': { text: '🔥 CMoney熱門話題', color: 'orange' },
-          // 盤後觸發器 (6個)
-          'limit_up_after_hours': { text: '盤後漲停', color: 'red' },
-          'limit_down_after_hours': { text: '盤後跌停', color: 'green' },
-          'after_hours_volume_amount_high': { text: '盤後量(金額)大', color: 'orange' },
-          'after_hours_volume_amount_low': { text: '盤後量(金額)小', color: 'blue' },
-          'after_hours_volume_change_rate_high': { text: '盤後量增(比率)高', color: 'gold' },
-          'after_hours_volume_change_rate_low': { text: '盤後量增(比率)低', color: 'cyan' },
-          // 盤中觸發器 (6個)
-          'intraday_limit_up': { text: '盤中漲停', color: 'volcano' },
-          'intraday_limit_down': { text: '盤中跌停', color: 'geekblue' },
-          'intraday_limit_up_by_amount': { text: '盤中漲(金額)', color: 'magenta' },
-          'intraday_limit_down_by_amount': { text: '盤中跌(金額)', color: 'lime' },
-          'intraday_volume_leaders': { text: '盤中量(成交量)大', color: 'orange' },
-          'intraday_amount_leaders': { text: '盤中量(金額)大', color: 'gold' }
+          // ========== 熱門話題 (1個) ==========
+          'trending_topics': { text: 'CMoney熱門話題', color: 'orange' },
+
+          // ========== 個股觸發器 - 盤後 (6個) ==========
+          'limit_up_after_hours': { text: '盤後漲', color: 'red' },
+          'limit_down_after_hours': { text: '盤後跌', color: 'green' },
+          'volume_amount_high': { text: '成交金額高', color: 'orange' },
+          'volume_amount_low': { text: '成交金額低', color: 'blue' },
+          'volume_change_rate_high': { text: '成交金額變化率高', color: 'volcano' },
+          'volume_change_rate_low': { text: '成交金額變化率低', color: 'cyan' },
+
+          // ========== 盤中觸發器 (6個) ==========
+          'intraday_gainers_by_amount': { text: '強勢股', color: 'volcano' },
+          'intraday_volume_leaders': { text: '成交量高', color: 'orange' },
+          'intraday_amount_leaders': { text: '成交額高', color: 'gold' },
+          'intraday_limit_down': { text: '跌停股', color: 'green' },
+          'intraday_limit_up': { text: '漲停股', color: 'red' },
+          'intraday_limit_down_by_amount': { text: '弱勢股', color: 'cyan' },
+
+          // ========== 自定義 (1個) ==========
+          'custom_stocks': { text: '自選股票', color: 'purple' },
+
+          // ========== 舊觸發器名稱（向後兼容） ==========
+          'after_hours_volume_amount_high': { text: '成交金額高', color: 'orange' },
+          'after_hours_volume_amount_low': { text: '成交金額低', color: 'blue' },
+          'after_hours_volume_change_rate_high': { text: '成交金額變化率高', color: 'gold' },
+          'after_hours_volume_change_rate_low': { text: '成交金額變化率低', color: 'cyan' },
+          'intraday_limit_up_by_amount': { text: '強勢股', color: 'magenta' }
         };
         // 🔥 FIX: Support both old and new trigger_config structures
         // New structure: triggerConfig.triggerKey

@@ -329,14 +329,14 @@ class CMoneyClient:
     async def get_topic_detail(self, access_token: str, topic_id: str) -> Dict[str, Any]:
         """
         獲取特定話題的詳細資訊（包含 relatedStockSymbols）
-        
+
         Args:
             access_token: 存取 Token
             topic_id: 話題 ID
-            
+
         Returns:
             話題詳細資訊字典
-            
+
         Raises:
             Exception: 獲取失敗
         """
@@ -346,24 +346,127 @@ class CMoneyClient:
                 "X-Version": "2.0",
                 "cmoneyapi-trace-context": "n8n"
             }
-            
+
             url = f"{self.api_base_url}/api/Topic/{topic_id}/Trending"
             response = self.client.get(url, headers=headers)
-            
+
             if response.status_code != 200:
                 error_msg = f"獲取話題詳細資訊失敗: HTTP {response.status_code}"
                 logger.error(f"{error_msg} - {response.text}")
                 raise Exception(error_msg)
-            
+
             # 解析回應
             result = response.json()
             logger.info(f"成功獲取話題 {topic_id} 的詳細資訊")
             return result
-            
+
         except Exception as e:
             logger.error(f"獲取話題詳細資訊失敗: {e}")
             raise
-    
+
+    async def get_topic_pinned_article(self, access_token: str, topic_id: str) -> Dict[str, Any]:
+        """
+        獲取特定話題的置頂文章（用於理解話題上下文）
+
+        Args:
+            access_token: 存取 Token
+            topic_id: 話題 ID
+
+        Returns:
+            置頂文章資訊字典
+
+        Raises:
+            Exception: 獲取失敗
+        """
+        try:
+            headers = {
+                "Authorization": f"Bearer {access_token}",
+                "X-Version": "2.0",
+                "cmoneyapi-trace-context": "n8n"
+            }
+
+            url = f"{self.api_base_url}/api/Topic/{topic_id}/Trending/Article/Pinned"
+            response = self.client.get(url, headers=headers)
+
+            if response.status_code != 200:
+                error_msg = f"獲取置頂文章失敗: HTTP {response.status_code}"
+                logger.error(f"{error_msg} - {response.text}")
+                raise Exception(error_msg)
+
+            # 解析回應
+            result = response.json()
+
+            # Extract article content if available
+            articles = result.get('articles', [])
+            if articles and len(articles) > 0:
+                article = articles[0]
+                content = article.get('content', {})
+                logger.info(f"成功獲取話題 {topic_id} 的置頂文章: {content.get('title', 'N/A')}")
+                return {
+                    'has_pinned': True,
+                    'article_id': article.get('id'),
+                    'title': content.get('title', ''),
+                    'text': content.get('text', ''),
+                    'creator_id': article.get('creatorId'),
+                    'create_time': article.get('createTime')
+                }
+            else:
+                logger.info(f"話題 {topic_id} 沒有置頂文章")
+                return {'has_pinned': False}
+
+        except Exception as e:
+            logger.warning(f"獲取置頂文章失敗（非致命錯誤）: {e}")
+            return {'has_pinned': False}
+
+    async def get_article_detail(self, access_token: str, article_id: str) -> Dict[str, Any]:
+        """
+        獲取文章完整內容（用於補充置頂文章不完整的內容）
+
+        Args:
+            access_token: 存取 Token
+            article_id: 文章 ID
+
+        Returns:
+            文章詳細資訊字典
+
+        Raises:
+            Exception: 獲取失敗
+        """
+        try:
+            headers = {
+                "Authorization": f"Bearer {access_token}",
+                "X-Version": "2.0",
+                "cmoneyapi-trace-context": "n8n"
+            }
+
+            url = f"{self.api_base_url}/api/Article/{article_id}"
+            response = self.client.get(url, headers=headers)
+
+            if response.status_code != 200:
+                error_msg = f"獲取文章詳情失敗: HTTP {response.status_code}"
+                logger.error(f"{error_msg} - {response.text}")
+                raise Exception(error_msg)
+
+            # 解析回應
+            result = response.json()
+            content = result.get('content', {})
+
+            logger.info(f"成功獲取文章 {article_id} 詳情: {content.get('title', 'N/A')}")
+            return {
+                'article_id': article_id,
+                'title': content.get('title', ''),
+                'text': content.get('text', ''),
+                'creator_id': result.get('creatorId'),
+                'create_time': result.get('createTime'),
+                'emoji_count': result.get('emojiCount', {}),
+                'comment_count': result.get('commentCount', 0),
+                'collected_count': result.get('collectedCount', 0)
+            }
+
+        except Exception as e:
+            logger.warning(f"獲取文章詳情失敗: {e}")
+            return {}
+
     async def publish_article(self, access_token: str, article: ArticleData) -> PublishResult:
         """
         發布文章

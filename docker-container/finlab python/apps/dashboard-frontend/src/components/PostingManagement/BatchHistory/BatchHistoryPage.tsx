@@ -261,50 +261,46 @@ const BatchHistoryPage: React.FC = () => {
       key: 'trigger_type',
       width: 120,
       render: (triggerType: string) => {
-        // 觸發器類型中英文映射 - 完整版本（包含所有生產環境和測試觸發器）
+        // 🔥 觸發器類型映射 - 與發文生成器步驟一保持一致（共14種觸發器）
         const triggerTypeMap: Record<string, { text: string; color: string }> = {
-          // ========== 盤後觸發器 (After Hours) ==========
-          'limit_up_after_hours': { text: '盤後漲停', color: 'red' },
-          'limit_down_after_hours': { text: '盤後跌停', color: 'green' },
+          // ========== 熱門話題 (1個) ==========
+          'trending_topics': { text: 'CMoney熱門話題', color: 'orange' },
+
+          // ========== 個股觸發器 - 盤後 (6個) ==========
+          'limit_up_after_hours': { text: '盤後漲', color: 'red' },
+          'limit_down_after_hours': { text: '盤後跌', color: 'green' },
           'volume_amount_high': { text: '成交金額高', color: 'orange' },
           'volume_amount_low': { text: '成交金額低', color: 'blue' },
           'volume_change_rate_high': { text: '成交金額變化率高', color: 'volcano' },
           'volume_change_rate_low': { text: '成交金額變化率低', color: 'cyan' },
 
-          // ========== 盤中觸發器 (Intraday) ==========
-          'intraday_limit_up': { text: '盤中漲停', color: 'red' },
-          'intraday_limit_down': { text: '盤中跌停', color: 'green' },
-          'intraday_gainers_by_amount': { text: '漲幅排序+成交額', color: 'volcano' },
-          'intraday_volume_leaders': { text: '成交量排序', color: 'orange' },
-          'intraday_amount_leaders': { text: '成交額排序', color: 'gold' },
-          'intraday_limit_down_by_amount': { text: '跌停篩選+成交額', color: 'cyan' },
-          'volume_surge': { text: '成交量暴增', color: 'orange' },
+          // ========== 盤中觸發器 (6個) ==========
+          'intraday_gainers_by_amount': { text: '強勢股', color: 'volcano' },
+          'intraday_volume_leaders': { text: '成交量高', color: 'orange' },
+          'intraday_amount_leaders': { text: '成交額高', color: 'gold' },
+          'intraday_limit_down': { text: '跌停股', color: 'green' },
+          'intraday_limit_up': { text: '漲停股', color: 'red' },
+          'intraday_limit_down_by_amount': { text: '弱勢股', color: 'cyan' },
 
-          // ========== 產業觸發器 (Sector) ==========
+          // ========== 自定義 (1個) ==========
+          'custom_stocks': { text: '自選股票', color: 'purple' },
+
+          // ========== 其他/舊觸發器（向後兼容） ==========
+          'manual': { text: '手動生成', color: 'default' },
+          'volume_surge': { text: '成交量暴增', color: 'orange' },
           'sector_rotation': { text: '類股輪動', color: 'purple' },
           'sector_momentum': { text: '產業動能', color: 'magenta' },
           'sector_selection': { text: '產業選擇', color: 'purple' },
           'sector_news': { text: '產業新聞', color: 'geekblue' },
-
-          // ========== 總經觸發器 (Macro) ==========
           'fed_policy': { text: 'Fed政策', color: 'blue' },
           'economic_data': { text: '經濟數據', color: 'cyan' },
           'currency_movement': { text: '匯率變動', color: 'blue' },
           'commodity_prices': { text: '商品價格', color: 'gold' },
-
-          // ========== 新聞觸發器 (News) ==========
           'news_hot': { text: '新聞熱股', color: 'magenta' },
           'company_news': { text: '公司新聞', color: 'geekblue' },
           'regulatory_news': { text: '監管新聞', color: 'purple' },
           'market_news': { text: '市場新聞', color: 'blue' },
           'international_news': { text: '國際新聞', color: 'cyan' },
-
-          // ========== 熱門話題 (Trending Topics) ==========
-          'trending_topics': { text: '🔥 CMoney熱門話題', color: 'orange' },
-
-          // ========== 自定義 (Custom) ==========
-          'custom_stocks': { text: '自選股', color: 'purple' },
-          'manual': { text: '手動生成', color: 'default' },
 
           // ========== 測試觸發器 (Test Triggers) ==========
           'test_personalized_mode': { text: '測試:個性化模式', color: 'lime' },
