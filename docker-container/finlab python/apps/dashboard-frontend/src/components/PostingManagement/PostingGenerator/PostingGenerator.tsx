@@ -397,6 +397,11 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
             ? kolSerials[Math.floor(Math.random() * kolSerials.length)]
             : kolSerials[0] || '201';
 
+          // 🔥 Prepare topic content (use pinned article if available, otherwise use description)
+          const topicContent = topic.pinned_article_context
+            ? `${topic.pinned_article_context.title}\n\n${topic.pinned_article_context.text}`
+            : topic.content;
+
           const pureTopicPost = {
             stock_code: `TOPIC_${topic.id}`,
             stock_name: topic.title,
@@ -404,7 +409,8 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
             session_id: session.id,
             topic_id: topic.id,
             topic_title: topic.title,
-            has_trending_topic: true
+            has_trending_topic: true,
+            topic_content: topicContent
           };
           console.log('➕ 添加純話題貼文:', pureTopicPost);
           postsToGenerate.push(pureTopicPost);
@@ -426,7 +432,8 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
                 session_id: session.id,
                 topic_id: topic.id,
                 topic_title: topic.title,
-                has_trending_topic: true
+                has_trending_topic: true,
+                topic_content: topicContent
               };
               console.log('➕ 添加話題×股票貼文:', postData);
               postsToGenerate.push(postData);

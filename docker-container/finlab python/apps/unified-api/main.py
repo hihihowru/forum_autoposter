@@ -4579,7 +4579,7 @@ async def get_trending_topics(limit: int = Query(10, description="返回結果�
                 "stock_ids": stock_ids,
                 "category": "市場熱議",
                 "engagement_score": engagement_score,
-                "pinned_article": pinned_article_context  # 🔥 NEW: Include pinned article context
+                "pinned_article_context": pinned_article_context  # 🔥 NEW: Include pinned article context
             })
 
             logger.info(f"📊 解析話題: {topic_title} | 相關股票: {stock_ids} | 置頂文章: {'有' if pinned_article_context else '無'}")

@@ -254,7 +254,6 @@ const EngagementManagementPage: React.FC = () => {
       }
 
       setArticleStats(stats);
-      setArticleDetails([]); // Clear article details as we don't need them anymore
 
       // Get last run time from 1-hour summary
       const lastHourResponse = await fetch(`${API_BASE_URL}/api/reaction-bot/hourly-stats/summary?hours=1`);

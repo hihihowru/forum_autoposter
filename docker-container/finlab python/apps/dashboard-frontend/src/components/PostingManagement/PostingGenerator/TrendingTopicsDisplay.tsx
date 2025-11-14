@@ -15,6 +15,10 @@ interface TrendingTopic {
   category: string;
   created_at: string;
   engagement_score: number;
+  pinned_article_context?: {
+    title: string;
+    text: string;
+  };
 }
 
 interface StockInfo {
