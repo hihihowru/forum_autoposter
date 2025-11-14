@@ -3207,6 +3207,12 @@ async def manual_posting(request: Request):
             if topic_id:
                 logger.info(f"✅ 使用 topic_id/topic_title (發文生成器): id={topic_id}, title={topic_title}")
 
+        # 🔥 NEW: Extract trending topic fields
+        has_trending_topic = body.get('has_trending_topic', False)
+        topic_content = body.get('topic_content')
+        if has_trending_topic:
+            logger.info(f"📰 This is a trending topic post: {topic_title}")
+
         # 生成參數記錄
         full_triggers_config_from_request = body.get('full_triggers_config', {})
         logger.info(f"🔍 DEBUG: Received full_triggers_config from request: {json.dumps(full_triggers_config_from_request, ensure_ascii=False)[:200]}...")
@@ -3249,14 +3255,14 @@ async def manual_posting(request: Request):
                     stock_code, stock_name,
                     title, content, content_md,
                     status, commodity_tags, generation_params, alternative_versions, trigger_type, generation_mode,
-                    topic_id, topic_title
+                    topic_id, topic_title, has_trending_topic, topic_content
                 ) VALUES (
                     %s, %s, %s, %s,
                     %s, %s, %s,
                     %s, %s,
                     %s, %s, %s,
                     %s, %s, %s, %s, %s, %s,
-                    %s, %s
+                    %s, %s, %s, %s
                 )
             """
 
@@ -3275,7 +3281,9 @@ async def manual_posting(request: Request):
                 trigger_type,  # 添加 trigger_type
                 generation_mode,  # 🔥 NEW: 添加 generation_mode
                 topic_id,  # 🔥 FIX: Add topic_id
-                topic_title  # 🔥 FIX: Add topic_title
+                topic_title,  # 🔥 FIX: Add topic_title
+                has_trending_topic,  # 🔥 NEW: Add has_trending_topic
+                topic_content  # 🔥 NEW: Add topic_content
             ))
 
             conn.commit()
@@ -4499,24 +4507,47 @@ async def get_trending_topics(limit: int = Query(10, description="返回結果�
         # Transform CMoney Topic objects to TrendingTopic interface
         topics = []
         for topic in cmoney_topics[:limit]:
-            # Extract stock_ids from raw_data if available
+            # 🔥 FIX: Extract stock_ids from relatedStockSymbols (correct CMoney API format)
+            # CMoney API format: relatedStockSymbols: [{ "type": "string", "key": "2330" }, ...]
             stock_ids = []
             if hasattr(topic, 'raw_data') and topic.raw_data:
                 related_stocks = topic.raw_data.get('relatedStockSymbols', [])
                 if isinstance(related_stocks, list):
-                    stock_ids = [str(stock) for stock in related_stocks]
+                    for stock_obj in related_stocks:
+                        if isinstance(stock_obj, dict) and 'key' in stock_obj:
+                            # Extract stock code from 'key' field
+                            stock_ids.append(str(stock_obj['key']))
+                        elif isinstance(stock_obj, str):
+                            # Fallback: if it's already a string
+                            stock_ids.append(str(stock_obj))
+
+            # 🔥 FIX: Also check if topic has direct relatedStockSymbols attribute
+            elif hasattr(topic, 'relatedStockSymbols') and topic.relatedStockSymbols:
+                related_stocks = topic.relatedStockSymbols
+                if isinstance(related_stocks, list):
+                    for stock_obj in related_stocks:
+                        if isinstance(stock_obj, dict) and 'key' in stock_obj:
+                            stock_ids.append(str(stock_obj['key']))
+                        elif isinstance(stock_obj, str):
+                            stock_ids.append(str(stock_obj))
 
             # Calculate engagement score (mock for now, can be enhanced later)
             engagement_score = 100.0 - (len(topics) * 5.0)  # Decreasing scores
 
+            # 🔥 FIX: Use 'name' field as primary title (matches CMoney API)
+            topic_title = topic.name if hasattr(topic, 'name') else (topic.title if hasattr(topic, 'title') else f"話題 {len(topics)+1}")
+            topic_description = topic.description if hasattr(topic, 'description') else f"熱門討論話題：{topic_title}"
+
             topics.append({
                 "id": str(topic.id) if hasattr(topic, 'id') else f"topic_{len(topics)+1}",
-                "title": topic.title if hasattr(topic, 'title') else topic.name,
-                "content": f"熱門討論話題：{topic.title if hasattr(topic, 'title') else topic.name}",
+                "title": topic_title,
+                "content": topic_description,
                 "stock_ids": stock_ids,
                 "category": "市場熱議",
                 "engagement_score": engagement_score
             })
+
+            logger.info(f"📊 解析話題: {topic_title} | 相關股票: {stock_ids}")
 
         result = {
             "topics": topics,
@@ -7541,11 +7572,24 @@ async def execute_schedule_now(task_id: str, request: Request):
                     trigger_result = await get_trending_topics(limit=max_stocks)
                     if 'topics' in trigger_result:
                         topics = trigger_result['topics']
+
+                        # 🔥 FIX: Store topics for later use (don't just extract stock_codes)
+                        trending_topics_data = topics[:max_stocks]
+
+                        # Extract stock codes from all topics
                         stock_codes = []
-                        for topic in topics[:max_stocks]:
-                            if 'stock_code' in topic:
-                                stock_codes.append(topic['stock_code'])
-                        logger.info(f"✅ 熱門話題觸發器從 {len(topics)} 個話題提取 {len(stock_codes)} 檔股票")
+                        for topic in trending_topics_data:
+                            if 'stock_ids' in topic and topic['stock_ids']:
+                                # Topic has related stocks - extract them
+                                stock_codes.extend(topic['stock_ids'])
+
+                        logger.info(f"✅ 熱門話題觸發器: {len(trending_topics_data)} 個話題, 提取 {len(stock_codes)} 檔相關股票")
+
+                        # 🔥 Store trending_topics_data for use in post generation
+                        # This will be used to create posts for both:
+                        # 1. Topic + Stock combinations
+                        # 2. Pure topic posts (when topic has no stocks)
+                        trigger_config['trending_topics_data'] = trending_topics_data
                 except Exception as e:
                     logger.error(f"❌ 熱門話題觸發器失敗: {e}")
                     import traceback
@@ -7553,15 +7597,26 @@ async def execute_schedule_now(task_id: str, request: Request):
             else:
                 logger.warning(f"⚠️ 未支持的觸發器類型: {trigger_key}")
 
-        if not stock_codes:
+        # 🔥 FIX: Allow trending_topics to run without stock_codes (pure topic mode)
+        trending_topics_data = trigger_config.get('trending_topics_data', [])
+        is_trending_topics_trigger = trigger_key == 'trending_topics'
+
+        if not stock_codes and not trending_topics_data:
             return {
                 "success": False,
                 "error": "無法獲取股票列表：排程未配置股票且觸發器未返回結果"
             }
 
         # Apply max_stocks limit
-        stock_codes = stock_codes[:max_stocks]
-        logger.info(f"📊 最終選定 {len(stock_codes)} 檔股票: {stock_codes}")
+        if stock_codes:
+            stock_codes = stock_codes[:max_stocks]
+            logger.info(f"📊 最終選定 {len(stock_codes)} 檔股票: {stock_codes}")
+
+        # 🔥 NEW: Handle pure trending topics (no stocks)
+        if is_trending_topics_trigger and trending_topics_data:
+            pure_topics = [topic for topic in trending_topics_data if not topic.get('stock_ids')]
+            if pure_topics:
+                logger.info(f"📰 發現 {len(pure_topics)} 個純話題（無股票）: {[t['title'] for t in pure_topics]}")
 
         # Generate unique session ID for this execution
         import time
@@ -7577,39 +7632,59 @@ async def execute_schedule_now(task_id: str, request: Request):
         failed_posts = []
 
         # 🔥 FIX: Get KOL list from database (not hardcoded!)
+        # Support different assignment modes:
+        # - 'random': Use all active KOLs
+        # - 'pool_random': Use selected_kols pool (user-defined)
+        # - 'fixed': Use selected_kols in order
         kol_serials = []
-        try:
-            # Fetch active KOLs from database
-            database_url = os.getenv("DATABASE_URL")
-            kol_conn = await asyncpg.connect(database_url)
-            kol_rows = await kol_conn.fetch("""
-                SELECT serial
-                FROM kol_profiles
-                WHERE status = 'active'
-                ORDER BY serial
-            """)
-            kol_serials = [row['serial'] for row in kol_rows]
-            await kol_conn.close()
-            logger.info(f"✅ Fetched {len(kol_serials)} active KOLs from database: {kol_serials}")
-        except Exception as e:
-            logger.error(f"❌ Failed to fetch KOLs from database: {e}")
-            # Fallback: use schedule's selected KOLs if available
-            if schedule.get('selected_kols'):
-                kol_serials = schedule['selected_kols']
-                logger.warning(f"⚠️ Using schedule's selected KOLs as fallback: {kol_serials}")
+
+        # Check if schedule has selected_kols (pool_random or fixed mode)
+        selected_kols = schedule.get('selected_kols', [])
+
+        if kol_assignment == 'pool_random' or kol_assignment == 'fixed':
+            # Use user-selected KOL pool
+            if selected_kols and len(selected_kols) > 0:
+                kol_serials = selected_kols
+                logger.info(f"✅ Using selected KOL pool ({kol_assignment} mode): {kol_serials}")
             else:
                 return {
                     "success": False,
-                    "error": "No KOLs available. Please configure KOLs in the system."
+                    "error": f"{kol_assignment} mode requires selected_kols to be configured"
                 }
+        else:
+            # random mode: fetch all active KOLs from database
+            try:
+                database_url = os.getenv("DATABASE_URL")
+                kol_conn = await asyncpg.connect(database_url)
+                kol_rows = await kol_conn.fetch("""
+                    SELECT serial
+                    FROM kol_profiles
+                    WHERE status = 'active'
+                    ORDER BY serial
+                """)
+                kol_serials = [row['serial'] for row in kol_rows]
+                await kol_conn.close()
+                logger.info(f"✅ Fetched {len(kol_serials)} active KOLs from database (random mode): {kol_serials}")
+            except Exception as e:
+                logger.error(f"❌ Failed to fetch KOLs from database: {e}")
+                # Fallback: use schedule's selected KOLs if available
+                if selected_kols:
+                    kol_serials = selected_kols
+                    logger.warning(f"⚠️ Using schedule's selected KOLs as fallback: {kol_serials}")
+                else:
+                    return {
+                        "success": False,
+                        "error": "No KOLs available. Please configure KOLs in the system."
+                    }
 
         for stock_code in stock_codes:
             # Select KOL based on assignment strategy
-            if kol_assignment == 'random':
+            if kol_assignment == 'random' or kol_assignment == 'pool_random':
                 import random
                 kol_serial = random.choice(kol_serials)
-                logger.info(f"🎲 Random KOL selected: {kol_serial}")
+                logger.info(f"🎲 Random KOL selected from {kol_assignment} pool: {kol_serial}")
             else:
+                # fixed or dynamic mode
                 kol_serial = kol_serials[0]  # Use first KOL for fixed assignment
                 logger.info(f"📌 Fixed KOL selected: {kol_serial}")
 
@@ -7633,6 +7708,15 @@ async def execute_schedule_now(task_id: str, request: Request):
 
                 logger.info(f"🔍 Content style: {content_style} → KOL persona: {kol_persona}")
 
+                # 🔥 NEW: Find matching topic for this stock (if trending_topics trigger)
+                matched_topic = None
+                if is_trending_topics_trigger and trending_topics_data:
+                    for topic in trending_topics_data:
+                        if stock_code in topic.get('stock_ids', []):
+                            matched_topic = topic
+                            logger.info(f"🔗 股票 {stock_code} 匹配到話題: {topic.get('title')}")
+                            break
+
                 # Call manual_posting logic internally
                 # Build request body
                 post_body = {
@@ -7650,6 +7734,11 @@ async def execute_schedule_now(task_id: str, request: Request):
                     # 🔥 FIX: Pass model override settings from generation_config
                     "model_id_override": generation_config.get('model_id_override'),
                     "use_kol_default_model": generation_config.get('use_kol_default_model', True),
+                    # 🔥 NEW: Pass topic info if matched
+                    "has_trending_topic": matched_topic is not None,
+                    "topic_id": matched_topic.get('id') if matched_topic else None,
+                    "topic_title": matched_topic.get('title') if matched_topic else None,
+                    "topic_content": matched_topic.get('content') if matched_topic else None,
                     "full_triggers_config": {
                         "trigger_type": trigger_key,  # 🔥 FIX: Use actual trigger_key
                         "stock_codes": stock_codes,
@@ -7715,6 +7804,111 @@ async def execute_schedule_now(task_id: str, request: Request):
                     "stock_code": stock_code,
                     "error": str(e)
                 })
+
+        # 🔥 NEW: Generate posts for trending topics (both with and without stocks)
+        if is_trending_topics_trigger and trending_topics_data:
+            logger.info(f"📰 開始處理熱門話題貼文生成...")
+
+            for topic in trending_topics_data:
+                topic_id = topic.get('id')
+                topic_title = topic.get('title')
+                topic_stock_ids = topic.get('stock_ids', [])
+
+                # Scenario 1: Topic with stocks - already handled above
+                # We just need to tag those posts with topic info
+
+                # Scenario 2: Pure topic (no stocks) - generate one post
+                if not topic_stock_ids:
+                    logger.info(f"📰 生成純話題貼文: {topic_title}")
+
+                    # Select KOL based on assignment mode
+                    if kol_assignment == 'random' or kol_assignment == 'pool_random':
+                        import random
+                        kol_serial = random.choice(kol_serials)
+                        logger.info(f"🎲 Random KOL selected for topic ({kol_assignment}): {kol_serial}")
+                    else:
+                        kol_serial = kol_serials[0]
+                        logger.info(f"📌 Fixed KOL selected for topic: {kol_serial}")
+
+                    try:
+                        # Build request body for pure topic post
+                        post_body = {
+                            "stock_code": None,  # 🔥 No stock code for pure topic
+                            "stock_name": None,
+                            "kol_serial": kol_serial,
+                            "kol_persona": generation_config.get('kol_persona', 'news_driven'),
+                            "session_id": session_id,
+                            "trigger_type": 'trending_topics',
+                            "generation_mode": "scheduled",
+                            "posting_type": generation_config.get('posting_type', 'analysis'),
+                            "max_words": generation_config.get('max_words', 200),
+                            "news_config": generation_config.get('news_config', {}),
+                            "model_id_override": generation_config.get('model_id_override'),
+                            "use_kol_default_model": generation_config.get('use_kol_default_model', True),
+                            # 🔥 NEW: Pass topic info
+                            "topic_id": topic_id,
+                            "topic_title": topic_title,
+                            "topic_content": topic.get('content', ''),
+                            "has_trending_topic": True,
+                            "full_triggers_config": {
+                                "trigger_type": 'trending_topics',
+                                "kol_assignment": kol_assignment,
+                                "max_stocks": max_stocks
+                            }
+                        }
+
+                        # Create mock request
+                        from starlette.requests import Request
+                        import io
+                        body_bytes = json.dumps(post_body).encode('utf-8')
+
+                        async def receive():
+                            return {'type': 'http.request', 'body': body_bytes}
+
+                        async def send(message):
+                            pass
+
+                        scope = {
+                            'type': 'http',
+                            'method': 'POST',
+                            'headers': [(b'content-type', b'application/json')],
+                        }
+
+                        mock_request = Request(scope, receive, send)
+                        mock_request._body = body_bytes
+
+                        # Call manual_posting
+                        result = await manual_posting(mock_request)
+
+                        # Handle JSONResponse
+                        from fastapi.responses import JSONResponse
+                        if isinstance(result, JSONResponse):
+                            result = json.loads(result.body.decode('utf-8'))
+
+                        if isinstance(result, dict) and result.get('success'):
+                            generated_posts.append({
+                                "post_id": result.get('post_id'),
+                                "stock_code": None,
+                                "topic_id": topic_id,
+                                "topic_title": topic_title,
+                                "kol_serial": kol_serial,
+                                "title": result.get('content', {}).get('title', ''),
+                                "content": result.get('content', {}).get('content', '')
+                            })
+                            logger.info(f"✅ 純話題貼文生成成功: {topic_title}")
+                        else:
+                            failed_posts.append({
+                                "topic_title": topic_title,
+                                "error": result.get('message', 'Unknown error')
+                            })
+                            logger.error(f"❌ 純話題貼文生成失敗: {topic_title}")
+
+                    except Exception as e:
+                        logger.error(f"❌ 生成純話題貼文失敗: {topic_title}, error: {e}")
+                        failed_posts.append({
+                            "topic_title": topic_title,
+                            "error": str(e)
+                        })
 
         logger.info(f"📊 排程執行完成: 成功={len(generated_posts)}, 失敗={len(failed_posts)}")
 

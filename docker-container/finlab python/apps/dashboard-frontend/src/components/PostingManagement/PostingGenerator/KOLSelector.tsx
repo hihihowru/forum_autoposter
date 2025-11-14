@@ -7,7 +7,7 @@ const { Title, Text } = Typography;
 const { Option } = Select;
 
 interface KOLConfig {
-  assignment_mode: 'fixed' | 'dynamic' | 'random';
+  assignment_mode: 'fixed' | 'dynamic' | 'random' | 'pool_random';
   selected_kols: number[];
   dynamic_criteria: {
     style_preference: string[];
@@ -62,12 +62,13 @@ const KOLSelector: React.FC<KOLSelectorProps> = ({ value, onChange }) => {
     }
   };
 
-  const handleAssignmentModeChange = (mode: 'fixed' | 'dynamic' | 'random') => {
+  const handleAssignmentModeChange = (mode: 'fixed' | 'dynamic' | 'random' | 'pool_random') => {
     onChange({
       ...value,
       assignment_mode: mode,
       selected_kols: mode === 'dynamic' || mode === 'random' ? [] : value.selected_kols,
-      dynamic_criteria: mode === 'fixed' ? value.dynamic_criteria : {
+      random_pool: mode === 'pool_random', // 🔥 NEW: Mark pool_random mode
+      dynamic_criteria: mode === 'fixed' || mode === 'pool_random' ? value.dynamic_criteria : {
         style_preference: [],
         expertise_match: true,
         activity_level: 'high'
@@ -129,9 +130,12 @@ const KOLSelector: React.FC<KOLSelectorProps> = ({ value, onChange }) => {
             value={value?.assignment_mode || 'random'}
             onChange={(e) => handleAssignmentModeChange(e.target.value)}
           >
-            <Radio value="fixed">固定指派</Radio>
-            <Radio value="dynamic">動態派發</Radio>
-            <Radio value="random">隨機模式</Radio>
+            <Space direction="vertical">
+              <Radio value="fixed">固定指派</Radio>
+              <Radio value="dynamic">動態派發</Radio>
+              <Radio value="random">完全隨機（所有KOL）</Radio>
+              <Radio value="pool_random">🎯 池子隨機（自選KOL池）</Radio>
+            </Space>
           </Radio.Group>
         </div>
 
@@ -354,6 +358,109 @@ const KOLSelector: React.FC<KOLSelectorProps> = ({ value, onChange }) => {
           </div>
         )}
 
+        {value?.assignment_mode === 'pool_random' && (
+          <div>
+            <Title level={5}>🎯 自選KOL池（池子隨機模式）</Title>
+            <Space direction="vertical" style={{ width: '100%' }} size="middle">
+              <div style={{ backgroundColor: '#e6f7ff', padding: '12px', borderRadius: '6px', border: '1px solid #91d5ff' }}>
+                <Text type="secondary">
+                  💡 <strong>池子隨機模式：</strong>只從你選擇的KOL中隨機分配，避免使用到其他人管理的KOL
+                </Text>
+              </div>
+
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <Text strong>選擇KOL加入隨機池</Text>
+                  <Button
+                    icon={<ReloadOutlined />}
+                    size="small"
+                    onClick={loadKOLs}
+                    loading={loading}
+                  >
+                    重新載入
+                  </Button>
+                </div>
+
+                <Spin spinning={loading}>
+                  <Select
+                    mode="multiple"
+                    placeholder="拖拉或點選KOL加入隨機池（可多選）"
+                    value={selectedKOLs}
+                    onChange={handleKOLSelection}
+                    style={{ width: '100%' }}
+                    optionLabelProp="label"
+                    maxTagCount="responsive"
+                    showSearch
+                    filterOption={(input, option) =>
+                      ((option?.label as string) ?? '').toLowerCase().includes(input.toLowerCase())
+                    }
+                  >
+                    {availableKOLs.map((kol) => (
+                      <Option key={kol.serial} value={kol.serial} label={kol.nickname}>
+                        <Space>
+                          <Avatar size="small" icon={<UserOutlined />} />
+                          <span>{kol.nickname}</span>
+                          <Tag color={getPersonaColor(kol.persona)}>
+                            {kol.persona}
+                          </Tag>
+                          <Text type="secondary" style={{ fontSize: '11px' }}>
+                            #{kol.serial}
+                          </Text>
+                        </Space>
+                      </Option>
+                    ))}
+                  </Select>
+                </Spin>
+              </div>
+
+              {getSelectedKOLs().length > 0 && (
+                <div>
+                  <Text strong>已選擇 {getSelectedKOLs().length} 個KOL加入隨機池:</Text>
+                  <div style={{ marginTop: '8px', marginBottom: '8px' }}>
+                    <Text type="secondary" style={{ fontSize: '12px' }}>
+                      🎲 系統將從這 {getSelectedKOLs().length} 個KOL中隨機選擇不同的KOL分配給同一批次中的不同貼文
+                    </Text>
+                  </div>
+                  <Space wrap style={{ marginTop: '8px' }}>
+                    {getSelectedKOLs().map((kol) => (
+                      <Card key={kol.serial} size="small" style={{ width: '280px' }}>
+                        <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Space>
+                              <Avatar size="small" icon={<UserOutlined />} />
+                              <Text strong>{kol.nickname}</Text>
+                              <Tag color={getPersonaColor(kol.persona)}>
+                                {kol.persona}
+                              </Tag>
+                            </Space>
+                            <Text type="secondary">#{kol.serial}</Text>
+                          </div>
+                          <Text type="secondary" style={{ fontSize: '12px' }}>
+                            {kol.tone_style} • {kol.target_audience}
+                          </Text>
+                          <div>
+                            <Text type="secondary" style={{ fontSize: '12px' }}>
+                              專長: {kol.content_types.join(', ')}
+                            </Text>
+                          </div>
+                        </Space>
+                      </Card>
+                    ))}
+                  </Space>
+                </div>
+              )}
+
+              {getSelectedKOLs().length === 0 && (
+                <div style={{ backgroundColor: '#fff7e6', padding: '12px', borderRadius: '6px', border: '1px solid #ffd591' }}>
+                  <Text type="warning">
+                    ⚠️ 請至少選擇 1 個KOL加入隨機池
+                  </Text>
+                </div>
+              )}
+            </Space>
+          </div>
+        )}
+
         <Divider />
 
         <div>
@@ -377,8 +484,14 @@ const KOLSelector: React.FC<KOLSelectorProps> = ({ value, onChange }) => {
 
         <div style={{ backgroundColor: '#f5f5f5', padding: '12px', borderRadius: '6px' }}>
           <Text type="secondary">
-            <SettingOutlined /> 提示：固定指派模式會使用指定的KOL，動態派發模式會根據條件自動選擇最適合的KOL，隨機模式會隨機分配KOL
+            <SettingOutlined /> <strong>模式說明：</strong>
           </Text>
+          <ul style={{ marginTop: '8px', marginBottom: 0, paddingLeft: '20px' }}>
+            <li><Text type="secondary">固定指派：使用指定的KOL發文</Text></li>
+            <li><Text type="secondary">動態派發：根據條件自動選擇最適合的KOL</Text></li>
+            <li><Text type="secondary">完全隨機：從所有可用KOL中隨機分配</Text></li>
+            <li><Text type="secondary" strong>池子隨機：只從你選擇的KOL池中隨機分配（推薦）</Text></li>
+          </ul>
         </div>
       </Space>
     </Card>

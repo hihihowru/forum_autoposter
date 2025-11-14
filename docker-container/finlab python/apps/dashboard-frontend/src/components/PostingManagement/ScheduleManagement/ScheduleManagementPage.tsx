@@ -711,7 +711,7 @@ const ScheduleManagementPage: React.FC = () => {
       render: (triggerConfig: any, record: ScheduleTask) => {
         const triggerTypeMap: Record<string, { text: string; color: string }> = {
           // 熱門話題
-          'trending_topics': { text: 'CMoney熱門話題', color: 'purple' },
+          'trending_topics': { text: '🔥 CMoney熱門話題', color: 'orange' },
           // 盤後觸發器 (6個)
           'limit_up_after_hours': { text: '盤後漲停', color: 'red' },
           'limit_down_after_hours': { text: '盤後跌停', color: 'green' },
@@ -791,11 +791,12 @@ const ScheduleManagementPage: React.FC = () => {
       width: 100,
       render: (triggerConfig: any, record: ScheduleTask) => {
         const kolAssignmentMap: Record<string, { text: string; color: string }> = {
-          'random': { text: '隨機分配', color: 'blue' },
+          'random': { text: '完全隨機', color: 'blue' },
+          'pool_random': { text: '🎯 池子隨機', color: 'cyan' },
           'fixed': { text: '固定指派', color: 'green' },
           'dynamic': { text: '動態派發', color: 'orange' },
           'round_robin': { text: '輪流分配', color: 'purple' },
-          'performance_based': { text: '基於表現', color: 'cyan' }
+          'performance_based': { text: '基於表現', color: 'magenta' }
         };
         const kolAssignment = triggerConfig?.kol_assignment || record.trigger_config?.kol_assignment || 'N/A';
         const mapped = kolAssignmentMap[kolAssignment] || { text: kolAssignment, color: 'default' };

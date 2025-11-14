@@ -63,17 +63,17 @@ class HourlyReactionService:
             with conn.cursor(cursor_factory=RealDictCursor) as cursor:
                 if kol_serials:
                     cursor.execute("""
-                        SELECT serial, email, password, username
+                        SELECT serial, email, password, nickname
                         FROM kol_profiles
                         WHERE serial = ANY(%s)
-                        AND is_active = true
+                        AND status = 'active'
                         ORDER BY serial
                     """, (kol_serials,))
                 else:
                     cursor.execute("""
-                        SELECT serial, email, password, username
+                        SELECT serial, email, password, nickname
                         FROM kol_profiles
-                        WHERE is_active = true
+                        WHERE status = 'active'
                         ORDER BY serial
                     """)
 
@@ -120,7 +120,7 @@ class HourlyReactionService:
                 current_kol = kol_pool[current_kol_index % len(kol_pool)]
 
                 # 登入取得 token
-                logger.info(f"🔑 [Login] Logging in KOL: {current_kol['username']} (serial={current_kol['serial']})")
+                logger.info(f"🔑 [Login] Logging in KOL: {current_kol['nickname']} (serial={current_kol['serial']})")
 
                 token = await self.cmoney_client.get_or_refresh_token(
                     kol_serial=current_kol['serial'],
@@ -129,18 +129,21 @@ class HourlyReactionService:
                 )
 
                 if not token:
-                    logger.error(f"❌ [Login] Failed for KOL {current_kol['username']}")
+                    logger.error(f"❌ [Login] Failed for KOL {current_kol['nickname']}")
                     current_kol_index += 1
                     current_kol_article_count = 0
                     continue
 
                 current_kol_token = token
                 current_kol_article_count = 0
-                logger.info(f"✅ [Login] Success for KOL {current_kol['username']}")
+                logger.info(f"✅ [Login] Success for KOL {current_kol['nickname']}")
 
             # 按讚
             total_attempts += 1
-            logger.info(f"👍 [Like] Attempting to like article {article_id} with KOL {current_kol['username']}")
+            logger.info(f"👍 [Like] Attempting to like article {article_id} with KOL {current_kol['nickname']}")
+
+            import time
+            start_time = time.time()
 
             result = await self.cmoney_client.add_article_reaction(
                 access_token=current_kol_token,
@@ -148,10 +151,24 @@ class HourlyReactionService:
                 reaction_type=1  # 1 = 讚
             )
 
+            response_time_ms = int((time.time() - start_time) * 1000)
+
+            # Log to database
+            self._log_reaction_to_db(
+                article_id=str(article_id),
+                kol_serial=current_kol['serial'],
+                kol_nickname=current_kol['nickname'],
+                reaction_type=1,
+                success=result.success,
+                http_status_code=getattr(result, 'http_status_code', None),
+                error_message=result.error_message,
+                response_time_ms=response_time_ms
+            )
+
             if result.success:
                 successful_likes += 1
                 liked_articles.add(article_id)
-                logger.info(f"✅ [Like] Success for article {article_id}")
+                logger.info(f"✅ [Like] Success for article {article_id} ({response_time_ms}ms)")
             else:
                 logger.warning(f"⚠️  [Like] Failed for article {article_id}: {result.error_message}")
 
@@ -164,6 +181,42 @@ class HourlyReactionService:
         logger.info(f"📊 [Batch Complete] Attempts={total_attempts}, Success={successful_likes}, Unique={unique_articles_liked}")
 
         return total_attempts, successful_likes, unique_articles_liked
+
+    def _log_reaction_to_db(
+        self,
+        article_id: str,
+        kol_serial: int,
+        kol_nickname: str,
+        reaction_type: int,
+        success: bool,
+        http_status_code: Optional[int],
+        error_message: Optional[str],
+        response_time_ms: int
+    ):
+        """記錄單次反應到資料庫"""
+        conn = None
+        try:
+            conn = self.db_pool.getconn()
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO reaction_logs (
+                        article_id, kol_serial, kol_nickname, reaction_type,
+                        success, http_status_code, error_message, response_time_ms
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    article_id, kol_serial, kol_nickname, reaction_type,
+                    success, http_status_code, error_message, response_time_ms
+                ))
+                conn.commit()
+
+        except Exception as e:
+            logger.error(f"❌ [Log Reaction] Failed to log: {e}")
+            if conn:
+                conn.rollback()
+
+        finally:
+            if conn:
+                self.db_pool.putconn(conn)
 
     def save_hourly_stats(
         self,
@@ -206,6 +259,16 @@ class HourlyReactionService:
                 conn.commit()
                 logger.info(f"✅ [Save Stats] Saved for hour {hour_start}")
 
+                # Auto-cleanup logs older than 2 days
+                cursor.execute("""
+                    DELETE FROM reaction_logs
+                    WHERE attempted_at < NOW() - INTERVAL '2 days'
+                """)
+                deleted_count = cursor.rowcount
+                if deleted_count > 0:
+                    logger.info(f"🧹 [Cleanup] Deleted {deleted_count} old reaction logs (>2 days)")
+                conn.commit()
+
         except Exception as e:
             logger.error(f"❌ [Save Stats] Failed: {e}")
             if conn:
@@ -215,28 +278,58 @@ class HourlyReactionService:
             if conn:
                 self.db_pool.putconn(conn)
 
-    async def run_hourly_task(self, kol_serials: Optional[List[int]] = None):
-        """執行每小時任務"""
+    async def run_hourly_task(self, kol_serials: Optional[List[int]] = None, article_ids: Optional[List[int]] = None):
+        """
+        執行每小時任務
+
+        Args:
+            kol_serials: 指定的 KOL serial 列表（None = 全部）
+            article_ids: 已抓取的文章 ID 列表（None = 從函數內抓取）
+
+        Returns:
+            Dict with stats: hour_start, hour_end, total_new_articles, etc.
+        """
         hour_start = datetime.now().replace(minute=0, second=0, microsecond=0)
+        hour_end = hour_start + timedelta(hours=1)
 
         logger.info(f"🚀 [Hourly Task] Starting for hour {hour_start}")
 
-        # 1. 抓取過去一小時文章
-        article_ids = fetch_past_hour_articles()
+        # 1. 抓取過去一小時文章（如果沒有傳入）
+        if article_ids is None:
+            article_ids = fetch_past_hour_articles()
+
         total_articles = len(article_ids)
 
         logger.info(f"📰 [Hourly Task] Found {total_articles} new articles")
 
         if total_articles == 0:
             logger.info("⚠️  [Hourly Task] No articles to process")
-            return
+            return {
+                'hour_start': hour_start,
+                'hour_end': hour_end,
+                'total_new_articles': 0,
+                'total_like_attempts': 0,
+                'successful_likes': 0,
+                'unique_articles_liked': 0,
+                'like_success_rate': 0.0,
+                'kol_pool_serials': []
+            }
 
         # 2. 取得 KOL 池子
         kol_pool = self.get_kol_pool(kol_serials)
 
         if not kol_pool:
             logger.error("❌ [Hourly Task] No KOLs available")
-            return
+            return {
+                'hour_start': hour_start,
+                'hour_end': hour_end,
+                'total_new_articles': total_articles,
+                'total_like_attempts': 0,
+                'successful_likes': 0,
+                'unique_articles_liked': 0,
+                'like_success_rate': 0.0,
+                'kol_pool_serials': []
+            }
 
         # 3. 執行按讚
         total_attempts, successful_likes, unique_articles = await self.process_hourly_batch(
@@ -246,17 +339,31 @@ class HourlyReactionService:
         )
 
         # 4. 儲存統計
+        kol_serials_list = [kol['serial'] for kol in kol_pool]
         self.save_hourly_stats(
             hour_start=hour_start,
             total_articles=total_articles,
             total_attempts=total_attempts,
             successful_likes=successful_likes,
             unique_articles=unique_articles,
-            kol_serials=[kol['serial'] for kol in kol_pool],
+            kol_serials=kol_serials_list,
             article_ids=article_ids
         )
 
         logger.info(f"✅ [Hourly Task] Completed for hour {hour_start}")
+
+        # 返回統計結果
+        like_rate = (successful_likes / total_articles * 100) if total_articles > 0 else 0
+        return {
+            'hour_start': hour_start,
+            'hour_end': hour_end,
+            'total_new_articles': total_articles,
+            'total_like_attempts': total_attempts,
+            'successful_likes': successful_likes,
+            'unique_articles_liked': unique_articles,
+            'like_success_rate': like_rate,
+            'kol_pool_serials': kol_serials_list
+        }
 
 
 # 測試用

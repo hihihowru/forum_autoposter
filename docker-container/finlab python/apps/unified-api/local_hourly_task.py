@@ -71,6 +71,39 @@ async def main():
         logger.info("📊 確保 hourly_reaction_stats 資料表存在...")
         service.create_hourly_stats_table()
 
+        # 讀取配置
+        logger.info("⚙️  讀取 reaction_bot_config 配置...")
+        conn = db_pool.getconn()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT * FROM reaction_bot_config WHERE id = 1;")
+                config_row = cursor.fetchone()
+
+                if not config_row:
+                    logger.error("❌ 找不到配置記錄 (id=1)")
+                    return
+
+                # Parse config
+                config = {
+                    'enabled': config_row[1],
+                    'reaction_percentage': config_row[2],
+                    'selected_kol_serials': config_row[3] or [],
+                    'distribution_algorithm': config_row[4],
+                    'min_delay_seconds': config_row[5],
+                    'max_delay_seconds': config_row[6],
+                    'max_reactions_per_kol_per_hour': config_row[7],
+                    'fetch_articles_enabled': config_row[10] if len(config_row) > 10 else True
+                }
+
+                logger.info(f"📋 配置: enabled={config['enabled']}, percentage={config['reaction_percentage']}%, KOLs={config['selected_kol_serials'] or 'all'}")
+
+                # Check if enabled
+                if not config['enabled']:
+                    logger.warning("⏸️  機器人已停用 (enabled=False)，跳過此次任務")
+                    return
+        finally:
+            db_pool.putconn(conn)
+
         # 計算本小時的時間範圍
         now = datetime.now()
         hour_start = now.replace(minute=0, second=0, microsecond=0)
@@ -78,30 +111,29 @@ async def main():
 
         logger.info(f"⏰ 處理時間範圍: {hour_start.strftime('%Y-%m-%d %H:%M')} - {hour_end.strftime('%Y-%m-%d %H:%M')}")
 
-        # 1. 抓取過去 1 小時的文章
-        logger.info("📥 開始抓取過去 1 小時的文章...")
-        article_ids = fetch_past_hour_articles(hours=1)
-
-        if not article_ids:
-            logger.warning("⚠️  沒有找到新文章")
-            # 儲存空統計
-            service.save_hourly_stats(
-                hour_start=hour_start,
-                total_articles=0,
-                total_attempts=0,
-                successful_likes=0,
-                unique_articles=0,
-                kol_serials=[],
-                article_ids=[]
-            )
-            logger.info("✅ 已儲存空統計記錄")
+        # 1. 抓取過去 1 小時的文章 (如果啟用)
+        if config['fetch_articles_enabled']:
+            logger.info("📥 開始抓取過去 1 小時的文章...")
+            article_ids = fetch_past_hour_articles(hours=1)
+            logger.info(f"✅ 找到 {len(article_ids)} 篇新文章")
+        else:
+            logger.warning("⏸️  文章抓取已停用 (fetch_articles_enabled=False)，跳過")
             return
 
-        logger.info(f"✅ 找到 {len(article_ids)} 篇新文章")
+        # Apply reaction_percentage filter
+        if config['reaction_percentage'] < 100:
+            import random
+            original_count = len(article_ids)
+            keep_count = int(original_count * config['reaction_percentage'] / 100)
+            article_ids = random.sample(article_ids, keep_count)
+            logger.info(f"🎲 根據 {config['reaction_percentage']}% 比例，從 {original_count} 篇中選擇 {len(article_ids)} 篇")
 
-        # 2. 執行按讚任務
-        logger.info("❤️  開始執行按讚任務...")
-        stats = await service.run_hourly_task()
+        # 2. 執行按讚任務（傳入已抓取的 article_ids 和配置）
+        logger.info(f"❤️  開始執行按讚任務 (delay: {config['min_delay_seconds']}-{config['max_delay_seconds']}s)...")
+        stats = await service.run_hourly_task(
+            article_ids=article_ids,
+            kol_serials=config['selected_kol_serials'] if config['selected_kol_serials'] else None
+        )
 
         # 3. 顯示結果
         logger.info("=" * 70)

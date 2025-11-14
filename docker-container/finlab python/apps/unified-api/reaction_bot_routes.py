@@ -1282,3 +1282,110 @@ async def get_hourly_stats_summary(
     except Exception as e:
         logger.error(f"❌ Error getting hourly stats summary: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/logs")
+async def get_reaction_logs(
+    limit: int = 100,
+    success_only: Optional[bool] = None,
+    kol_serial: Optional[int] = None,
+    article_id: Optional[str] = None
+):
+    """
+    Get reaction logs for verification
+    
+    Query params:
+    - limit: Max number of logs to return (default 100, max 1000)
+    - success_only: Filter by success status (true/false/null for all)
+    - kol_serial: Filter by KOL serial number
+    - article_id: Filter by specific article ID
+    
+    Returns logs from past 2 days (auto-deleted after)
+    """
+    try:
+        from database import get_db_connection, return_db_connection
+        
+        conn = get_db_connection()
+        
+        try:
+            with conn.cursor() as cursor:
+                # Build query with filters
+                query = """
+                    SELECT 
+                        id,
+                        article_id,
+                        kol_serial,
+                        kol_nickname,
+                        reaction_type,
+                        success,
+                        http_status_code,
+                        error_message,
+                        attempted_at,
+                        response_time_ms
+                    FROM reaction_logs
+                    WHERE 1=1
+                """
+                params = []
+                
+                if success_only is not None:
+                    query += " AND success = %s"
+                    params.append(success_only)
+                
+                if kol_serial is not None:
+                    query += " AND kol_serial = %s"
+                    params.append(kol_serial)
+                
+                if article_id is not None:
+                    query += " AND article_id = %s"
+                    params.append(article_id)
+                
+                query += " ORDER BY attempted_at DESC LIMIT %s"
+                params.append(min(limit, 1000))  # Cap at 1000
+                
+                cursor.execute(query, params)
+                logs = cursor.fetchall()
+                
+                # Format results
+                result = []
+                for log in logs:
+                    result.append({
+                        "id": log[0],
+                        "article_id": log[1],
+                        "kol_serial": log[2],
+                        "kol_nickname": log[3],
+                        "reaction_type": log[4],
+                        "success": log[5],
+                        "http_status_code": log[6],
+                        "error_message": log[7],
+                        "attempted_at": log[8].isoformat() if log[8] else None,
+                        "response_time_ms": log[9]
+                    })
+                
+                # Get summary stats
+                cursor.execute("""
+                    SELECT 
+                        COUNT(*) as total,
+                        COUNT(CASE WHEN success THEN 1 END) as successful,
+                        AVG(CASE WHEN success THEN response_time_ms END) as avg_response_time
+                    FROM reaction_logs
+                    WHERE attempted_at >= NOW() - INTERVAL '24 hours'
+                """)
+                stats = cursor.fetchone()
+                
+                return {
+                    "logs": result,
+                    "count": len(result),
+                    "stats_24h": {
+                        "total_attempts": stats[0],
+                        "successful": stats[1],
+                        "success_rate": round(stats[1] / stats[0] * 100, 2) if stats[0] > 0 else 0,
+                        "avg_response_time_ms": round(stats[2], 1) if stats[2] else 0
+                    }
+                }
+        
+        finally:
+            return_db_connection(conn)
+    
+    except Exception as e:
+        logger.error(f"❌ Error getting reaction logs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

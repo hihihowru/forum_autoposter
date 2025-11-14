@@ -21,11 +21,11 @@ import {
   Form,
   Alert
 } from 'antd';
-import { 
-  CheckOutlined, 
-  CloseOutlined, 
-  SendOutlined, 
-  EyeOutlined, 
+import {
+  CheckOutlined,
+  CloseOutlined,
+  SendOutlined,
+  EyeOutlined,
   EditOutlined,
   ClockCircleOutlined,
   CheckCircleOutlined,
@@ -34,7 +34,8 @@ import {
   SaveOutlined,
   CancelOutlined,
   DeleteOutlined,
-  BranchesOutlined
+  BranchesOutlined,
+  FireOutlined
 } from '@ant-design/icons';
 import PostingManagementAPI from '../../../services/postingManagementAPI';
 import { Post } from '../../../types/posting';
@@ -548,7 +549,27 @@ const PostReviewPage: React.FC<PostReviewPageProps> = ({ sessionId, onBack }) =>
               );
             }}
           />
-          
+
+          <Column
+            title="熱門話題"
+            key="trending_topic"
+            width={150}
+            render={(_, record: Post) => {
+              if (record.has_trending_topic && record.topic_title) {
+                return (
+                  <Tooltip title={record.topic_content || record.topic_title}>
+                    <Tag color="orange" icon={<FireOutlined />}>
+                      {record.topic_title.length > 20
+                        ? `${record.topic_title.substring(0, 20)}...`
+                        : record.topic_title}
+                    </Tag>
+                  </Tooltip>
+                );
+              }
+              return <Text type="secondary">-</Text>;
+            }}
+          />
+
           <Column
             title="KOL"
             dataIndex="kol_nickname"

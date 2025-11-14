@@ -25,7 +25,8 @@ import {
   PlusOutlined,
   BarChartOutlined,
   LinkOutlined,
-  ReloadOutlined
+  ReloadOutlined,
+  FireOutlined
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import type { ColumnsType } from 'antd/es/table';
@@ -48,6 +49,8 @@ interface BatchRecord {
   success_rate: number;
   stock_codes: string[];
   kol_names: string[];
+  has_trending_topics?: boolean;
+  trending_topics_count?: number;
   posts: Array<{
     post_id: string;
     title: string;
@@ -56,6 +59,8 @@ interface BatchRecord {
     status: string;
     published_at?: string;
     generation_config: any;
+    has_trending_topic?: boolean;
+    topic_title?: string;
   }>;
 }
 
@@ -295,7 +300,7 @@ const BatchHistoryPage: React.FC = () => {
           'international_news': { text: '國際新聞', color: 'cyan' },
 
           // ========== 熱門話題 (Trending Topics) ==========
-          'trending_topics': { text: 'CMoney熱門話題', color: 'red' },
+          'trending_topics': { text: '🔥 CMoney熱門話題', color: 'orange' },
 
           // ========== 自定義 (Custom) ==========
           'custom_stocks': { text: '自選股', color: 'purple' },
@@ -593,7 +598,7 @@ const BatchHistoryPage: React.FC = () => {
                       'international_news': '國際新聞',
 
                       // 熱門話題 (Trending Topics)
-                      'trending_topics': 'CMoney熱門話題',
+                      'trending_topics': '🔥 CMoney熱門話題',
 
                       // 自定義 (Custom)
                       'custom_stocks': '自選股',
@@ -679,12 +684,22 @@ const BatchHistoryPage: React.FC = () => {
 
             <div>
               <Text strong>貼文列表:</Text>
+              {selectedBatch.trigger_type === 'trending_topics' && selectedBatch.posts.some(p => p.has_trending_topic) && (
+                <Tag color="orange" style={{ marginLeft: 8 }}>
+                  🔥 包含 {selectedBatch.posts.filter(p => p.has_trending_topic).length} 篇熱門話題貼文
+                </Tag>
+              )}
               <div style={{ marginTop: 8, maxHeight: 300, overflowY: 'auto' }}>
                 {selectedBatch.posts.map((post, index) => (
                   <Card key={index} size="small" style={{ marginBottom: 8 }}>
                     <Row gutter={8}>
                       <Col span={4}>
                         <Tag color="blue">{post.kol_nickname}</Tag>
+                        {post.has_trending_topic && post.topic_title && (
+                          <Tag color="orange" icon={<FireOutlined />} style={{ marginTop: 4 }}>
+                            {post.topic_title.length > 10 ? `${post.topic_title.substring(0, 10)}...` : post.topic_title}
+                          </Tag>
+                        )}
                       </Col>
                       <Col span={4}>
                         <Tag color={post.status === 'published' ? 'green' : 'orange'}>

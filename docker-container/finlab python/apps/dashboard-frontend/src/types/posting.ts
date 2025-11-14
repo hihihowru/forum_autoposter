@@ -30,9 +30,13 @@ export interface Post {
   shares: number;
   topic_id?: string;
   topic_title?: string;
+  has_trending_topic?: boolean;
+  topic_content?: string;
   created_at: string;
   updated_at: string;
   commodity_tags?: any[];
+  stock_codes?: string[];
+  stock_names?: string[];
 }
 
 export interface PostReviewPageProps {

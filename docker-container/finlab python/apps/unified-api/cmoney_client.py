@@ -755,20 +755,24 @@ class CMoneyClient:
             反應結果
         """
         try:
+            # Use correct API: PUT /api/Article/{articleId}/Emoji/{emojiType}
             headers = {
                 "Authorization": f"Bearer {access_token}",
-                "cmoneyapi-trace-context": "engagement-bot",
-                "accept": "application/json"
+                "X-Version": "2.0",
+                "Content-Type": "application/json",
+                "cmoneyapi-trace-context": '{"manufacturer":"Python","appVersion":"1.0.0","platform":1,"osName":"Server","model":"AutoBot","appId":18,"osVersion":"1.0"}',
+                "Accept-Encoding": "gzip"
             }
 
-            url = f"{self.forum_ocean_url}/api/Interactive/Reaction/{article_id}"
-            params = {"reactionType": reaction_type}
+            # Correct URL format: https://forumservice.cmoney.tw/api/Article/{articleId}/Emoji/{emojiType}
+            url = f"{self.api_base_url}/api/Article/{article_id}/Emoji/{reaction_type}"
 
             logger.info(f"對文章 {article_id} 添加反應類型 {reaction_type}")
 
-            response = self.client.post(url, headers=headers, params=params)
+            # Use PUT method with empty JSON body
+            response = self.client.put(url, headers=headers, json={})
 
-            if response.status_code == 204:
+            if response.status_code == 200 or response.status_code == 204:
                 logger.info(f"成功對文章 {article_id} 添加反應")
                 return ReactionResult(
                     success=True,
