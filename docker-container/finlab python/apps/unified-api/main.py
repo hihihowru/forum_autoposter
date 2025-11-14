@@ -4507,39 +4507,48 @@ async def get_trending_topics(limit: int = Query(10, description="返回結果�
         # Transform CMoney Topic objects to TrendingTopic interface
         topics = []
         for topic in cmoney_topics[:limit]:
-            # 🔥 FIX: Extract stock_ids from relatedStockSymbols (correct CMoney API format)
-            # CMoney API format: relatedStockSymbols: [{ "type": "string", "key": "2330" }, ...]
+            topic_id = str(topic.id) if hasattr(topic, 'id') else f"topic_{len(topics)+1}"
+
+            # 🔥 FIX: Fetch topic details to get relatedStockSymbols
             stock_ids = []
-            if hasattr(topic, 'raw_data') and topic.raw_data:
-                related_stocks = topic.raw_data.get('relatedStockSymbols', [])
+            topic_description = None
+            try:
+                logger.info(f"🔍 Fetching details for topic: {topic_id}")
+                topic_detail = await cmoney_client.get_topic_detail(access_token, topic_id)
+
+                # Extract stock_ids from relatedStockSymbols in detail response
+                related_stocks = topic_detail.get('relatedStockSymbols', [])
                 if isinstance(related_stocks, list):
                     for stock_obj in related_stocks:
                         if isinstance(stock_obj, dict) and 'key' in stock_obj:
-                            # Extract stock code from 'key' field
                             stock_ids.append(str(stock_obj['key']))
                         elif isinstance(stock_obj, str):
-                            # Fallback: if it's already a string
                             stock_ids.append(str(stock_obj))
 
-            # 🔥 FIX: Also check if topic has direct relatedStockSymbols attribute
-            elif hasattr(topic, 'relatedStockSymbols') and topic.relatedStockSymbols:
-                related_stocks = topic.relatedStockSymbols
-                if isinstance(related_stocks, list):
-                    for stock_obj in related_stocks:
-                        if isinstance(stock_obj, dict) and 'key' in stock_obj:
-                            stock_ids.append(str(stock_obj['key']))
-                        elif isinstance(stock_obj, str):
-                            stock_ids.append(str(stock_obj))
+                # Get description from detail if available
+                topic_description = topic_detail.get('description') or topic_detail.get('name')
+
+                logger.info(f"✅ Topic {topic_id} has {len(stock_ids)} related stocks: {stock_ids}")
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to fetch details for topic {topic_id}: {e}")
+                # Fallback: try to extract from raw_data if available
+                if hasattr(topic, 'raw_data') and topic.raw_data:
+                    related_stocks = topic.raw_data.get('relatedStockSymbols', [])
+                    if isinstance(related_stocks, list):
+                        for stock_obj in related_stocks:
+                            if isinstance(stock_obj, dict) and 'key' in stock_obj:
+                                stock_ids.append(str(stock_obj['key']))
 
             # Calculate engagement score (mock for now, can be enhanced later)
             engagement_score = 100.0 - (len(topics) * 5.0)  # Decreasing scores
 
             # 🔥 FIX: Use 'name' field as primary title (matches CMoney API)
             topic_title = topic.name if hasattr(topic, 'name') else (topic.title if hasattr(topic, 'title') else f"話題 {len(topics)+1}")
-            topic_description = topic.description if hasattr(topic, 'description') else f"熱門討論話題：{topic_title}"
+            if not topic_description:
+                topic_description = f"熱門討論話題：{topic_title}"
 
             topics.append({
-                "id": str(topic.id) if hasattr(topic, 'id') else f"topic_{len(topics)+1}",
+                "id": topic_id,
                 "title": topic_title,
                 "content": topic_description,
                 "stock_ids": stock_ids,
