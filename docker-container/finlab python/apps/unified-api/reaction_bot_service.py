@@ -143,14 +143,27 @@ class ReactionBotService:
                 logger.warning("⚠️ No reaction bot config found in database")
                 return None
 
+            # Parse selected_kol_serials from JSON if it's a string
+            kol_serials = row['selected_kol_serials']
+            if isinstance(kol_serials, str):
+                import json
+                try:
+                    kol_serials = json.loads(kol_serials) if kol_serials else []
+                except:
+                    kol_serials = []
+            elif kol_serials is None:
+                kol_serials = []
+
             return ReactionBotConfig(
                 enabled=row['enabled'],
                 reaction_percentage=row['reaction_percentage'],
-                selected_kol_serials=row['selected_kol_serials'] or [],
+                selected_kol_serials=kol_serials,
                 distribution_algorithm=row['distribution_algorithm'],
                 min_delay_seconds=row['min_delay_seconds'],
                 max_delay_seconds=row['max_delay_seconds'],
-                max_reactions_per_kol_per_hour=row['max_reactions_per_kol_per_hour']
+                max_reactions_per_kol_per_hour=row['max_reactions_per_kol_per_hour'],
+                created_at=row.get('created_at'),
+                updated_at=row.get('updated_at')
             )
 
     async def update_config(self, config_updates: Dict) -> Dict:
