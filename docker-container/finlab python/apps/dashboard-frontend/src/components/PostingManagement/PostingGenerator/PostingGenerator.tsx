@@ -404,7 +404,7 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
 
           const pureTopicPost = {
             stock_code: `TOPIC_${topic.id}`,
-            stock_name: topic.title,
+            stock_name: '純話題',  // 🔥 FIX: 不要用 topic.title，明確標示為純話題
             kol_serial: randomKolSerialPure,
             session_id: session.id,
             topic_id: topic.id,

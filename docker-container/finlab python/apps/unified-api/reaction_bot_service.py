@@ -28,6 +28,8 @@ class ReactionBotConfig:
     min_delay_seconds: float
     max_delay_seconds: float
     max_reactions_per_kol_per_hour: int
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 
 class PoissonDistributor:

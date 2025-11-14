@@ -538,8 +538,14 @@ const PostReviewPage: React.FC<PostReviewPageProps> = ({ sessionId, onBack }) =>
             key="stock"
             width={120}
             render={(codes: string[], record: Post) => {
-              const stockName = record.stock_names && record.stock_names[0] ? record.stock_names[0] : '無';
               const stockCode = codes && codes[0] ? codes[0] : '無';
+
+              // 🔥 如果是純話題（stock_code 以 TOPIC_ 開頭），顯示 "-"
+              if (stockCode.startsWith('TOPIC_')) {
+                return <Text type="secondary">-</Text>;
+              }
+
+              const stockName = record.stock_names && record.stock_names[0] ? record.stock_names[0] : '無';
               return (
                 <div>
                   <Text strong>{stockName}</Text>
