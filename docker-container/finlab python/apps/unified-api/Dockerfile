@@ -24,6 +24,9 @@ RUN pip install --no-cache-dir --retries 10 --timeout 300 -r requirements.txt ||
 # 複製應用程式碼
 COPY main.py .
 
+# 複製 services 模組 (CMoney realtime 服務需要)
+COPY services/ ./services/
+
 # 複製 posting-service 模組 (GPT 和個人化模組需要)
 # Note: posting-service directory should be in unified-api/ before Docker build
 COPY posting-service/ ./posting-service/
