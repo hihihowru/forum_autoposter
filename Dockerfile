@@ -1,7 +1,7 @@
 # CRITICAL: Docker Hub auth is completely down (502/503 errors)
 # Using full python:3.11 image which Railway likely has cached
 # Full image is larger but should work without hitting Docker Hub auth
-# 🔥 FORCE REBUILD: 2025-10-21-13:35 - Add APScheduler dependency to CORRECT requirements.txt
+# 🔥 FORCE REBUILD: 2025-11-20-10:33 - Disable CMoney VPN service (commented out import)
 FROM python:3.11
 
 # 設置工作目錄
