@@ -1,13 +1,12 @@
 [build]
 builder = "nixpacks"
-buildCommand = "cd 'docker-container/finlab python/apps/unified-api' && pip install -r requirements.txt"
 
 [deploy]
-startCommand = "cd 'docker-container/finlab python/apps/unified-api' && python main.py"
+startCommand = "python 'docker-container/finlab python/apps/unified-api/main.py'"
 healthcheckPath = "/health"
 healthcheckTimeout = 300
 restartPolicyType = "on_failure"
 
 [env]
 NODE_ENV = "production"
-PYTHONPATH = "/app/docker-container/finlab python/apps/unified-api"
+PYTHONPATH = "/app/docker-container/finlab python/apps/unified-api:/app"
