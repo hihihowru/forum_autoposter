@@ -1,8 +1,10 @@
 [build]
-builder = "nixpacks"
+builder = "dockerfile"
+dockerfilePath = "docker-container/finlab python/apps/unified-api/Dockerfile"
+dockerfileContext = "docker-container/finlab python/apps/unified-api"
 
 [deploy]
-startCommand = "sh start-unified-api.sh"
+# startCommand is handled by Dockerfile CMD
 healthcheckPath = "/health"
 healthcheckTimeout = 300
 restartPolicyType = "on_failure"
