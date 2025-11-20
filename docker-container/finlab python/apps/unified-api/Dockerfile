@@ -10,9 +10,6 @@ RUN apt-get update --fix-missing || apt-get update && \
     apt-get install -y --no-install-recommends \
     gcc \
     g++ \
-    openvpn \
-    iproute2 \
-    iputils-ping \
     && rm -rf /var/lib/apt/lists/*
 
 # 複製 requirements.txt 並安裝 Python 依賴 (with retry logic for Railway network issues)
@@ -31,17 +28,11 @@ COPY services/ ./services/
 # Note: posting-service directory should be in unified-api/ before Docker build
 COPY posting-service/ ./posting-service/
 
-# 複製 VPN entrypoint script and .ovpn config
-COPY vpn-entrypoint.sh /app/vpn-entrypoint.sh
-COPY cmoney.ovpn /app/cmoney.ovpn
-RUN chmod +x /app/vpn-entrypoint.sh
-
 # Note: stock_mapping.json and post_records are loaded from database or generated at runtime
 # Removed COPY commands for files outside build context
 
 # 暴露端口（Railway 會自動設置 PORT 環境變數）
 EXPOSE $PORT
 
-# 使用 VPN entrypoint 啟動應用
-ENTRYPOINT ["/app/vpn-entrypoint.sh"]
+# 直接啟動應用 (VPN已移除)
 CMD ["python", "main.py"]
