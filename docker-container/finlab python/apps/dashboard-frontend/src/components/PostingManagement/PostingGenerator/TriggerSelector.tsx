@@ -793,6 +793,9 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
       stock_codes: newSelectedStocks,
       stock_names: newSelectedNames
     });
+
+    // 🔥 FIX: Also sync selectedStocksForBatch for UI display consistency
+    setSelectedStocksForBatch(newSelectedStocks);
   };
 
   // 批量選擇股票 - 自動更新配置
@@ -1156,31 +1159,24 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ value, onChange, onNe
         console.log(`根據限制截取前 ${value.stockCountLimit} 檔股票`);
       }
       
-      // 更新篩選後的股票代號和名稱，並自動選取
+      // 🔥 FIX: 不再自動選取所有股票，僅載入數據供使用者手動選擇
       if (stocksToUse.length > 0) {
-        const stockCodes = stocksToUse.map((stock: any) => stock.stock_code);
-        const stockNames = stocksToUse.map((stock: any) => stock.stock_name);
-        
-        // 自動選取所有篩選出的股票
-        onChange({
-          ...value,
-          stock_codes: stockCodes,
-          stock_names: stockNames
-        });
-        
         loadCompanyNameMapping(stocksToUse);
-        
-        // 顯示自動選取的信息
-        message.success(`已自動選取 ${stockCodes.length} 檔股票`);
+
+        // 清空之前的選擇，讓使用者手動選取
+        setSelectedStocksForBatch([]);
+
+        // 提示使用者手動選取股票
+        message.info(`找到 ${stocksToUse.length} 檔股票，請手動選擇要分析的個股`);
       }
       
+      // 🔥 FIX: 移除重複的成功訊息（已在上方顯示 info 訊息）
       const finalCount = stocksToUse.length;
       const totalCount = result.stocks?.length || 0;
-      
+
+      // 僅在有截取時顯示額外提示
       if (value.stockCountLimit && totalCount > value.stockCountLimit) {
-        message.success(`篩選後找到 ${totalCount} 檔股票，已選擇前 ${finalCount} 檔`);
-      } else {
-        message.success(`篩選後找到 ${finalCount} 檔股票`);
+        message.warning(`共有 ${totalCount} 檔符合條件，僅顯示前 ${finalCount} 檔`);
       }
     } catch (error) {
       message.error('篩選失敗，請稍後再試');
