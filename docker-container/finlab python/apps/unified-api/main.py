@@ -3964,10 +3964,10 @@ async def refresh_kol_interactions(serial: str):
                         with conn.cursor() as update_cursor:
                             update_cursor.execute("""
                                 UPDATE post_records
-                                SET likes = %s, comments = %s, shares = %s, bookmarks = %s,
+                                SET likes = %s, comments = %s, shares = %s,
                                     emoji_data = %s, last_interaction_update = CURRENT_TIMESTAMP
                                 WHERE post_id = %s
-                            """, (likes, comments, shares, bookmarks, json.dumps(emoji_data), post_id))
+                            """, (likes, comments, shares, json.dumps(emoji_data), post_id))
 
                         updated_count += 1
                         logger.info(f"Updated post {post_id}: {likes} likes, {comments} comments, {shares} shares")
@@ -4154,11 +4154,10 @@ async def refresh_all_interactions():
                                         SET likes = %s,
                                             comments = %s,
                                             shares = %s,
-                                            bookmarks = %s,
                                             emoji_data = %s,
                                             last_interaction_update = CURRENT_TIMESTAMP
                                         WHERE post_id = %s
-                                    """, (likes, comments, collections, collections, json.dumps(emoji_data), post_id))
+                                    """, (likes, comments, collections, json.dumps(emoji_data), post_id))
 
                                 updated_count += 1
                                 logger.debug(f"Updated post {post_id}: likes={likes}, comments={comments}, collections={collections}")
