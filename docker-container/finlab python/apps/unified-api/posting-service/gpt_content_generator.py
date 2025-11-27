@@ -44,6 +44,7 @@ class GPTContentGenerator:
                              realtime_price_data: Optional[Dict[str, Any]] = None,
                              ohlc_data: Optional[Dict[str, Any]] = None,
                              technical_indicators: Optional[Dict[str, Any]] = None,
+                             dtno_data: Optional[Dict[str, Any]] = None,  # 🔥 NEW: DTNO 數據
                              content_length: str = "medium",
                              max_words: int = 1000,  # 🔥 增加字數限制以獲得更詳細的分析
                              model: Optional[str] = None,
@@ -61,6 +62,7 @@ class GPTContentGenerator:
             realtime_price_data: CMoney即時股價資訊 (包含 current_price, volume, change等)
             ohlc_data: OHLC價格數據
             technical_indicators: 技術指標數據
+            dtno_data: DTNO 數據 (基本面/技術面/籌碼面)
             content_length: 內容長度
             max_words: 最大字數
             model: 模型ID
@@ -87,7 +89,7 @@ class GPTContentGenerator:
             # 🎯 準備參數
             params = self._prepare_template_parameters(
                 kol_profile, stock_id, stock_name, trigger_type,
-                serper_analysis, realtime_price_data, ohlc_data, technical_indicators, max_words
+                serper_analysis, realtime_price_data, ohlc_data, technical_indicators, dtno_data, max_words
             )
 
             # 🎯 注入參數到模板
@@ -336,7 +338,7 @@ class GPTContentGenerator:
 【背景】{trigger_description}
 
 【市場數據】
-{news_summary}{ohlc_summary}{tech_summary}
+{news_summary}{ohlc_summary}{tech_summary}{dtno_summary}
 請分析這檔股票，包含：
 1. 為什麼值得關注
 2. 你的專業看法
@@ -373,7 +375,7 @@ class GPTContentGenerator:
 【背景】{trigger_description}
 
 【市場數據】
-{news_summary}{ohlc_summary}
+{news_summary}{ohlc_summary}{dtno_summary}
 請針對這檔股票提出一個引發討論的問題，鼓勵讀者分享看法。
 
 要求：
@@ -409,7 +411,7 @@ class GPTContentGenerator:
 【背景】{trigger_description}
 
 【市場數據】
-{news_summary}{ohlc_summary}{tech_summary}
+{news_summary}{ohlc_summary}{tech_summary}{dtno_summary}
 請用你獨特的風格分析這檔股票，展現你的個性和專業。
 
 要求：
@@ -434,6 +436,7 @@ class GPTContentGenerator:
                                      realtime_price_data: Optional[Dict[str, Any]],
                                      ohlc_data: Optional[Dict[str, Any]],
                                      technical_indicators: Optional[Dict[str, Any]],
+                                     dtno_data: Optional[Dict[str, Any]],
                                      max_words: int) -> Dict[str, Any]:
         """準備模板參數"""
 
@@ -531,10 +534,90 @@ class GPTContentGenerator:
             params['tech_summary'] = ''
             params['tech'] = {}
 
+        # 🔥 NEW: DTNO 數據摘要 (基本面/技術面/籌碼面)
+        if dtno_data:
+            dtno_summary = self._format_dtno_summary(dtno_data)
+            params['dtno_summary'] = dtno_summary
+            params['dtno'] = dtno_data
+            params['has_dtno_data'] = True
+            logger.info(f"📊 DTNO 數據已注入: {len(dtno_data)} 個分類")
+        else:
+            params['dtno_summary'] = ''
+            params['dtno'] = {}
+            params['has_dtno_data'] = False
+
         # 新聞列表（支援 {news[0].title}）
         params['news'] = news_items
 
         return params
+
+    def _format_dtno_summary(self, dtno_data: Dict[str, Any]) -> str:
+        """格式化 DTNO 數據為 prompt 摘要"""
+        if not dtno_data:
+            return ''
+
+        # 分類名稱對照
+        sub_cat_names = {
+            'revenue': '營收統計',
+            'eps': 'EPS與盈餘',
+            'profitability': '獲利能力',
+            'financial_health': '財務健康',
+            'dividend': '股利政策',
+            'analyst_rating': '機構評等',
+            'momentum': '價格動能',
+            'ma': '均線系統',
+            'kd': 'KD指標',
+            'rsi': 'RSI指標',
+            'macd': 'MACD指標',
+            'bias': '乖離率',
+            'volatility': '波動率',
+            'institutional': '三大法人',
+            'foreign_detail': '外資詳細',
+            'trust_detail': '投信詳細',
+            'concentration': '籌碼集中度',
+            'major_trading': '主力買賣超',
+            'broker': '券商分點',
+            'major_streak': '主力連續買賣',
+            'winner_loser': '贏家/輸家統計',
+        }
+
+        lines = ["\n【DTNO 數據分析資料 - 請融入文章分析中】\n"]
+
+        for sub_cat, data in dtno_data.items():
+            if not data or not data.get('data'):
+                continue
+
+            titles = data.get('titles', [])
+            rows = data.get('data', [])
+            display_name = sub_cat_names.get(sub_cat, sub_cat)
+
+            lines.append(f"\n### {display_name}")
+
+            # 只取最新一筆資料
+            if rows:
+                latest_row = rows[0]
+                # 跳過前幾個 meta columns (日期、代號、名稱)
+                for i, title in enumerate(titles):
+                    if i < 4:  # 跳過 date, time, code, name
+                        continue
+                    if i >= len(latest_row):
+                        break
+
+                    value = latest_row[i]
+                    if value is not None and value != '':
+                        try:
+                            num_val = float(value)
+                            if abs(num_val) >= 1000000:
+                                formatted = f"{num_val/1000000:.2f}M"
+                            elif abs(num_val) >= 1000:
+                                formatted = f"{num_val/1000:.2f}K"
+                            else:
+                                formatted = f"{num_val:.2f}"
+                            lines.append(f"- {title}: {formatted}")
+                        except (ValueError, TypeError):
+                            lines.append(f"- {title}: {value}")
+
+        return "\n".join(lines)
 
     def _inject_parameters(self, template: str, params: Dict[str, Any]) -> str:
         """注入參數到模板

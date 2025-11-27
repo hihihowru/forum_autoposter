@@ -40,6 +40,8 @@ import asyncpg  # 🔥 Add asyncpg for KOL Profile query
 
 # 🔥 CMoney Real-time Stock Price Service
 from services.cmoney_realtime import get_cmoney_service
+# 🔥 DTNO Data Service (基本面/技術面/籌碼面)
+from services.dtno import get_dtno_service
 
 # Timezone utility - Always use Taipei time (GMT+8)
 def get_current_time():
@@ -3051,6 +3053,23 @@ async def manual_posting(request: Request):
         else:
             logger.info("ℹ️  Serper 服務未初始化，跳過新聞搜尋")
 
+        # 🔥 Phase 3: DTNO 數據 (基本面/技術面/籌碼面)
+        dtno_data = {}
+        data_sources = body.get('data_sources', {})
+        sub_categories = data_sources.get('subCategories', [])
+
+        if sub_categories:
+            try:
+                logger.info(f"📊 開始抓取 DTNO 數據: {sub_categories}")
+                dtno_service = get_dtno_service()
+                dtno_data = await dtno_service.fetch_by_subcategories(stock_code, sub_categories)
+                logger.info(f"✅ DTNO 數據抓取成功: {len(dtno_data)} 個分類")
+            except Exception as dtno_error:
+                logger.warning(f"⚠️  DTNO 數據抓取失敗: {dtno_error}，繼續使用空數據")
+                dtno_data = {}
+        else:
+            logger.info("ℹ️  未選擇 DTNO 數據源，跳過")
+
         # 🔥 FIX: Check if user provided custom title and content (for manual posting)
         custom_title = body.get('title')
         custom_content = body.get('content')
@@ -3071,9 +3090,10 @@ async def manual_posting(request: Request):
                     posting_type=posting_type,  # 🔥 使用 posting_type 決定 prompt 模板
                     trigger_type=trigger_type,  # 🔥 新增
                     serper_analysis=serper_analysis,  # ✅ 傳入真實 Serper 數據
-                    realtime_price_data=realtime_price_data,  # 🔥 NEW: 傳入即時股價資訊
-                    ohlc_data=None,  # 🔥 Phase 2 接入
-                    technical_indicators=None,  # 🔥 Phase 2 接入
+                    realtime_price_data=realtime_price_data,  # 🔥 傳入即時股價資訊
+                    ohlc_data=None,
+                    technical_indicators=None,
+                    dtno_data=dtno_data if dtno_data else None,  # 🔥 NEW: DTNO 數據
                     content_length="medium",
                     max_words=max_words,
                     model=chosen_model_id  # 🔥 傳遞選定的模型
