@@ -3965,9 +3965,9 @@ async def refresh_kol_interactions(serial: str):
                             update_cursor.execute("""
                                 UPDATE post_records
                                 SET likes = %s, comments = %s, shares = %s,
-                                    emoji_data = %s, last_interaction_update = CURRENT_TIMESTAMP
+                                    last_interaction_update = CURRENT_TIMESTAMP
                                 WHERE post_id = %s
-                            """, (likes, comments, shares, json.dumps(emoji_data), post_id))
+                            """, (likes, comments, shares, post_id))
 
                         updated_count += 1
                         logger.info(f"Updated post {post_id}: {likes} likes, {comments} comments, {shares} shares")
@@ -4154,10 +4154,9 @@ async def refresh_all_interactions():
                                         SET likes = %s,
                                             comments = %s,
                                             shares = %s,
-                                            emoji_data = %s,
                                             last_interaction_update = CURRENT_TIMESTAMP
                                         WHERE post_id = %s
-                                    """, (likes, comments, collections, json.dumps(emoji_data), post_id))
+                                    """, (likes, comments, collections, post_id))
 
                                 updated_count += 1
                                 logger.debug(f"Updated post {post_id}: likes={likes}, comments={comments}, collections={collections}")
@@ -4363,9 +4362,9 @@ async def refresh_filtered_interactions(request: Request):
                                     update_cursor.execute("""
                                         UPDATE post_records
                                         SET likes = %s, comments = %s, shares = %s,
-                                            emoji_data = %s, last_interaction_update = CURRENT_TIMESTAMP
+                                            last_interaction_update = CURRENT_TIMESTAMP
                                         WHERE post_id = %s
-                                    """, (likes, comments, collections, json.dumps(emoji_data), post_id))
+                                    """, (likes, comments, collections, post_id))
 
                                 updated_count += 1
                                 updated_posts.append({
