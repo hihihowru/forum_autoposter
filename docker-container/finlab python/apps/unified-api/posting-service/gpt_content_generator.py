@@ -556,29 +556,52 @@ class GPTContentGenerator:
         if not dtno_data:
             return ''
 
-        # 分類名稱對照
+        # 分類名稱對照 (30張 DTNO 表 + 別名)
         sub_cat_names = {
-            'revenue': '營收統計',
-            'eps': 'EPS與盈餘',
+            # 基本面 (9張)
+            'revenue_stats': '月營收統計',
+            'revenue': '月營收詳細',
+            'eps': '財報摘要',
             'profitability': '獲利能力',
-            'financial_health': '財務健康',
+            'eps_estimate': '機構預估EPS',
+            'quarterly_earnings': '季盈餘自結',
+            'financial_health': 'IFRS年財報',
             'dividend': '股利政策',
             'analyst_rating': '機構評等',
-            'momentum': '價格動能',
+            # 技術面 (8張)
+            'daily_close': '日收盤表',
+            'prediction': '預測主要股',
+            'daily_kline': '日K線',
             'ma': '均線系統',
+            'momentum': '報酬率動能',
+            'yearly_stats': '年度統計',
+            'technical': '技術指標',
+            'industry': '產業標的',
+            # 技術面別名
             'kd': 'KD指標',
             'rsi': 'RSI指標',
             'macd': 'MACD指標',
             'bias': '乖離率',
             'volatility': '波動率',
+            # 籌碼面 (14張)
             'institutional': '三大法人',
             'foreign_detail': '外資詳細',
             'trust_detail': '投信詳細',
+            'dealer_detail': '自營商詳細',
+            'broker_top1': 'Top1券商',
+            'broker_top5': 'Top5券商',
+            'broker_top10': 'Top10券商',
+            'broker_top15': 'Top15券商',
+            'broker_daily_top15': '每日Top15券商',
+            'winner_loser': '贏家輸家統計',
+            'major_select': '分點主力選股',
+            'major_daily': '日主力買超',
+            'major_trading': '主力買超統計',
+            'broker_analysis': '分點籌碼分析',
+            # 籌碼面別名
             'concentration': '籌碼集中度',
-            'major_trading': '主力買賣超',
             'broker': '券商分點',
             'major_streak': '主力連續買賣',
-            'winner_loser': '贏家/輸家統計',
         }
 
         lines = ["\n【DTNO 數據分析資料 - 請融入文章分析中】\n"]

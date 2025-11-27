@@ -17,57 +17,98 @@ logger = logging.getLogger(__name__)
 # ============================================
 
 DTNO_TABLE_MAPPING = {
-    # 基本面
-    'revenue': '115694491',           # 營收統計
-    'eps': '115694323',               # EPS與盈餘
-    'profitability': '115694323',     # 獲利能力 (same table as EPS)
-    'financial_health': '115694602',  # 財務健康
-    'dividend': '115394894',          # 股利政策
-    'analyst_rating': '115694873',    # 機構評等
+    # ========== 基本面 (9張) ==========
+    'revenue_stats': '115694276',     # 月營收統計 (創新高、連續成長)
+    'revenue': '115694491',           # 月營收詳細 (營收金額、年增率)
+    'eps': '115694323',               # 財報摘要 (EPS、毛利率、營益率)
+    'profitability': '115694323',     # 獲利能力 (same table as eps)
+    'eps_estimate': '115694449',      # 機構預估EPS (預估EPS、目標價)
+    'quarterly_earnings': '115694772', # 季盈餘公司自結
+    'financial_health': '115694602',  # IFRS年財報 (負債比、ROE)
+    'dividend': '115394894',          # 股利與股票
+    'analyst_rating': '115694873',    # 個股機構績效評等
 
-    # 技術面
-    'momentum': '115695101',          # 價格動能
-    'ma': '115694997',                # 均線系統
-    'kd': '115695868',                # KD指標
-    'rsi': '115695868',               # RSI指標 (same table)
-    'macd': '115695868',              # MACD指標 (same table)
-    'bias': '115695868',              # 乖離率 (same table)
-    'volatility': '115695868',        # 波動率 (same table)
+    # ========== 技術面 (8張) ==========
+    'daily_close': '115695215',       # 日收盤表 (OHLCV)
+    'prediction': '115694668',        # 預測主要股
+    'daily_kline': '115694759',       # 主要股日K線
+    'ma': '115694997',                # 常用技術指標_均線
+    'momentum': '115695101',          # 日乖離比較表 (報酬率)
+    'yearly_stats': '115695150',      # 個股年份統計表
+    'technical': '115695868',         # 技術指標1 (KD、RSI、MACD、乖離率、波動率)
+    'industry': '113775643',          # 產業標的
+    # 技術面別名 (向後相容)
+    'kd': '115695868',                # alias → technical
+    'rsi': '115695868',               # alias → technical
+    'macd': '115695868',              # alias → technical
+    'bias': '115695868',              # alias → technical
+    'volatility': '115695868',        # alias → technical
 
-    # 籌碼面
-    'institutional': '115696346',     # 三大法人
+    # ========== 籌碼面 (14張) ==========
+    'institutional': '115696346',     # 三大主力 (外資、投信、自營商合計)
     'foreign_detail': '115696245',    # 外資詳細
     'trust_detail': '115696307',      # 投信詳細
-    'concentration': '115085458',     # 籌碼集中度
-    'major_trading': '115696668',     # 主力買賣超
-    'broker': '115696587',            # 券商分點
-    'major_streak': '115696523',      # 主力連續買賣
-    'winner_loser': '115085952',      # 贏家/輸家統計
+    'dealer_detail': '115696320',     # 自營商詳細
+    'broker_top1': '115085458',       # top1券商統計 (籌碼集中度)
+    'broker_top5': '115085822',       # top5券商統計
+    'broker_top10': '115085871',      # top10券商統計
+    'broker_top15': '115085886',      # top15券商統計
+    'broker_daily_top15': '115085927', # 每日top15券商統計
+    'winner_loser': '115085952',      # 個股贏家統計
+    'major_select': '115696523',      # 分點主力選股
+    'major_daily': '115696587',       # 日主力買超出表
+    'major_trading': '115696668',     # 個股主力買超統計
+    'broker_analysis': '115696306',   # 分點籌碼分析
+    # 籌碼面別名 (向後相容)
+    'concentration': '115085458',     # alias → broker_top1
+    'broker': '115696587',            # alias → major_daily
+    'major_streak': '115696523',      # alias → major_select
 }
 
 # Period type for each table (day/month/quarter)
 DTNO_PERIOD_TYPE = {
+    # 基本面
+    'revenue_stats': 'month',
     'revenue': 'month',
     'eps': 'quarter',
     'profitability': 'quarter',
+    'eps_estimate': 'month',
+    'quarterly_earnings': 'quarter',
     'financial_health': 'quarter',
     'dividend': 'year',
     'analyst_rating': 'day',
-    'momentum': 'day',
+    # 技術面
+    'daily_close': 'day',
+    'prediction': 'day',
+    'daily_kline': 'day',
     'ma': 'day',
-    'kd': 'day',
-    'rsi': 'day',
-    'macd': 'day',
-    'bias': 'day',
-    'volatility': 'day',
+    'momentum': 'day',
+    'yearly_stats': 'year',
+    'technical': 'day',
+    'industry': 'day',
+    'kd': 'day',           # alias
+    'rsi': 'day',          # alias
+    'macd': 'day',         # alias
+    'bias': 'day',         # alias
+    'volatility': 'day',   # alias
+    # 籌碼面
     'institutional': 'day',
     'foreign_detail': 'day',
     'trust_detail': 'day',
-    'concentration': 'day',
-    'major_trading': 'day',
-    'broker': 'day',
-    'major_streak': 'day',
+    'dealer_detail': 'day',
+    'broker_top1': 'day',
+    'broker_top5': 'day',
+    'broker_top10': 'day',
+    'broker_top15': 'day',
+    'broker_daily_top15': 'day',
     'winner_loser': 'day',
+    'major_select': 'day',
+    'major_daily': 'day',
+    'major_trading': 'day',
+    'broker_analysis': 'day',
+    'concentration': 'day',  # alias
+    'broker': 'day',         # alias
+    'major_streak': 'day',   # alias
 }
 
 
