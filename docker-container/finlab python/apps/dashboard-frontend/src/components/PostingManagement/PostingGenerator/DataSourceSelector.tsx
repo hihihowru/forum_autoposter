@@ -491,7 +491,11 @@ const DataSourceSelector: React.FC<DataSourceSelectorProps> = ({ value, onChange
               </Space>
             }
           >
-            <Space direction="vertical" style={{ width: '100%' }} size="small">
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: '8px'
+            }}>
               {category.subCategories.map((sub) => (
                 <Card
                   key={sub.id}
@@ -500,24 +504,26 @@ const DataSourceSelector: React.FC<DataSourceSelectorProps> = ({ value, onChange
                     border: isSubCategorySelected(sub.id)
                       ? `2px solid ${category.color}`
                       : '1px solid #f0f0f0',
-                    backgroundColor: isSubCategorySelected(sub.id) ? `${category.color}08` : '#fff'
+                    backgroundColor: isSubCategorySelected(sub.id) ? `${category.color}08` : '#fff',
+                    cursor: 'pointer'
                   }}
+                  onClick={() => handleSubCategoryChange(sub.id, !isSubCategorySelected(sub.id))}
                 >
-                  <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-                    <Checkbox
-                      checked={isSubCategorySelected(sub.id)}
-                      onChange={(e) => handleSubCategoryChange(sub.id, e.target.checked)}
-                    >
-                      <Space>
-                        <Tag color={category.color}>{sub.name}</Tag>
-                        <Text type="secondary" style={{ fontSize: '12px' }}>
-                          ({getColumnCount(sub)} 個欄位)
-                        </Text>
-                        {isSubCategorySelected(sub.id) && (
-                          <CheckCircleOutlined style={{ color: category.color }} />
-                        )}
-                      </Space>
-                    </Checkbox>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Checkbox
+                        checked={isSubCategorySelected(sub.id)}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          handleSubCategoryChange(sub.id, e.target.checked);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <Tag color={category.color} style={{ margin: 0 }}>{sub.name}</Tag>
+                      <Text type="secondary" style={{ fontSize: '11px' }}>
+                        ({getColumnCount(sub)})
+                      </Text>
+                    </div>
                     <Tooltip
                       title={
                         <div>
@@ -529,12 +535,15 @@ const DataSourceSelector: React.FC<DataSourceSelectorProps> = ({ value, onChange
                       }
                       placement="left"
                     >
-                      <InfoCircleOutlined style={{ color: '#999', cursor: 'pointer' }} />
+                      <InfoCircleOutlined
+                        style={{ color: '#999', cursor: 'pointer' }}
+                        onClick={(e) => e.stopPropagation()}
+                      />
                     </Tooltip>
-                  </Space>
+                  </div>
                 </Card>
               ))}
-            </Space>
+            </div>
           </Panel>
         ))}
       </Collapse>
