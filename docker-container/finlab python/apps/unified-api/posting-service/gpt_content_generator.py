@@ -214,8 +214,17 @@ class GPTContentGenerator:
                         logger.error(f"❌ 無法從 Responses API 提取文字內容")
                         logger.error(f"❌ response.status: {response.status}")
                         logger.error(f"❌ 所有 output types: {[item.type for item in response.output]}")
+
+                        # 🔥 FIX: 如果 GPT-5 無法提取內容，直接 fallback 到模板
+                        logger.warning(f"⚠️ GPT-5 生成失敗，使用備用模板")
+                        kol_persona = kol_profile.get('persona', 'mixed')
+                        return self._fallback_generation(stock_id, stock_name, kol_persona)
                 else:
                     logger.error(f"❌ Responses API 回應沒有 output")
+                    # 🔥 FIX: 如果沒有 output，直接 fallback 到模板
+                    logger.warning(f"⚠️ GPT-5 沒有回應，使用備用模板")
+                    kol_persona = kol_profile.get('persona', 'mixed')
+                    return self._fallback_generation(stock_id, stock_name, kol_persona)
 
             else:
                 # 🔥 舊模型: 使用 Chat Completions API
@@ -829,6 +838,19 @@ class GPTContentGenerator:
 
     def _parse_gpt_response(self, content: str, stock_id: str, stock_name: str) -> Dict[str, Any]:
         """解析GPT回應"""
+
+        # 🔥 FIX: 防禦性檢查 - 如果 content 是 None 或空字串
+        if not content:
+            logger.error(f"❌ _parse_gpt_response 收到空內容，返回預設結構")
+            return {
+                "title": f"{stock_name}({stock_id}) 市場分析",
+                "content": f"【{stock_name}({stock_id}) 市場觀察】\n\n目前暫無詳細分析內容，請稍後再試。",
+                "content_md": f"【{stock_name}({stock_id}) 市場觀察】\n\n目前暫無詳細分析內容，請稍後再試。",
+                "commodity_tags": [{"type": "Stock", "key": stock_id, "bullOrBear": 0}],
+                "community_topic": None,
+                "generation_method": "empty_fallback",
+                "model_used": self.model
+            }
 
         # 🔥 清理 Markdown 格式（防禦性編程：即使 GPT 使用了 Markdown，也要移除）
         content = self._clean_markdown(content)
