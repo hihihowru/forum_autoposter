@@ -928,9 +928,9 @@ const InteractionAnalysisPage: React.FC = () => {
       post.comments || 0,
       post.shares || 0,
       (post.likes || 0) + (post.comments || 0) + (post.shares || 0),
-      post.published_at || post.created_at || '',
+      post.create_time || '',
       post.article_id || '',
-      post.post_url || ''
+      post.article_url || ''
     ]);
 
     // 組合 CSV 內容
