@@ -2938,10 +2938,11 @@ async def manual_posting(request: Request):
                 password=DB_CONFIG['password']
             )
 
-            # 🔥 查詢完整 KOL Profile (包含 prompt 設定)
+            # 🔥 查詢完整 KOL Profile (包含 prompt 設定 + 簽名檔)
             kol_row = await conn.fetchrow("""
                 SELECT serial, nickname, persona, model_id,
-                       prompt_persona, prompt_style, prompt_guardrails, prompt_skeleton
+                       prompt_persona, prompt_style, prompt_guardrails, prompt_skeleton,
+                       signature
                 FROM kol_profiles
                 WHERE serial = $1
             """, str(kol_serial))
@@ -2949,7 +2950,7 @@ async def manual_posting(request: Request):
             await conn.close()
 
             if kol_row:
-                # 🔥 構建 kol_profile dict (包含完整 prompt 設定)
+                # 🔥 構建 kol_profile dict (包含完整 prompt 設定 + 簽名檔)
                 kol_profile = {
                     'serial': kol_row['serial'],
                     'nickname': kol_row['nickname'],
@@ -2957,7 +2958,8 @@ async def manual_posting(request: Request):
                     'writing_style': kol_row['prompt_style'] or '',  # 使用 prompt_style 作為 writing_style
                     'prompt_persona': kol_row['prompt_persona'] or '',
                     'prompt_guardrails': kol_row['prompt_guardrails'] or '',
-                    'prompt_skeleton': kol_row['prompt_skeleton'] or ''
+                    'prompt_skeleton': kol_row['prompt_skeleton'] or '',
+                    'signature': kol_row['signature'] or ''  # 🔥 NEW: 簽名檔
                 }
 
                 # 模型選擇邏輯（保持不變）
@@ -2990,6 +2992,10 @@ async def manual_posting(request: Request):
         realtime_price_data = {}
         # 🔥 NEW: Check if enable_realtime_price is True (default: True)
         enable_realtime_price = body.get('enable_realtime_price', True)
+
+        # 🔥 NEW: Check if include_signature is True (default: False)
+        include_signature = body.get('include_signature', False)
+        logger.info(f"✍️  簽名檔設定: include_signature={include_signature}")
 
         if enable_realtime_price:
             try:
@@ -3108,6 +3114,14 @@ async def manual_posting(request: Request):
                 title = gpt_result.get('title', f"{stock_name}({stock_code}) 分析")
                 content = gpt_result.get('content', '')
                 logger.info(f"✅ GPT 內容生成成功: title={title[:30]}...")
+
+                # 🔥 NEW: 附加簽名檔（在新聞連結之前）
+                if include_signature and kol_profile and kol_profile.get('signature'):
+                    kol_signature = kol_profile['signature'].strip()
+                    if kol_signature:
+                        # 確保簽名檔前有足夠空白
+                        content += f"\n\n{kol_signature}"
+                        logger.info(f"✍️  已附加 KOL 簽名檔: {kol_signature[:30]}...")
 
                 # 🔥 FIX: 整合新聞連結到內容末尾
                 if serper_analysis and serper_analysis.get('enable_news_links', True):

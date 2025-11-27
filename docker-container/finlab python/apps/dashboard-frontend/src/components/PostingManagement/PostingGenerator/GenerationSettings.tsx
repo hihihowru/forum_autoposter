@@ -30,6 +30,8 @@ interface GenerationSettings {
   news_links_count: number; // 附加的新聞連結數量 (1-5)
   // 🔥 新增：即時股價設定
   enable_realtime_price: boolean; // 是否包含即時股價資訊
+  // 🔥 新增：簽名檔設定
+  include_signature: boolean; // 是否附加 KOL 簽名檔（確定會使用到）
 }
 
 interface GenerationSettingsProps {
@@ -203,6 +205,13 @@ const GenerationSettings: React.FC<GenerationSettingsProps> = ({ value, onChange
     onChange({
       ...value,
       enable_realtime_price: enable
+    });
+  };
+
+  const handleIncludeSignatureChange = (include: boolean) => {
+    onChange({
+      ...value,
+      include_signature: include
     });
   };
 
@@ -731,6 +740,38 @@ const GenerationSettings: React.FC<GenerationSettingsProps> = ({ value, onChange
           </Space>
         </div>
 
+        <Divider />
+
+        {/* 🔥 簽名檔設定 */}
+        <div>
+          <Title level={5}>
+            <Space>
+              <FileTextOutlined />
+              簽名檔設定
+            </Space>
+          </Title>
+          <Space direction="vertical" style={{ width: '100%' }}>
+            <Space>
+              <Text>附加 KOL 簽名檔：</Text>
+              <Switch
+                checked={value.include_signature === true}
+                onChange={handleIncludeSignatureChange}
+                checkedChildren="開啟"
+                unCheckedChildren="關閉"
+              />
+              <Tag color={value.include_signature === true ? "green" : "default"}>
+                {value.include_signature === true ? "已啟用（確定會使用到）" : "已停用"}
+              </Tag>
+            </Space>
+            <Text type="secondary" style={{ fontSize: '12px', display: 'block', marginTop: '4px' }}>
+              {value.include_signature === true
+                ? '✅ 開啟後，將在貼文內容最後、新聞連結之前附加 KOL 的簽名檔'
+                : '❌ 關閉後，貼文不會附加 KOL 簽名檔'
+              }
+            </Text>
+          </Space>
+        </div>
+
         {/* 設定摘要 */}
         <Card size="small" style={{ backgroundColor: '#f6ffed', border: '1px solid #b7eb8f' }}>
           <Title level={5} style={{ color: '#52c41a', margin: 0 }}>設定摘要</Title>
@@ -756,6 +797,9 @@ const GenerationSettings: React.FC<GenerationSettingsProps> = ({ value, onChange
             </Text>
             <Text type="secondary">
               • 即時股價：{value.enable_realtime_price !== false ? '✅ 已啟用' : '❌ 已停用'}
+            </Text>
+            <Text type="secondary">
+              • 簽名檔：{value.include_signature === true ? '✅ 已啟用' : '❌ 已停用'}
             </Text>
           </Space>
         </Card>

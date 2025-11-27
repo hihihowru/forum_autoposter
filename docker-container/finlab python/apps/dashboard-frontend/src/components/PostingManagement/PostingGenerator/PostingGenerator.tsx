@@ -135,7 +135,9 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
       model_id_override: null,
       use_kol_default_model: true,  // 預設使用 KOL 預設模型
       // 🔥 新增：即時股價設定
-      enable_realtime_price: true  // 預設啟用即時股價
+      enable_realtime_price: true,  // 預設啟用即時股價
+      // 🔥 新增：簽名檔設定
+      include_signature: false  // 預設關閉簽名檔（確定會使用到）
     },
     tags: {
       tag_mode: 'stock_tags',
@@ -619,7 +621,9 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
         model_id_override: generationConfig.settings?.model_id_override,
         use_kol_default_model: generationConfig.settings?.use_kol_default_model,
         // 🔥 NEW: Pass enable_realtime_price from Step 7
-        enable_realtime_price: generationConfig.settings?.enable_realtime_price !== false
+        enable_realtime_price: generationConfig.settings?.enable_realtime_price !== false,
+        // 🔥 NEW: Pass include_signature from Step 7 (確定會使用到)
+        include_signature: generationConfig.settings?.include_signature === true
       }).then(result => {
         // Silent completion toast (non-blocking)
         if (result.success) {
