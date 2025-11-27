@@ -102,6 +102,9 @@ const InteractionAnalysisPage: React.FC = () => {
   const [dateRange, setDateRange] = useState<[any, any] | null>(null);
   const [includeExternal, setIncludeExternal] = useState(true);
   const [searchKeyword, setSearchKeyword] = useState('');
+  const [timeQuickFilter, setTimeQuickFilter] = useState<string>('all'); // 時間快速篩選
+  const [selectedStock, setSelectedStock] = useState<string | undefined>(undefined); // 個股篩選
+  const [selectedTrigger, setSelectedTrigger] = useState<string | undefined>(undefined); // 觸發器篩選
   
   // 排序條件
   const [sortField, setSortField] = useState<string>('total_interactions');
@@ -114,6 +117,66 @@ const InteractionAnalysisPage: React.FC = () => {
   // 計算總互動數
   const calculateTotalInteractions = (post: InteractionPost): number => {
     return (post.likes || 0) + (post.comments || 0) + (post.shares || 0) + (post.bookmarks || 0);
+  };
+
+  // 🔥 獲取所有唯一的股票標籤
+  const uniqueStocks = useMemo(() => {
+    const stockSet = new Set<string>();
+    posts.forEach(post => {
+      if (post.commodity_tags && Array.isArray(post.commodity_tags)) {
+        post.commodity_tags.forEach(tag => {
+          if (tag.key) stockSet.add(tag.key);
+        });
+      }
+    });
+    return Array.from(stockSet).sort();
+  }, [posts]);
+
+  // 🔥 獲取所有唯一的 KOL
+  const uniqueKOLs = useMemo(() => {
+    const kolMap = new Map<number, string>();
+    posts.forEach(post => {
+      if (post.kol_serial && !kolMap.has(post.kol_serial)) {
+        kolMap.set(post.kol_serial, post.kol_nickname);
+      }
+    });
+    return Array.from(kolMap.entries()).map(([serial, nickname]) => ({ serial, nickname }));
+  }, [posts]);
+
+  // 🔥 時間快速篩選處理
+  const handleTimeQuickFilter = (value: string) => {
+    setTimeQuickFilter(value);
+    const now = new Date();
+    let startDate: Date | null = null;
+    let endDate: Date = now;
+
+    switch (value) {
+      case 'today':
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        break;
+      case 'yesterday':
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+        endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59);
+        break;
+      case 'week':
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case 'month':
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        break;
+      case 'custom':
+        // 使用 dateRange
+        return;
+      case 'all':
+      default:
+        setDateRange(null);
+        return;
+    }
+
+    if (startDate) {
+      // 轉換為 dayjs 或 moment 對象（取決於你的 DatePicker 配置）
+      setDateRange([startDate, endDate] as any);
+    }
   };
 
   // 分析幽默程度
@@ -156,9 +219,31 @@ const InteractionAnalysisPage: React.FC = () => {
   const getSortedAndFilteredPosts = (): InteractionPost[] => {
     let filteredPosts = [...posts];
 
+    // 🔥 應用 KOL 篩選
+    if (selectedKOL !== undefined) {
+      filteredPosts = filteredPosts.filter(post => post.kol_serial === selectedKOL);
+    }
+
+    // 🔥 應用個股篩選
+    if (selectedStock) {
+      filteredPosts = filteredPosts.filter(post =>
+        post.commodity_tags?.some(tag => tag.key === selectedStock)
+      );
+    }
+
+    // 🔥 應用時間篩選
+    if (dateRange && dateRange[0] && dateRange[1]) {
+      const startDate = new Date(dateRange[0]).getTime();
+      const endDate = new Date(dateRange[1]).getTime();
+      filteredPosts = filteredPosts.filter(post => {
+        const postDate = new Date(post.create_time).getTime();
+        return postDate >= startDate && postDate <= endDate;
+      });
+    }
+
     // 應用搜索篩選
     if (searchKeyword) {
-      filteredPosts = filteredPosts.filter(post => 
+      filteredPosts = filteredPosts.filter(post =>
         post.title.toLowerCase().includes(searchKeyword.toLowerCase()) ||
         post.content.toLowerCase().includes(searchKeyword.toLowerCase()) ||
         post.kol_nickname.toLowerCase().includes(searchKeyword.toLowerCase())
@@ -795,19 +880,6 @@ const InteractionAnalysisPage: React.FC = () => {
       ),
     },
     {
-      title: '瀏覽數',
-      dataIndex: 'views',
-      key: 'views',
-      width: 80,
-      sorter: (a: InteractionPost, b: InteractionPost) => a.views - b.views,
-      render: (views: number) => (
-        <Space>
-          <EyeOutlined style={{ color: '#1890ff' }} />
-          <Text strong>{views}</Text>
-        </Space>
-      ),
-    },
-    {
       title: '讚數',
       dataIndex: 'likes',
       key: 'likes',
@@ -957,22 +1029,6 @@ const InteractionAnalysisPage: React.FC = () => {
         <Text type="secondary">整合系統發文和外部數據的完整互動分析</Text>
       </div>
 
-      {/* 數據刷新控制 */}
-      <Card size="small" style={{ marginBottom: '24px' }}>
-        <Space>
-          <Button 
-            type="primary" 
-            icon={<ReloadOutlined />}
-            onClick={fetchInteractionAnalysis}
-            loading={refreshing}
-          >
-            一鍵刷新互動數據
-          </Button>
-          <Text type="secondary">
-            點擊按鈕獲取最新的 CMoney 互動數據
-          </Text>
-        </Space>
-      </Card>
 
       {/* 總體統計 */}
       {overallStats && (
@@ -1039,121 +1095,212 @@ const InteractionAnalysisPage: React.FC = () => {
         </Card>
       )}
 
-      {/* 篩選和搜索 */}
-      <Card size="small" style={{ marginBottom: 24 }}>
-        <Row gutter={16} align="middle">
-          <Col span={4}>
-            <Select
-              placeholder="選擇KOL"
-              value={selectedKOL}
-              onChange={setSelectedKOL}
-              style={{ width: '100%' }}
-              allowClear
-            >
-              {Object.entries(kolStats).map(([serial, stats]) => (
-                <Option key={serial} value={parseInt(serial)}>
-                  {stats.kol_nickname} ({serial})
-                </Option>
-              ))}
-            </Select>
+      {/* 🔥 篩選區域 - 重新設計 */}
+      <Card
+        size="small"
+        style={{ marginBottom: 24 }}
+        title={
+          <Space>
+            <FilterOutlined />
+            <span>篩選條件</span>
+            <Tag color="blue">{getSortedAndFilteredPosts().length} 筆符合</Tag>
+          </Space>
+        }
+        extra={
+          <Button
+            type="primary"
+            icon={<ReloadOutlined spin={refreshing} />}
+            onClick={fetchInteractionAnalysis}
+            loading={refreshing}
+            size="large"
+          >
+            刷新篩選結果
+          </Button>
+        }
+      >
+        {/* 第一行：時間篩選 */}
+        <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+          <Col span={24}>
+            <Space size="middle">
+              <Text strong><CalendarOutlined /> 時間篩選：</Text>
+              <Button
+                type={timeQuickFilter === 'all' ? 'primary' : 'default'}
+                size="small"
+                onClick={() => handleTimeQuickFilter('all')}
+              >
+                全部
+              </Button>
+              <Button
+                type={timeQuickFilter === 'today' ? 'primary' : 'default'}
+                size="small"
+                onClick={() => handleTimeQuickFilter('today')}
+              >
+                今日
+              </Button>
+              <Button
+                type={timeQuickFilter === 'yesterday' ? 'primary' : 'default'}
+                size="small"
+                onClick={() => handleTimeQuickFilter('yesterday')}
+              >
+                昨日
+              </Button>
+              <Button
+                type={timeQuickFilter === 'week' ? 'primary' : 'default'}
+                size="small"
+                onClick={() => handleTimeQuickFilter('week')}
+              >
+                近7天
+              </Button>
+              <Button
+                type={timeQuickFilter === 'month' ? 'primary' : 'default'}
+                size="small"
+                onClick={() => handleTimeQuickFilter('month')}
+              >
+                近30天
+              </Button>
+              <Divider type="vertical" />
+              <RangePicker
+                placeholder={['開始日期', '結束日期']}
+                value={dateRange}
+                onChange={(dates) => {
+                  setDateRange(dates);
+                  setTimeQuickFilter('custom');
+                }}
+                size="small"
+                style={{ width: 240 }}
+              />
+            </Space>
+          </Col>
+        </Row>
+
+        {/* 第二行：角色池 + 個股篩選 */}
+        <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+          <Col span={6}>
+            <Space direction="vertical" size="small" style={{ width: '100%' }}>
+              <Text type="secondary"><UserOutlined /> 角色池篩選</Text>
+              <Select
+                placeholder="選擇 KOL"
+                value={selectedKOL}
+                onChange={setSelectedKOL}
+                style={{ width: '100%' }}
+                allowClear
+                showSearch
+                optionFilterProp="children"
+              >
+                {uniqueKOLs.map(kol => (
+                  <Option key={kol.serial} value={kol.serial}>
+                    {kol.nickname} ({kol.serial})
+                  </Option>
+                ))}
+              </Select>
+            </Space>
           </Col>
           <Col span={6}>
-            <RangePicker
-              placeholder={['開始日期', '結束日期']}
-              value={dateRange}
-              onChange={setDateRange}
-              style={{ width: '100%' }}
-            />
+            <Space direction="vertical" size="small" style={{ width: '100%' }}>
+              <Text type="secondary">📈 個股篩選</Text>
+              <Select
+                placeholder="選擇股票"
+                value={selectedStock}
+                onChange={setSelectedStock}
+                style={{ width: '100%' }}
+                allowClear
+                showSearch
+              >
+                {uniqueStocks.map(stock => (
+                  <Option key={stock} value={stock}>
+                    {stock}
+                  </Option>
+                ))}
+              </Select>
+            </Space>
           </Col>
-          <Col span={4}>
-            <Select
-              value={includeExternal}
-              onChange={setIncludeExternal}
-              style={{ width: '100%' }}
-            >
-              <Option value={true}>包含外部數據</Option>
-              <Option value={false}>僅系統數據</Option>
-            </Select>
+          <Col span={6}>
+            <Space direction="vertical" size="small" style={{ width: '100%' }}>
+              <Text type="secondary">🔍 關鍵字搜尋</Text>
+              <Search
+                placeholder="標題、內容、KOL"
+                value={searchKeyword}
+                onChange={(e) => setSearchKeyword(e.target.value)}
+                allowClear
+                size="middle"
+              />
+            </Space>
           </Col>
-          <Col span={4}>
-            <Search
-              placeholder="搜索標題、內容、KOL"
-              value={searchKeyword}
-              onChange={(e) => setSearchKeyword(e.target.value)}
-              allowClear
-            />
+          <Col span={6}>
+            <Space direction="vertical" size="small" style={{ width: '100%' }}>
+              <Text type="secondary">📊 排序方式</Text>
+              <Space.Compact style={{ width: '100%' }}>
+                <Select
+                  value={sortField}
+                  onChange={setSortField}
+                  style={{ width: '60%' }}
+                >
+                  <Option value="total_interactions">總互動</Option>
+                  <Option value="likes">讚數</Option>
+                  <Option value="comments">留言</Option>
+                  <Option value="shares">分享</Option>
+                </Select>
+                <Select
+                  value={sortOrder}
+                  onChange={setSortOrder}
+                  style={{ width: '40%' }}
+                >
+                  <Option value="descend">↓降</Option>
+                  <Option value="ascend">↑升</Option>
+                </Select>
+              </Space.Compact>
+            </Space>
           </Col>
-          <Col span={3}>
-            <Select
-              placeholder="排序欄位"
-              value={sortField}
-              onChange={setSortField}
-              style={{ width: '100%' }}
-            >
-              <Option value="total_interactions">總互動數</Option>
-              <Option value="likes">讚數</Option>
-              <Option value="comments">留言數</Option>
-              <Option value="shares">分享數</Option>
-              <Option value="views">瀏覽數</Option>
-              <Option value="engagement_rate">互動率</Option>
-            </Select>
-          </Col>
-          <Col span={3}>
-            <Select
-              placeholder="排序順序"
-              value={sortOrder}
-              onChange={setSortOrder}
-              style={{ width: '100%' }}
-            >
-              <Option value="descend">降序</Option>
-              <Option value="ascend">升序</Option>
-            </Select>
-          </Col>
-          <Col span={8}>
+        </Row>
+
+        {/* 第三行：快速操作按鈕 */}
+        <Row>
+          <Col span={24}>
             <Space wrap>
-              <Button 
+              <Button
                 type={showTop30 ? "primary" : "default"}
                 onClick={() => setShowTop30(!showTop30)}
                 icon={<BarChartOutlined />}
+                size="small"
               >
-                {showTop30 ? "顯示全部" : "前30名"}
+                {showTop30 ? "顯示全部" : "僅前30名"}
               </Button>
-              <Button 
+              <Button
                 type={showFeatureAnalysis ? "primary" : "default"}
                 onClick={() => setShowFeatureAnalysis(!showFeatureAnalysis)}
                 icon={<BarChartOutlined />}
+                size="small"
               >
                 {showFeatureAnalysis ? "隱藏分析" : "特徵分析"}
               </Button>
-              <Button 
-                type="primary" 
-                icon={<ReloadOutlined />}
-                onClick={fetchInteractionAnalysis}
-                loading={loading}
+              <Divider type="vertical" />
+              <Button
+                size="small"
+                onClick={() => {
+                  setSelectedKOL(undefined);
+                  setSelectedStock(undefined);
+                  setDateRange(null);
+                  setTimeQuickFilter('all');
+                  setSearchKeyword('');
+                }}
               >
-                刷新
+                清除篩選
               </Button>
-              <Button 
+              <Button
                 type="default"
                 icon={<ReloadOutlined />}
                 onClick={refreshAllInteractions}
                 loading={refreshing}
+                size="small"
               >
                 批量刷新
               </Button>
-              <Button 
-                type="default"
-                icon={<BarChartOutlined />}
-                onClick={fetchAllInteractions}
-                loading={refreshing}
-              >
-                一鍵抓取
-              </Button>
-              <Button 
+              <Button
                 type="default"
                 icon={<FilterOutlined />}
                 onClick={deduplicatePosts}
                 loading={refreshing}
+                size="small"
               >
                 去重
               </Button>
