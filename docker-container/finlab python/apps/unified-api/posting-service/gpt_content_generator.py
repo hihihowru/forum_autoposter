@@ -371,8 +371,9 @@ class GPTContentGenerator:
 3. 潛在機會和風險
 
 🔥 重要格式要求：
-- 第一行是標題，簡潔有力（建議 15-25 字）
-- 標題範例：「康舒股價漲停分析」「台積電Q4展望與投資機會」
+- 第一行是標題，必須精簡（限制 15 字以內）
+- 標題範例：「康舒漲停分析」「台積電展望」「聯發科觀察」
+- ⚠️ 標題超過 15 字會被截斷
 {price_instruction}- 內容長度：約 {max_words} 字，提供深入分析'''
             },
             'interaction': {
@@ -412,8 +413,9 @@ class GPTContentGenerator:
 請針對這檔股票提出一個引發討論的問題，鼓勵讀者分享看法。
 
 要求：
-- 🔥 第一行是標題，簡潔有力（建議 15-25 字）
-- 標題範例：「康舒股價漲停分析」「台積電Q4展望與投資機會」
+- 🔥 第一行是標題，必須精簡（限制 15 字以內）
+- 標題範例：「康舒怎麼看？」「台積電進場？」
+- ⚠️ 標題超過 15 字會被截斷
 {price_instruction}- 內容長度：約 {max_words} 字
 - 提出單一核心問題
 - 引發讀者思考和互動'''
@@ -458,8 +460,9 @@ class GPTContentGenerator:
 請用你獨特的風格分析這檔股票，展現你的個性和專業。
 
 要求：
-- 🔥 第一行是標題，簡潔有力（建議 15-25 字）
-- 標題範例：「康舒股價漲停分析」「台積電Q4展望與投資機會」
+- 🔥 第一行是標題，必須精簡（限制 15 字以內）
+- 標題範例：「康舒看法」「台積電筆記」
+- ⚠️ 標題超過 15 字會被截斷
 {price_instruction}- 目標長度：約 {max_words} 字，提供深入分析
 - 充分展現你的個人風格
 - 用你習慣的方式組織內容'''
@@ -881,6 +884,26 @@ class GPTContentGenerator:
         # 如果沒有找到標題，使用預設
         if not title:
             title = f"{stock_name} 分析"
+
+        # 🔥 標題長度控制（最多 15 字）
+        MAX_TITLE_LENGTH = 15
+        if len(title) > MAX_TITLE_LENGTH:
+            logger.warning(f"⚠️ 標題過長 ({len(title)} 字)，進行截斷: {title[:30]}...")
+
+            # 策略 1: 嘗試在標點符號處截斷
+            punctuation_marks = ['，', '、', '！', '？', '：', '｜', '|', '-', '—', ' ']
+            truncated = False
+            for i in range(MAX_TITLE_LENGTH - 1, 5, -1):  # 從最大長度往回找，最少保留 5 字
+                if title[i] in punctuation_marks:
+                    title = title[:i]
+                    truncated = True
+                    break
+
+            # 策略 2: 如果沒有合適的標點，直接截斷
+            if not truncated and len(title) > MAX_TITLE_LENGTH:
+                title = title[:MAX_TITLE_LENGTH]
+
+            logger.info(f"✂️ 截斷後標題: {title}")
 
         # 🔥 移除內容開頭的重複標題
         # 如果內容以標題開頭，則移除第一行（標題行）及其後的空行
