@@ -318,7 +318,14 @@ class GPTContentGenerator:
                 'posting_type': 'analysis',
                 'system_prompt_template': '''你是 {kol_nickname}，一位{persona_name}風格的股票分析師。
 
+【角色設定】
+{prompt_persona}
+
+【寫作風格】
 {writing_style}
+
+【內容護欄】
+{prompt_guardrails}
 
 你的目標是提供專業、深入的股票分析，包含技術面、基本面、市場情緒等多角度觀點。
 
@@ -355,7 +362,14 @@ class GPTContentGenerator:
                 'posting_type': 'interaction',
                 'system_prompt_template': '''你是 {kol_nickname}，一位{persona_name}風格的股票分析師。
 
+【角色設定】
+{prompt_persona}
+
+【寫作風格】
 {writing_style}
+
+【內容護欄】
+{prompt_guardrails}
 
 你的目標是與讀者互動，提出引發思考的問題，鼓勵討論。例如：「你覺得這檔股票現在適合進場嗎？留言分享你的看法！」內容要簡短有力。
 
@@ -391,7 +405,17 @@ class GPTContentGenerator:
                 'posting_type': 'personalized',
                 'system_prompt_template': '''你是 {kol_nickname}，一位{persona_name}風格的股票分析師。
 
+【角色設定】
+{prompt_persona}
+
+【寫作風格】
 {writing_style}
+
+【內容護欄】
+{prompt_guardrails}
+
+【內容骨架參考】
+{prompt_skeleton}
 
 你的目標是展現你獨特的個人風格和觀點，讓讀者感受到你的個性和專業。
 
@@ -445,6 +469,10 @@ class GPTContentGenerator:
             'kol_nickname': kol_profile.get('nickname', '股市分析師'),
             'persona_name': self._get_persona_name(kol_profile.get('persona', 'mixed')),
             'writing_style': kol_profile.get('writing_style', '請用你的專業風格分析股票。'),
+            # 🔥 NEW: 完整的 KOL Prompt 設定
+            'prompt_persona': kol_profile.get('prompt_persona', ''),
+            'prompt_guardrails': kol_profile.get('prompt_guardrails', ''),
+            'prompt_skeleton': kol_profile.get('prompt_skeleton', ''),
             'stock_id': stock_id,
             'stock_name': stock_name,
             'trigger_description': self._get_trigger_description(trigger_type),
