@@ -4017,101 +4017,162 @@ async def refresh_all_interactions():
         conn = get_db_connection()
         conn.rollback()  # Clear any failed transactions
 
-        # Get KOL credentials from environment
-        email = os.getenv("FORUM_200_EMAIL")
-        password = os.getenv("FORUM_200_PASSWORD")
-
-        if not email or not password:
-            return {"success": False, "error": "KOL credentials not configured", "timestamp": get_current_time().isoformat()}
-
-        # Fetch all published posts with article_id
+        # Fetch all published posts with cmoney_post_id, grouped by KOL for credential lookup
         with conn.cursor(cursor_factory=RealDictCursor) as cursor:
             cursor.execute("""
-                SELECT post_id, article_id, kol_serial
-                FROM post_records
-                WHERE status = 'published' AND article_id IS NOT NULL
-                ORDER BY created_at DESC
+                SELECT pr.post_id, pr.cmoney_post_id as article_id, pr.kol_serial,
+                       kp.email, kp.password
+                FROM post_records pr
+                LEFT JOIN kol_profiles kp ON pr.kol_serial = kp.serial::integer
+                WHERE pr.status = 'published' AND pr.cmoney_post_id IS NOT NULL
+                ORDER BY pr.created_at DESC
+                LIMIT 500
             """)
             posts = cursor.fetchall()
             conn.commit()
 
+        if not posts:
+            return {
+                "success": True,
+                "updated_count": 0,
+                "failed_count": 0,
+                "total_posts": 0,
+                "message": "沒有找到已發布的貼文",
+                "timestamp": get_current_time().isoformat()
+            }
+
         logger.info(f"Found {len(posts)} published posts to refresh")
 
-        # Login to CMoney to get access token
+        # Group posts by KOL to use appropriate credentials
+        kol_posts = {}
+        for post in posts:
+            kol_serial = post['kol_serial']
+            if kol_serial not in kol_posts:
+                kol_posts[kol_serial] = {
+                    'email': post['email'],
+                    'password': post['password'],
+                    'posts': []
+                }
+            kol_posts[kol_serial]['posts'].append(post)
+
+        updated_count = 0
+        failed_count = 0
+
         async with httpx.AsyncClient() as client:
-            login_response = await client.post(
-                "https://www.cmoney.tw/member/login/jsonp.aspx",
-                data={"a": email, "b": password, "remember": 0},
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
-                timeout=30.0
-            )
+            for kol_serial, kol_data in kol_posts.items():
+                email = kol_data['email']
+                password = kol_data['password']
 
-            if login_response.status_code != 200:
-                return {"success": False, "error": "CMoney login failed", "timestamp": get_current_time().isoformat()}
+                if not email or not password:
+                    logger.warning(f"KOL {kol_serial} 沒有登入憑證，跳過")
+                    failed_count += len(kol_data['posts'])
+                    continue
 
-            # Extract access token
-            token_data = login_response.json()
-            access_token = token_data.get("Data", {}).get("access_token")
-
-            if not access_token:
-                return {"success": False, "error": "Failed to get access token", "timestamp": get_current_time().isoformat()}
-
-            # Refresh interaction data for each post
-            updated_count = 0
-            failed_count = 0
-
-            for post in posts:
-                article_id = post['article_id']
-                post_id = post['post_id']
-
+                # Login to CMoney using correct endpoint
                 try:
-                    # Fetch interaction data from CMoney
-                    interaction_response = await client.get(
-                        f"https://forumservice.cmoney.tw/api/Article/{article_id}",
-                        headers={
-                            "Authorization": f"Bearer {access_token}",
-                            "X-Version": "2.0",
-                            "accept": "application/json"
+                    login_response = await client.post(
+                        "https://social.cmoney.tw/identity/token",
+                        data={
+                            "grant_type": "password",
+                            "login_method": "email",
+                            "client_id": "cmstockcommunity",
+                            "account": email,
+                            "password": password
                         },
-                        timeout=15.0
+                        headers={"Content-Type": "application/x-www-form-urlencoded"},
+                        timeout=30.0
                     )
 
-                    if interaction_response.status_code == 200:
-                        data = interaction_response.json()
+                    if login_response.status_code != 200:
+                        logger.error(f"KOL {kol_serial} 登入失敗: {login_response.status_code}")
+                        failed_count += len(kol_data['posts'])
+                        continue
 
-                        # Extract interaction metrics
-                        likes = data.get("ArticleReplyDto", {}).get("SatisfiedCount", 0)
-                        comments = data.get("CommentCount", 0)
-                        shares = data.get("ArticleReplyDto", {}).get("ShareCount", 0)
-                        bookmarks = data.get("ArticleReplyDto", {}).get("CollectedCount", 0)
+                    token_data = login_response.json()
+                    access_token = token_data.get("access_token")
 
-                        # Extract emoji counts
-                        emojis = data.get("ArticleReplyDto", {}).get("PersonEmotionArticleDetailDto", {})
-                        emoji_data = {
-                            "like": emojis.get("Like", 0),
-                            "dislike": emojis.get("Dislike", 0),
-                            "laugh": emojis.get("Laugh", 0),
-                            "money": emojis.get("Money", 0),
-                            "shock": emojis.get("Shock", 0),
-                            "cry": emojis.get("Cry", 0),
-                            "think": emojis.get("Think", 0),
-                            "angry": emojis.get("Angry", 0)
-                        }
+                    if not access_token:
+                        logger.error(f"KOL {kol_serial} 無法獲取 access_token")
+                        failed_count += len(kol_data['posts'])
+                        continue
 
-                        # Update database
-                        with conn.cursor() as update_cursor:
-                            update_cursor.execute("""
-                                UPDATE post_records
-                                SET likes = %s, comments = %s, shares = %s, bookmarks = %s,
-                                    emoji_data = %s, last_interaction_update = CURRENT_TIMESTAMP
-                                WHERE post_id = %s
-                            """, (likes, comments, shares, bookmarks, json.dumps(emoji_data), post_id))
+                    # Process each post for this KOL
+                    for post in kol_data['posts']:
+                        article_id = post['article_id']
+                        post_id = post['post_id']
 
-                        updated_count += 1
+                        try:
+                            # Fetch interaction data from CMoney
+                            interaction_response = await client.get(
+                                f"https://forumservice.cmoney.tw/api/Article/{article_id}",
+                                headers={
+                                    "Authorization": f"Bearer {access_token}",
+                                    "X-Version": "2.0",
+                                    "accept": "application/json"
+                                },
+                                timeout=15.0
+                            )
+
+                            if interaction_response.status_code == 200:
+                                data = interaction_response.json()
+
+                                # Extract emoji counts (correct API response format)
+                                emoji_count = data.get("emojiCount", {})
+                                likes = emoji_count.get("like", 0)
+                                dislikes = emoji_count.get("dislike", 0)
+                                laughs = emoji_count.get("laugh", 0)
+                                money = emoji_count.get("money", 0)
+                                shock = emoji_count.get("shock", 0)
+                                cry = emoji_count.get("cry", 0)
+                                think = emoji_count.get("think", 0)
+                                angry = emoji_count.get("angry", 0)
+
+                                # Other interaction data
+                                comments = data.get("commentCount", 0)
+                                collections = data.get("collectedCount", 0)
+                                donations = data.get("donation", 0)
+
+                                # Calculate total emojis
+                                total_emojis = likes + dislikes + laughs + money + shock + cry + think + angry
+
+                                emoji_data = {
+                                    "like": likes,
+                                    "dislike": dislikes,
+                                    "laugh": laughs,
+                                    "money": money,
+                                    "shock": shock,
+                                    "cry": cry,
+                                    "think": think,
+                                    "angry": angry,
+                                    "total": total_emojis
+                                }
+
+                                # Update database
+                                with conn.cursor() as update_cursor:
+                                    update_cursor.execute("""
+                                        UPDATE post_records
+                                        SET likes = %s,
+                                            comments = %s,
+                                            shares = %s,
+                                            bookmarks = %s,
+                                            emoji_data = %s,
+                                            last_interaction_update = CURRENT_TIMESTAMP
+                                        WHERE post_id = %s
+                                    """, (likes, comments, collections, collections, json.dumps(emoji_data), post_id))
+
+                                updated_count += 1
+                                logger.debug(f"Updated post {post_id}: likes={likes}, comments={comments}, collections={collections}")
+                            else:
+                                logger.warning(f"無法獲取文章 {article_id} 的互動數據: HTTP {interaction_response.status_code}")
+                                failed_count += 1
+
+                        except Exception as e:
+                            logger.error(f"Failed to update post {post_id}: {e}")
+                            failed_count += 1
 
                 except Exception as e:
-                    logger.error(f"Failed to update post {post_id}: {e}")
-                    failed_count += 1
+                    logger.error(f"KOL {kol_serial} 處理失敗: {e}")
+                    failed_count += len(kol_data['posts'])
 
             conn.commit()
 
@@ -4129,6 +4190,210 @@ async def refresh_all_interactions():
         if conn:
             conn.rollback()
         logger.error(f"❌ Refresh all failed: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {"success": False, "error": str(e), "timestamp": get_current_time().isoformat()}
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+
+@app.post("/api/posts/refresh-filtered")
+async def refresh_filtered_interactions(request: Request):
+    """
+    刷新篩選後的貼文互動數據
+    從CMoney API獲取最新的likes, comments, shares等數據並更新到數據庫
+
+    Request body:
+    {
+        "post_ids": ["uuid1", "uuid2", ...],  // 可選，指定要刷新的貼文ID
+        "kol_serials": [1, 2, 3],             // 可選，指定要刷新的KOL
+        "limit": 100                           // 可選，限制刷新數量
+    }
+    """
+    logger.info("收到 refresh-filtered 請求")
+
+    if not db_pool:
+        return {"success": False, "error": "數據庫連接不可用", "timestamp": get_current_time().isoformat()}
+
+    conn = None
+    try:
+        body = await request.json()
+        post_ids = body.get("post_ids", [])
+        kol_serials = body.get("kol_serials", [])
+        limit = body.get("limit", 100)
+
+        conn = get_db_connection()
+        conn.rollback()
+
+        # Build query based on filters
+        query = """
+            SELECT pr.post_id, pr.cmoney_post_id as article_id, pr.kol_serial,
+                   kp.email, kp.password
+            FROM post_records pr
+            LEFT JOIN kol_profiles kp ON pr.kol_serial = kp.serial::integer
+            WHERE pr.status = 'published' AND pr.cmoney_post_id IS NOT NULL
+        """
+        params = []
+
+        if post_ids:
+            query += " AND pr.post_id = ANY(%s)"
+            params.append(post_ids)
+
+        if kol_serials:
+            query += " AND pr.kol_serial = ANY(%s)"
+            params.append(kol_serials)
+
+        query += f" ORDER BY pr.created_at DESC LIMIT {int(limit)}"
+
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute(query, params)
+            posts = cursor.fetchall()
+            conn.commit()
+
+        if not posts:
+            return {
+                "success": True,
+                "updated_count": 0,
+                "failed_count": 0,
+                "total_posts": 0,
+                "message": "沒有找到符合條件的貼文",
+                "timestamp": get_current_time().isoformat()
+            }
+
+        logger.info(f"Found {len(posts)} posts to refresh")
+
+        # Group posts by KOL
+        kol_posts = {}
+        for post in posts:
+            kol_serial = post['kol_serial']
+            if kol_serial not in kol_posts:
+                kol_posts[kol_serial] = {
+                    'email': post['email'],
+                    'password': post['password'],
+                    'posts': []
+                }
+            kol_posts[kol_serial]['posts'].append(post)
+
+        updated_count = 0
+        failed_count = 0
+        updated_posts = []
+
+        async with httpx.AsyncClient() as client:
+            for kol_serial, kol_data in kol_posts.items():
+                email = kol_data['email']
+                password = kol_data['password']
+
+                if not email or not password:
+                    logger.warning(f"KOL {kol_serial} 沒有登入憑證，跳過")
+                    failed_count += len(kol_data['posts'])
+                    continue
+
+                try:
+                    # Login to CMoney
+                    login_response = await client.post(
+                        "https://social.cmoney.tw/identity/token",
+                        data={
+                            "grant_type": "password",
+                            "login_method": "email",
+                            "client_id": "cmstockcommunity",
+                            "account": email,
+                            "password": password
+                        },
+                        headers={"Content-Type": "application/x-www-form-urlencoded"},
+                        timeout=30.0
+                    )
+
+                    if login_response.status_code != 200:
+                        logger.error(f"KOL {kol_serial} 登入失敗")
+                        failed_count += len(kol_data['posts'])
+                        continue
+
+                    token_data = login_response.json()
+                    access_token = token_data.get("access_token")
+
+                    if not access_token:
+                        failed_count += len(kol_data['posts'])
+                        continue
+
+                    for post in kol_data['posts']:
+                        article_id = post['article_id']
+                        post_id = post['post_id']
+
+                        try:
+                            interaction_response = await client.get(
+                                f"https://forumservice.cmoney.tw/api/Article/{article_id}",
+                                headers={
+                                    "Authorization": f"Bearer {access_token}",
+                                    "X-Version": "2.0",
+                                    "accept": "application/json"
+                                },
+                                timeout=15.0
+                            )
+
+                            if interaction_response.status_code == 200:
+                                data = interaction_response.json()
+
+                                emoji_count = data.get("emojiCount", {})
+                                likes = emoji_count.get("like", 0)
+                                comments = data.get("commentCount", 0)
+                                collections = data.get("collectedCount", 0)
+
+                                emoji_data = {
+                                    "like": likes,
+                                    "dislike": emoji_count.get("dislike", 0),
+                                    "laugh": emoji_count.get("laugh", 0),
+                                    "money": emoji_count.get("money", 0),
+                                    "shock": emoji_count.get("shock", 0),
+                                    "cry": emoji_count.get("cry", 0),
+                                    "think": emoji_count.get("think", 0),
+                                    "angry": emoji_count.get("angry", 0)
+                                }
+
+                                with conn.cursor() as update_cursor:
+                                    update_cursor.execute("""
+                                        UPDATE post_records
+                                        SET likes = %s, comments = %s, shares = %s, bookmarks = %s,
+                                            emoji_data = %s, last_interaction_update = CURRENT_TIMESTAMP
+                                        WHERE post_id = %s
+                                    """, (likes, comments, collections, collections, json.dumps(emoji_data), post_id))
+
+                                updated_count += 1
+                                updated_posts.append({
+                                    "post_id": post_id,
+                                    "article_id": article_id,
+                                    "likes": likes,
+                                    "comments": comments,
+                                    "shares": collections
+                                })
+                            else:
+                                failed_count += 1
+
+                        except Exception as e:
+                            logger.error(f"Failed to update post {post_id}: {e}")
+                            failed_count += 1
+
+                except Exception as e:
+                    logger.error(f"KOL {kol_serial} 處理失敗: {e}")
+                    failed_count += len(kol_data['posts'])
+
+            conn.commit()
+
+        return {
+            "success": True,
+            "updated_count": updated_count,
+            "failed_count": failed_count,
+            "total_posts": len(posts),
+            "updated_posts": updated_posts[:20],  # 只返回前20筆詳細資料
+            "timestamp": get_current_time().isoformat()
+        }
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"❌ Refresh filtered failed: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return {"success": False, "error": str(e), "timestamp": get_current_time().isoformat()}
     finally:
         if conn:

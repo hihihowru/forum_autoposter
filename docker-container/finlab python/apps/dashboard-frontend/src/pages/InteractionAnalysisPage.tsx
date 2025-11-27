@@ -35,6 +35,7 @@ import {
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { getApiBaseUrl } from '../config/api';
+import dayjs from 'dayjs';
 
 
 const API_BASE_URL = getApiBaseUrl();
@@ -98,8 +99,8 @@ const InteractionAnalysisPage: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   
   // 篩選條件
-  const [selectedKOL, setSelectedKOL] = useState<number | undefined>(undefined);
-  const [dateRange, setDateRange] = useState<[any, any] | null>(null);
+  const [selectedKOLs, setSelectedKOLs] = useState<number[]>([]); // 🔥 改為多選
+  const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null);
   const [includeExternal, setIncludeExternal] = useState(true);
   const [searchKeyword, setSearchKeyword] = useState('');
   const [timeQuickFilter, setTimeQuickFilter] = useState<string>('all'); // 時間快速篩選
@@ -146,36 +147,27 @@ const InteractionAnalysisPage: React.FC = () => {
   // 🔥 時間快速篩選處理
   const handleTimeQuickFilter = (value: string) => {
     setTimeQuickFilter(value);
-    const now = new Date();
-    let startDate: Date | null = null;
-    let endDate: Date = now;
 
     switch (value) {
       case 'today':
-        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        setDateRange([dayjs().startOf('day'), dayjs().endOf('day')]);
         break;
       case 'yesterday':
-        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-        endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59);
+        setDateRange([dayjs().subtract(1, 'day').startOf('day'), dayjs().subtract(1, 'day').endOf('day')]);
         break;
       case 'week':
-        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        setDateRange([dayjs().subtract(7, 'day').startOf('day'), dayjs().endOf('day')]);
         break;
       case 'month':
-        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        setDateRange([dayjs().subtract(30, 'day').startOf('day'), dayjs().endOf('day')]);
         break;
       case 'custom':
-        // 使用 dateRange
+        // 使用者自選日期範圍
         return;
       case 'all':
       default:
         setDateRange(null);
         return;
-    }
-
-    if (startDate) {
-      // 轉換為 dayjs 或 moment 對象（取決於你的 DatePicker 配置）
-      setDateRange([startDate, endDate] as any);
     }
   };
 
@@ -219,9 +211,9 @@ const InteractionAnalysisPage: React.FC = () => {
   const getSortedAndFilteredPosts = (): InteractionPost[] => {
     let filteredPosts = [...posts];
 
-    // 🔥 應用 KOL 篩選
-    if (selectedKOL !== undefined) {
-      filteredPosts = filteredPosts.filter(post => post.kol_serial === selectedKOL);
+    // 🔥 應用 KOL 篩選（多選）
+    if (selectedKOLs.length > 0) {
+      filteredPosts = filteredPosts.filter(post => selectedKOLs.includes(post.kol_serial));
     }
 
     // 🔥 應用個股篩選
@@ -231,10 +223,10 @@ const InteractionAnalysisPage: React.FC = () => {
       );
     }
 
-    // 🔥 應用時間篩選
+    // 🔥 應用時間篩選（使用 dayjs）
     if (dateRange && dateRange[0] && dateRange[1]) {
-      const startDate = new Date(dateRange[0]).getTime();
-      const endDate = new Date(dateRange[1]).getTime();
+      const startDate = dateRange[0].valueOf();
+      const endDate = dateRange[1].valueOf();
       filteredPosts = filteredPosts.filter(post => {
         const postDate = new Date(post.create_time).getTime();
         return postDate >= startDate && postDate <= endDate;
@@ -542,7 +534,75 @@ const InteractionAnalysisPage: React.FC = () => {
       return null;
     }
     return analyzeHighInteractionFeatures();
-  }, [showFeatureAnalysis, posts, selectedKOL, dateRange, includeExternal, searchKeyword, sortField, sortOrder, showTop30]);
+  }, [showFeatureAnalysis, posts, selectedKOLs, dateRange, includeExternal, searchKeyword, sortField, sortOrder, showTop30]);
+
+  // 🔥 計算選中 KOL 群體的統計數據
+  const selectedKOLGroupStats = useMemo(() => {
+    if (selectedKOLs.length === 0 || posts.length === 0) {
+      return null;
+    }
+
+    const filteredPosts = posts.filter(post => selectedKOLs.includes(post.kol_serial));
+    if (filteredPosts.length === 0) return null;
+
+    const stats = {
+      totalPosts: filteredPosts.length,
+      totalLikes: 0,
+      totalComments: 0,
+      totalShares: 0,
+      totalViews: 0,
+      kolDetails: [] as Array<{
+        serial: number;
+        nickname: string;
+        postCount: number;
+        likes: number;
+        comments: number;
+        shares: number;
+        views: number;
+        avgInteractions: number;
+      }>
+    };
+
+    // 計算每個 KOL 的統計
+    const kolMap = new Map<number, typeof stats.kolDetails[0]>();
+
+    filteredPosts.forEach(post => {
+      stats.totalLikes += post.likes || 0;
+      stats.totalComments += post.comments || 0;
+      stats.totalShares += post.shares || 0;
+      stats.totalViews += post.views || 0;
+
+      if (!kolMap.has(post.kol_serial)) {
+        kolMap.set(post.kol_serial, {
+          serial: post.kol_serial,
+          nickname: post.kol_nickname,
+          postCount: 0,
+          likes: 0,
+          comments: 0,
+          shares: 0,
+          views: 0,
+          avgInteractions: 0
+        });
+      }
+      const kolStat = kolMap.get(post.kol_serial)!;
+      kolStat.postCount++;
+      kolStat.likes += post.likes || 0;
+      kolStat.comments += post.comments || 0;
+      kolStat.shares += post.shares || 0;
+      kolStat.views += post.views || 0;
+    });
+
+    // 計算平均互動數
+    kolMap.forEach(kolStat => {
+      kolStat.avgInteractions = kolStat.postCount > 0
+        ? (kolStat.likes + kolStat.comments + kolStat.shares) / kolStat.postCount
+        : 0;
+    });
+
+    stats.kolDetails = Array.from(kolMap.values()).sort((a, b) => b.avgInteractions - a.avgInteractions);
+
+    return stats;
+  }, [selectedKOLs, posts]);
 
   // 生成排程建議
   const generateSchedulingSuggestions = () => {
@@ -728,46 +788,91 @@ const InteractionAnalysisPage: React.FC = () => {
     }
   };
 
-  // 批量刷新互動數據
+  // 批量刷新互動數據（從 CMoney API 抓取最新數據並更新到資料庫）
   const refreshAllInteractions = async () => {
     setRefreshing(true);
-    message.info('開始刷新互動數據，這可能需要幾分鐘...');
+
+    // 根據是否有選擇 KOL 決定使用哪個 API
+    const hasFilters = selectedKOLs.length > 0;
+    const endpoint = hasFilters
+      ? `${API_BASE_URL}/api/posts/refresh-filtered`
+      : `${API_BASE_URL}/api/posts/refresh-all`;
+
+    const filterInfo = hasFilters
+      ? `選定的 ${selectedKOLs.length} 位 KOL`
+      : '所有';
+
+    message.loading({
+      content: `正在從 CMoney API 刷新${filterInfo}貼文的互動數據...`,
+      key: 'refresh-interactions',
+      duration: 0
+    });
+
     try {
-      const response = await fetch(`${API_BASE_URL}/api/posts/refresh-all`, {
+      const requestBody = hasFilters
+        ? { kol_serials: selectedKOLs, limit: 200 }
+        : {};
+
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
+        body: JSON.stringify(requestBody),
       });
 
       const result = await response.json();
 
       if (result.success) {
-        message.success(`刷新成功！更新了 ${result.updated_count} 篇貼文，失敗 ${result.failed_count} 篇`);
-        // 重新獲取數據
+        message.destroy('refresh-interactions');
+        if (result.updated_count > 0) {
+          message.success({
+            content: `刷新成功！從 CMoney API 更新了 ${result.updated_count} 篇貼文的互動數據，失敗 ${result.failed_count} 篇`,
+            duration: 5
+          });
+        } else if (result.total_posts === 0) {
+          message.warning({
+            content: '沒有找到符合條件的已發布貼文',
+            duration: 3
+          });
+        } else {
+          message.warning({
+            content: `找到 ${result.total_posts} 篇貼文，但全部刷新失敗。請檢查 KOL 的登入憑證是否正確。`,
+            duration: 5
+          });
+        }
+        // 重新獲取數據以顯示更新後的結果
         await fetchInteractionAnalysis();
       } else {
-        message.error(`批量刷新失敗: ${result.error}`);
+        message.destroy('refresh-interactions');
+        message.error({
+          content: `刷新失敗: ${result.error || '未知錯誤'}`,
+          duration: 5
+        });
       }
     } catch (error) {
+      message.destroy('refresh-interactions');
       console.error('批量刷新失敗:', error);
-      message.error('批量刷新失敗: ' + (error as Error).message);
+      message.error({
+        content: '批量刷新失敗: ' + (error as Error).message,
+        duration: 5
+      });
     } finally {
       setRefreshing(false);
     }
   };
 
-  // ❌ REMOVED: fetchAllInteractions - endpoint /interactions/fetch-all-interactions doesn't exist
-  // Use refreshAllInteractions instead which calls /api/posts/refresh-all
-  const fetchAllInteractions = async () => {
-    // Redirect to refreshAllInteractions which uses the correct endpoint
+  // 刷新篩選後的貼文互動數據
+  const refreshFilteredInteractions = async () => {
+    if (selectedKOLs.length === 0) {
+      message.info('請先選擇要刷新的 KOL');
+      return;
+    }
     await refreshAllInteractions();
   };
 
-  // ❌ REMOVED: deduplicatePosts - endpoint /interactions/deduplicate doesn't exist
-  // Deduplication is now handled automatically by /api/posts/refresh-all
+  // 去重功能（現已整合到刷新功能中）
   const deduplicatePosts = async () => {
-    // Redirect to refreshAllInteractions which handles deduplication
     message.info('去重功能已整合至批量刷新功能中');
     await refreshAllInteractions();
   };
@@ -786,6 +891,62 @@ const InteractionAnalysisPage: React.FC = () => {
     }).catch(() => {
       message.error('複製失敗');
     });
+  };
+
+  // 下載 CSV
+  const downloadCSV = () => {
+    const filteredPosts = getSortedAndFilteredPosts();
+    if (filteredPosts.length === 0) {
+      message.warning('沒有數據可下載');
+      return;
+    }
+
+    // CSV 標題行
+    const headers = [
+      'KOL Serial',
+      'KOL 暱稱',
+      '標題',
+      '讚數',
+      '留言數',
+      '分享數',
+      '總互動',
+      '發文時間',
+      'Article ID',
+      '貼文連結'
+    ];
+
+    // 轉換數據為 CSV 行
+    const rows = filteredPosts.map(post => [
+      post.kol_serial,
+      `"${(post.kol_nickname || '').replace(/"/g, '""')}"`,
+      `"${(post.title || '').replace(/"/g, '""')}"`,
+      post.likes || 0,
+      post.comments || 0,
+      post.shares || 0,
+      (post.likes || 0) + (post.comments || 0) + (post.shares || 0),
+      post.published_at || post.created_at || '',
+      post.article_id || '',
+      post.post_url || ''
+    ]);
+
+    // 組合 CSV 內容
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.join(','))
+    ].join('\n');
+
+    // 建立下載連結
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `互動分析_${dayjs().format('YYYYMMDD_HHmmss')}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    message.success(`已下載 ${filteredPosts.length} 筆數據`);
   };
 
   // 表格列定義
@@ -1013,10 +1174,10 @@ const InteractionAnalysisPage: React.FC = () => {
 
   // 篩選條件變化時重新加載數據
   useEffect(() => {
-    if (selectedKOL !== undefined || dateRange !== null || includeExternal !== true) {
+    if (selectedKOLs.length > 0 || dateRange !== null || includeExternal !== true) {
       fetchInteractionAnalysis();
     }
-  }, [selectedKOL, dateRange, includeExternal]);
+  }, [selectedKOLs, dateRange, includeExternal]);
 
   return (
     <div style={{ padding: '24px' }}>
@@ -1107,15 +1268,16 @@ const InteractionAnalysisPage: React.FC = () => {
           </Space>
         }
         extra={
-          <Button
-            type="primary"
-            icon={<ReloadOutlined spin={refreshing} />}
-            onClick={fetchInteractionAnalysis}
-            loading={refreshing}
-            size="large"
-          >
-            刷新篩選結果
-          </Button>
+          <Space size="small">
+            <Button
+              icon={<ReloadOutlined spin={loading} />}
+              onClick={fetchInteractionAnalysis}
+              loading={loading}
+              size="small"
+            >
+              刷新
+            </Button>
+          </Space>
         }
       >
         {/* 第一行：時間篩選 */}
@@ -1163,11 +1325,22 @@ const InteractionAnalysisPage: React.FC = () => {
                 placeholder={['開始日期', '結束日期']}
                 value={dateRange}
                 onChange={(dates) => {
-                  setDateRange(dates);
-                  setTimeQuickFilter('custom');
+                  // 確保兩個日期都是有效的 dayjs 物件才設置
+                  if (dates && dates[0] && dates[1] && dayjs.isDayjs(dates[0]) && dayjs.isDayjs(dates[1])) {
+                    setDateRange([dates[0], dates[1]]);
+                    setTimeQuickFilter('custom');
+                  } else if (!dates) {
+                    setDateRange(null);
+                    setTimeQuickFilter('all');
+                  }
+                }}
+                onCalendarChange={(dates) => {
+                  // 處理日曆選擇過程中的中間狀態（只選了開始日期還沒選結束日期）
+                  // 不在這裡設置 state，等 onChange 完成時再處理
                 }}
                 size="small"
                 style={{ width: 240 }}
+                allowClear
               />
             </Space>
           </Col>
@@ -1179,17 +1352,20 @@ const InteractionAnalysisPage: React.FC = () => {
             <Space direction="vertical" size="small" style={{ width: '100%' }}>
               <Text type="secondary"><UserOutlined /> 角色池篩選</Text>
               <Select
-                placeholder="選擇 KOL"
-                value={selectedKOL}
-                onChange={setSelectedKOL}
+                mode="multiple"
+                placeholder="選擇 KOL（可多選）"
+                value={selectedKOLs}
+                onChange={setSelectedKOLs}
                 style={{ width: '100%' }}
                 allowClear
                 showSearch
                 optionFilterProp="children"
+                maxTagCount={2}
+                maxTagPlaceholder={(omittedValues) => `+${omittedValues.length} 位`}
               >
                 {uniqueKOLs.map(kol => (
                   <Option key={kol.serial} value={kol.serial}>
-                    {kol.nickname} ({kol.serial})
+                    {kol.nickname}
                   </Option>
                 ))}
               </Select>
@@ -1277,7 +1453,7 @@ const InteractionAnalysisPage: React.FC = () => {
               <Button
                 size="small"
                 onClick={() => {
-                  setSelectedKOL(undefined);
+                  setSelectedKOLs([]);
                   setSelectedStock(undefined);
                   setDateRange(null);
                   setTimeQuickFilter('all');
@@ -1287,27 +1463,141 @@ const InteractionAnalysisPage: React.FC = () => {
                 清除篩選
               </Button>
               <Button
-                type="default"
-                icon={<ReloadOutlined />}
+                type="primary"
+                icon={<ReloadOutlined spin={refreshing} />}
                 onClick={refreshAllInteractions}
                 loading={refreshing}
                 size="small"
+                style={{ backgroundColor: '#52c41a', borderColor: '#52c41a' }}
               >
-                批量刷新
+                {selectedKOLs.length > 0
+                  ? `刷新 ${selectedKOLs.length} 位 KOL`
+                  : '刷新互動數據'}
               </Button>
               <Button
-                type="default"
-                icon={<FilterOutlined />}
-                onClick={deduplicatePosts}
-                loading={refreshing}
+                icon={<ExportOutlined />}
+                onClick={downloadCSV}
                 size="small"
               >
-                去重
+                下載 CSV
               </Button>
             </Space>
           </Col>
         </Row>
       </Card>
+
+      {/* 🔥 選中 KOL 群體統計 */}
+      {selectedKOLGroupStats && selectedKOLs.length > 0 && (
+        <Card
+          size="small"
+          style={{ marginBottom: 24 }}
+          title={
+            <Space>
+              <UserOutlined />
+              <span>已選擇 {selectedKOLs.length} 位 KOL 群體統計</span>
+              <Tag color="purple">{selectedKOLGroupStats.totalPosts} 篇貼文</Tag>
+            </Space>
+          }
+        >
+          {/* 群體總計 */}
+          <Row gutter={16} style={{ marginBottom: 16 }}>
+            <Col span={4}>
+              <Statistic
+                title="群體總貼文"
+                value={selectedKOLGroupStats.totalPosts}
+                prefix={<BarChartOutlined />}
+              />
+            </Col>
+            <Col span={4}>
+              <Statistic
+                title="群體總讚數"
+                value={selectedKOLGroupStats.totalLikes}
+                prefix={<LikeOutlined />}
+                valueStyle={{ color: '#52c41a' }}
+              />
+            </Col>
+            <Col span={4}>
+              <Statistic
+                title="群體總留言"
+                value={selectedKOLGroupStats.totalComments}
+                prefix={<MessageOutlined />}
+                valueStyle={{ color: '#722ed1' }}
+              />
+            </Col>
+            <Col span={4}>
+              <Statistic
+                title="群體總分享"
+                value={selectedKOLGroupStats.totalShares}
+                prefix={<ShareAltOutlined />}
+                valueStyle={{ color: '#fa8c16' }}
+              />
+            </Col>
+            <Col span={4}>
+              <Statistic
+                title="群體總互動"
+                value={selectedKOLGroupStats.totalLikes + selectedKOLGroupStats.totalComments + selectedKOLGroupStats.totalShares}
+                prefix={<BarChartOutlined />}
+                valueStyle={{ color: '#1890ff' }}
+              />
+            </Col>
+            <Col span={4}>
+              <Statistic
+                title="平均互動/篇"
+                value={((selectedKOLGroupStats.totalLikes + selectedKOLGroupStats.totalComments + selectedKOLGroupStats.totalShares) / selectedKOLGroupStats.totalPosts).toFixed(1)}
+                prefix={<BarChartOutlined />}
+                valueStyle={{ color: '#eb2f96' }}
+              />
+            </Col>
+          </Row>
+
+          {/* 各 KOL 詳細數據 */}
+          <Divider style={{ margin: '12px 0' }} />
+          <Text strong style={{ marginBottom: 8, display: 'block' }}>各 KOL 表現對比：</Text>
+          <Row gutter={[12, 12]}>
+            {selectedKOLGroupStats.kolDetails.map((kol, index) => (
+              <Col span={selectedKOLs.length <= 3 ? 8 : selectedKOLs.length <= 4 ? 6 : 4} key={kol.serial}>
+                <Card
+                  size="small"
+                  style={{
+                    borderLeft: `3px solid ${index === 0 ? '#52c41a' : index === 1 ? '#1890ff' : '#d9d9d9'}`
+                  }}
+                >
+                  <div style={{ marginBottom: 8 }}>
+                    <Tag color={index === 0 ? 'gold' : index === 1 ? 'silver' : 'default'}>
+                      #{index + 1}
+                    </Tag>
+                    <Text strong>{kol.nickname}</Text>
+                  </div>
+                  <Row gutter={4}>
+                    <Col span={12}>
+                      <Text type="secondary" style={{ fontSize: '11px' }}>貼文數</Text>
+                      <div style={{ fontWeight: 'bold' }}>{kol.postCount}</div>
+                    </Col>
+                    <Col span={12}>
+                      <Text type="secondary" style={{ fontSize: '11px' }}>平均互動</Text>
+                      <div style={{ fontWeight: 'bold', color: '#1890ff' }}>{kol.avgInteractions.toFixed(1)}</div>
+                    </Col>
+                  </Row>
+                  <Row gutter={4} style={{ marginTop: 4 }}>
+                    <Col span={8}>
+                      <Text type="secondary" style={{ fontSize: '10px' }}>讚</Text>
+                      <div style={{ fontSize: '12px' }}>{kol.likes}</div>
+                    </Col>
+                    <Col span={8}>
+                      <Text type="secondary" style={{ fontSize: '10px' }}>留言</Text>
+                      <div style={{ fontSize: '12px' }}>{kol.comments}</div>
+                    </Col>
+                    <Col span={8}>
+                      <Text type="secondary" style={{ fontSize: '10px' }}>分享</Text>
+                      <div style={{ fontSize: '12px' }}>{kol.shares}</div>
+                    </Col>
+                  </Row>
+                </Card>
+              </Col>
+            ))}
+          </Row>
+        </Card>
+      )}
 
       {/* 特徵分析區域 */}
       {showFeatureAnalysis && analysisData && (
