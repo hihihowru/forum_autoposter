@@ -4278,6 +4278,7 @@ async def refresh_filtered_interactions(request: Request):
         updated_count = 0
         failed_count = 0
         updated_posts = []
+        errors = []  # 記錄詳細錯誤
 
         async with httpx.AsyncClient() as client:
             for kol_serial, kol_data in kol_posts.items():
@@ -4285,7 +4286,9 @@ async def refresh_filtered_interactions(request: Request):
                 password = kol_data['password']
 
                 if not email or not password:
-                    logger.warning(f"KOL {kol_serial} 沒有登入憑證，跳過")
+                    error_msg = f"KOL {kol_serial} 沒有登入憑證 (email={email}, password={'***' if password else None})"
+                    logger.warning(error_msg)
+                    errors.append(error_msg)
                     failed_count += len(kol_data['posts'])
                     continue
 
@@ -4305,7 +4308,9 @@ async def refresh_filtered_interactions(request: Request):
                     )
 
                     if login_response.status_code != 200:
-                        logger.error(f"KOL {kol_serial} 登入失敗")
+                        error_msg = f"KOL {kol_serial} ({email}) 登入失敗: HTTP {login_response.status_code} - {login_response.text[:200]}"
+                        logger.error(error_msg)
+                        errors.append(error_msg)
                         failed_count += len(kol_data['posts'])
                         continue
 
@@ -4313,8 +4318,13 @@ async def refresh_filtered_interactions(request: Request):
                     access_token = token_data.get("access_token")
 
                     if not access_token:
+                        error_msg = f"KOL {kol_serial} ({email}) 無法獲取 access_token: {token_data}"
+                        logger.error(error_msg)
+                        errors.append(error_msg)
                         failed_count += len(kol_data['posts'])
                         continue
+
+                    logger.info(f"KOL {kol_serial} ({email}) 登入成功")
 
                     for post in kol_data['posts']:
                         article_id = post['article_id']
@@ -4353,10 +4363,10 @@ async def refresh_filtered_interactions(request: Request):
                                 with conn.cursor() as update_cursor:
                                     update_cursor.execute("""
                                         UPDATE post_records
-                                        SET likes = %s, comments = %s, shares = %s, bookmarks = %s,
+                                        SET likes = %s, comments = %s, shares = %s,
                                             emoji_data = %s, last_interaction_update = CURRENT_TIMESTAMP
                                         WHERE post_id = %s
-                                    """, (likes, comments, collections, collections, json.dumps(emoji_data), post_id))
+                                    """, (likes, comments, collections, json.dumps(emoji_data), post_id))
 
                                 updated_count += 1
                                 updated_posts.append({
@@ -4385,6 +4395,7 @@ async def refresh_filtered_interactions(request: Request):
             "failed_count": failed_count,
             "total_posts": len(posts),
             "updated_posts": updated_posts[:20],  # 只返回前20筆詳細資料
+            "errors": errors[:10] if errors else [],  # 返回前10條錯誤訊息
             "timestamp": get_current_time().isoformat()
         }
 
