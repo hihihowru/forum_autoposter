@@ -792,14 +792,17 @@ const InteractionAnalysisPage: React.FC = () => {
   const refreshAllInteractions = async () => {
     setRefreshing(true);
 
-    // 根據是否有選擇 KOL 決定使用哪個 API
-    const hasFilters = selectedKOLs.length > 0;
+    // 獲取當前篩選後的貼文
+    const filteredPosts = getSortedAndFilteredPosts();
+    const hasFilters = filteredPosts.length > 0 && filteredPosts.length < posts.length;
+
+    // 如果有篩選條件，只刷新篩選後的貼文；否則刷新全部
     const endpoint = hasFilters
       ? `${API_BASE_URL}/api/posts/refresh-filtered`
       : `${API_BASE_URL}/api/posts/refresh-all`;
 
     const filterInfo = hasFilters
-      ? `選定的 ${selectedKOLs.length} 位 KOL`
+      ? `篩選後的 ${filteredPosts.length} 篇`
       : '所有';
 
     message.loading({
@@ -809,8 +812,9 @@ const InteractionAnalysisPage: React.FC = () => {
     });
 
     try {
+      // 如果有篩選，發送篩選後的 post_ids
       const requestBody = hasFilters
-        ? { kol_serials: selectedKOLs, limit: 200 }
+        ? { post_ids: filteredPosts.map(p => p.post_id), limit: 200 }
         : {};
 
       const response = await fetch(endpoint, {
