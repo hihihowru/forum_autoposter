@@ -1323,20 +1323,16 @@ const InteractionAnalysisPage: React.FC = () => {
               <Divider type="vertical" />
               <RangePicker
                 placeholder={['開始日期', '結束日期']}
-                value={dateRange}
-                onChange={(dates) => {
-                  // 確保兩個日期都是有效的 dayjs 物件才設置
-                  if (dates && dates[0] && dates[1] && dayjs.isDayjs(dates[0]) && dayjs.isDayjs(dates[1])) {
-                    setDateRange([dates[0], dates[1]]);
+                value={dateRange ? [dateRange[0], dateRange[1]] : undefined}
+                onChange={(dates, dateStrings) => {
+                  // 使用 dateStrings 來重建 dayjs 物件，避免類型問題
+                  if (dateStrings && dateStrings[0] && dateStrings[1]) {
+                    setDateRange([dayjs(dateStrings[0]), dayjs(dateStrings[1])]);
                     setTimeQuickFilter('custom');
-                  } else if (!dates) {
+                  } else {
                     setDateRange(null);
                     setTimeQuickFilter('all');
                   }
-                }}
-                onCalendarChange={(dates) => {
-                  // 處理日曆選擇過程中的中間狀態（只選了開始日期還沒選結束日期）
-                  // 不在這裡設置 state，等 onChange 完成時再處理
                 }}
                 size="small"
                 style={{ width: 240 }}
