@@ -1355,16 +1355,15 @@ const InteractionAnalysisPage: React.FC = () => {
                 style={{ width: '100%' }}
                 allowClear
                 showSearch
-                optionFilterProp="children"
+                optionFilterProp="label"
+                optionLabelProp="label"
                 maxTagCount={2}
                 maxTagPlaceholder={(omittedValues) => `+${omittedValues.length} 位`}
-              >
-                {uniqueKOLs.map(kol => (
-                  <Option key={kol.serial} value={kol.serial}>
-                    {kol.nickname}
-                  </Option>
-                ))}
-              </Select>
+                options={uniqueKOLs.map(kol => ({
+                  value: kol.serial,
+                  label: kol.nickname
+                }))}
+              />
             </Space>
           </Col>
           <Col span={6}>
