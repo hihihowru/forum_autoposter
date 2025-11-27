@@ -39,8 +39,7 @@ import asyncio
 import asyncpg  # 🔥 Add asyncpg for KOL Profile query
 
 # 🔥 CMoney Real-time Stock Price Service
-# DISABLED: VPN-based feature postponed - will whitelist IP later
-# from services.cmoney_realtime import get_cmoney_service
+from services.cmoney_realtime import get_cmoney_service
 
 # Timezone utility - Always use Taipei time (GMT+8)
 def get_current_time():
@@ -2991,31 +2990,24 @@ async def manual_posting(request: Request):
         enable_realtime_price = body.get('enable_realtime_price', True)
 
         if enable_realtime_price:
-            # DISABLED: CMoney VPN-based service postponed - will whitelist IP later
-            logger.info(f"⏭️  CMoney 即時股價服務暫時停用 (VPN feature postponed)")
-            realtime_price_data = {
-                "is_realtime": False,
-                "disabled": True,
-                "reason": "CMoney VPN service postponed"
-            }
-            # try:
-            #     logger.info(f"💰 開始抓取 {stock_name}({stock_code}) 即時股價...")
-            #     cmoney_service = get_cmoney_service()
-            #     realtime_price_data = await cmoney_service.get_realtime_stock_price(
-            #         stock_code=stock_code,
-            #         stock_name=stock_name
-            #     )
-            #
-            #     if realtime_price_data.get('is_realtime'):
-            #         logger.info(f"✅ 成功獲取即時股價: {stock_name} 當前價格 {realtime_price_data.get('current_price')} 元 ({realtime_price_data.get('price_change_pct'):+.2f}%)")
-            #     else:
-            #         logger.warning(f"⚠️  無法獲取即時股價，將使用預設數據")
-            # except Exception as price_error:
-            #     logger.error(f"❌ 獲取即時股價失敗: {price_error}")
-            #     realtime_price_data = {
-            #         "error": str(price_error),
-            #         "is_realtime": False
-            #     }
+            try:
+                logger.info(f"💰 開始抓取 {stock_name}({stock_code}) 即時股價...")
+                cmoney_service = get_cmoney_service()
+                realtime_price_data = await cmoney_service.get_realtime_stock_price(
+                    stock_code=stock_code,
+                    stock_name=stock_name
+                )
+
+                if realtime_price_data.get('is_realtime'):
+                    logger.info(f"✅ 成功獲取即時股價: {stock_name} 當前價格 {realtime_price_data.get('current_price')} 元 ({realtime_price_data.get('price_change_pct'):+.2f}%)")
+                else:
+                    logger.warning(f"⚠️  無法獲取即時股價，將使用預設數據")
+            except Exception as price_error:
+                logger.error(f"❌ 獲取即時股價失敗: {price_error}")
+                realtime_price_data = {
+                    "error": str(price_error),
+                    "is_realtime": False
+                }
         else:
             logger.info(f"⏭️  跳過即時股價抓取 (enable_realtime_price=False)")
             realtime_price_data = {
