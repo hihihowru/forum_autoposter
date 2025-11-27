@@ -3964,8 +3964,7 @@ async def refresh_kol_interactions(serial: str):
                         with conn.cursor() as update_cursor:
                             update_cursor.execute("""
                                 UPDATE post_records
-                                SET likes = %s, comments = %s, shares = %s,
-                                    last_interaction_update = CURRENT_TIMESTAMP
+                                SET likes = %s, comments = %s, shares = %s
                                 WHERE post_id = %s
                             """, (likes, comments, shares, post_id))
 
@@ -4151,10 +4150,7 @@ async def refresh_all_interactions():
                                 with conn.cursor() as update_cursor:
                                     update_cursor.execute("""
                                         UPDATE post_records
-                                        SET likes = %s,
-                                            comments = %s,
-                                            shares = %s,
-                                            last_interaction_update = CURRENT_TIMESTAMP
+                                        SET likes = %s, comments = %s, shares = %s
                                         WHERE post_id = %s
                                     """, (likes, comments, collections, post_id))
 
@@ -4361,8 +4357,7 @@ async def refresh_filtered_interactions(request: Request):
                                 with conn.cursor() as update_cursor:
                                     update_cursor.execute("""
                                         UPDATE post_records
-                                        SET likes = %s, comments = %s, shares = %s,
-                                            last_interaction_update = CURRENT_TIMESTAMP
+                                        SET likes = %s, comments = %s, shares = %s
                                         WHERE post_id = %s
                                     """, (likes, comments, collections, post_id))
 
