@@ -951,9 +951,23 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
           </Col>
         </Row>
 
-        {/* 步驟指示器 */}
+        {/* 步驟指示器 - 🔥 可點擊快速跳轉 */}
         <Card size="small" style={{ marginBottom: '24px' }}>
-          <Steps current={currentStep} items={steps} />
+          <Steps
+            current={currentStep}
+            items={steps.map((step, index) => ({
+              ...step,
+              style: { cursor: 'pointer' },
+              onClick: () => setCurrentStep(index)
+            }))}
+            onChange={(current) => setCurrentStep(current)}
+            style={{ cursor: 'pointer' }}
+          />
+          <div style={{ marginTop: 8, textAlign: 'center' }}>
+            <span style={{ color: '#999', fontSize: 12 }}>
+              💡 點擊上方步驟數字或標題可快速跳轉
+            </span>
+          </div>
         </Card>
 
         {/* 當前步驟內容 */}
