@@ -17,8 +17,12 @@ load_dotenv('../../../../.env')
 logger = logging.getLogger(__name__)
 
 class GPTContentGenerator:
-    """GPT內容生成器"""
-    
+    """GPT內容生成器
+
+    預設使用 gpt-4o-mini 模型，提供良好的速度和質量平衡。
+    注意：gpt-5 系列模型已禁用（OpenAI 尚未發布）
+    """
+
     def __init__(self, api_key: Optional[str] = None, model: str = "gpt-4o-mini"):
         # 重新載入環境變數以確保API Key正確載入
         load_dotenv('../../../../.env')
@@ -107,12 +111,18 @@ class GPTContentGenerator:
             logger.info(f"🔍 DEBUG User Prompt 前 500 字: {user_prompt[:500]}")
 
             # 🔥 判斷是否為 GPT-5 系列
-            is_gpt5_model = chosen_model.startswith('gpt-5')
+            # ⚠️ GPT-5 已禁用 - OpenAI 尚未發布 gpt-5 模型，會導致 API 錯誤
+            is_gpt5_model = False  # chosen_model.startswith('gpt-5') - DISABLED
+
+            # 🔥 如果使用者選擇了 gpt-5，自動降級到 gpt-4o-mini
+            if chosen_model.startswith('gpt-5'):
+                logger.warning(f"⚠️ GPT-5 模型已禁用，自動降級到 gpt-4o-mini")
+                chosen_model = 'gpt-4o-mini'
 
             # 🔥 GPT-5 可以使用兩種 API：
-            # 1. Responses API (推薦，支援 CoT)
+            # 1. Responses API (推薦，支援 CoT) - DISABLED
             # 2. Chat Completions API (傳統方式，用 reasoning_effort 參數)
-            # 我們優先使用 Responses API
+            # 目前統一使用 Chat Completions API
 
             if is_gpt5_model:
                 # 🔥 GPT-5: 使用 Responses API
