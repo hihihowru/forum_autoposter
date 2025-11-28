@@ -491,8 +491,10 @@ async def check_schedules():
                     # Call the existing execute endpoint internally
                     # We'll construct a request body similar to what the API endpoint expects
                     async with httpx.AsyncClient(timeout=300.0) as client:
-                        # Call our own execute endpoint
-                        api_url = os.getenv('RAILWAY_PUBLIC_URL', 'http://localhost:8080')
+                        # Call our own execute endpoint - use internal port for self-calls
+                        internal_port = os.getenv('PORT', '8000')
+                        api_url = f"http://127.0.0.1:{internal_port}"
+                        logger.info(f"🔗 [APScheduler] Calling internal API: {api_url}/api/schedule/execute/{schedule_id}")
                         response = await client.post(
                             f"{api_url}/api/schedule/execute/{schedule_id}",
                             json={}
@@ -540,7 +542,9 @@ async def publish_posts_with_queue(posts: List[Dict], interval_seconds: int):
     """
     try:
         import httpx
-        api_url = os.getenv('RAILWAY_PUBLIC_URL', 'http://localhost:8080')
+        # Use internal port for self-calls
+        internal_port = os.getenv('PORT', '8000')
+        api_url = f"http://127.0.0.1:{internal_port}"
 
         for idx, post in enumerate(posts):
             try:
