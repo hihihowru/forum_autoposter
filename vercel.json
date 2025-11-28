@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "./build-frontend.sh",
+  "buildCommand": "cd \"docker-container/finlab python/apps/dashboard-frontend\" && npm install && npm run build",
   "outputDirectory": "docker-container/finlab python/apps/dashboard-frontend/dist",
   "rewrites": [
     {
@@ -23,7 +23,7 @@
     }
   ],
   "env": {
-    "RAILWAY_API_URL": "https://forumautoposter-production.up.railway.app"
+    "RAILWAY_API_URL": "https://forumautoposter-production-ed0b.up.railway.app"
   },
   "functions": {
     "api/proxy/[...path].js": {
