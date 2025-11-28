@@ -13,7 +13,7 @@ export default async function handler(req, res) {
   }
   
   try {
-    const RAILWAY_URL = process.env.RAILWAY_API_URL || 'https://forumautoposter-production-ed0b.up.railway.app';
+    const RAILWAY_URL = process.env.RAILWAY_API_URL || 'https://forumautoposter-production.up.railway.app';
     const targetUrl = `${RAILWAY_URL}${req.url}`;
     
     console.log('Proxying to:', targetUrl);

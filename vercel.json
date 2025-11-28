@@ -23,7 +23,7 @@
     }
   ],
   "env": {
-    "RAILWAY_API_URL": "https://forumautoposter-production-ed0b.up.railway.app"
+    "RAILWAY_API_URL": "https://forumautoposter-production.up.railway.app"
   },
   "functions": {
     "api/proxy/[...path].js": {
