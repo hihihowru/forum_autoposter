@@ -305,9 +305,9 @@ const ScheduleConfigModal: React.FC<ScheduleConfigModalProps> = ({
                 rules={[{ required: true, message: '請選擇KOL分配方式' }]}
               >
                 <Select>
-                  <Option value="random">隨機分配</Option>
-                  <Option value="round_robin">輪流分配</Option>
-                  <Option value="performance_based">基於表現</Option>
+                  <Option value="fixed">固定指派</Option>
+                  <Option value="random">隨機指派</Option>
+                  <Option value="pool_random">角色池指派</Option>
                 </Select>
               </Form.Item>
             </Col>

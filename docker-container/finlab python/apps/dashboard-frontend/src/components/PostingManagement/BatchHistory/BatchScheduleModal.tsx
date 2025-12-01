@@ -76,11 +76,15 @@ const BatchScheduleModal: React.FC<BatchScheduleModalProps> = ({
       try {
         const response = await fetch('/api/kol/list');
         const result = await response.json();
-        if (result.success && result.kols) {
-          setAvailableKols(result.kols.map((kol: any) => ({
+        console.log('🔍 KOL list API response:', result);
+        // 🔥 FIX: API returns 'data' not 'kols'
+        if (result.success && result.data) {
+          const kols = result.data.map((kol: any) => ({
             serial: kol.serial?.toString() || kol.kol_serial?.toString(),
             nickname: kol.nickname || kol.kol_nickname || `KOL-${kol.serial}`
-          })));
+          }));
+          console.log('🔍 Parsed KOLs:', kols);
+          setAvailableKols(kols);
         }
       } catch (error) {
         console.error('Failed to fetch KOLs:', error);
@@ -639,19 +643,21 @@ const BatchScheduleModal: React.FC<BatchScheduleModalProps> = ({
                   label={kolAssignment === 'fixed' ? '選擇指定KOL' : '選擇KOL角色池'}
                   rules={[{ required: true, message: kolAssignment === 'fixed' ? '請選擇一個KOL' : '請至少選擇一個KOL' }]}
                 >
+                  {/* 🔥 FIX: Don't set value prop - let Form.Item manage it. Only use onChange to sync state */}
                   <Select
                     mode={kolAssignment === 'fixed' ? undefined : 'multiple'}
                     placeholder={kolAssignment === 'fixed' ? '選擇一個KOL' : '選擇多個KOL'}
-                    value={kolAssignment === 'fixed' ? selectedKols[0] : selectedKols}
                     onChange={(value) => {
+                      // Sync to state for use in schedule config
                       if (kolAssignment === 'fixed') {
-                        setSelectedKols([value as string]);
+                        setSelectedKols(value ? [value as string] : []);
                       } else {
-                        setSelectedKols(value as string[]);
+                        setSelectedKols(value as string[] || []);
                       }
                     }}
                     showSearch
                     optionFilterProp="children"
+                    notFoundContent={availableKols.length === 0 ? '載入中...' : '無此資料'}
                   >
                     {availableKols.map(kol => (
                       <Option key={kol.serial} value={kol.serial}>

@@ -801,23 +801,34 @@ const ScheduleManagementPage: React.FC = () => {
       title: 'KOL分配',
       dataIndex: 'trigger_config',
       key: 'kol_assignment',
-      width: 100,
+      width: 120,
       render: (triggerConfig: any, record: ScheduleTask) => {
         const kolAssignmentMap: Record<string, { text: string; color: string }> = {
-          'random': { text: '完全隨機', color: 'blue' },
-          'pool_random': { text: '🎯 池子隨機', color: 'cyan' },
+          'random': { text: '隨機指派', color: 'blue' },
+          'pool_random': { text: '角色池指派', color: 'cyan' },
           'fixed': { text: '固定指派', color: 'green' },
-          'dynamic': { text: '動態派發', color: 'orange' },
-          'round_robin': { text: '輪流分配', color: 'purple' },
-          'performance_based': { text: '基於表現', color: 'magenta' }
         };
-        const kolAssignment = triggerConfig?.kol_assignment || record.trigger_config?.kol_assignment || 'N/A';
+        const kolAssignment = triggerConfig?.kol_assignment || record.trigger_config?.kol_assignment || 'random';
         const mapped = kolAssignmentMap[kolAssignment] || { text: kolAssignment, color: 'default' };
+
+        // 🔥 Get selected KOLs from schedule_config
+        const scheduleConfig = record.schedule_config as any;
+        const selectedKols = scheduleConfig?.selected_kols || [];
+
         return (
-          <Space>
-            <UserOutlined />
-            <Tag color={mapped.color}>{mapped.text}</Tag>
-          </Space>
+          <div>
+            <Space>
+              <UserOutlined />
+              <Tag color={mapped.color}>{mapped.text}</Tag>
+            </Space>
+            {/* 🔥 Show selected KOLs for fixed/pool_random modes */}
+            {(kolAssignment === 'fixed' || kolAssignment === 'pool_random') && selectedKols.length > 0 && (
+              <div style={{ fontSize: '11px', marginTop: 4, color: '#666' }}>
+                {selectedKols.slice(0, 3).join(', ')}
+                {selectedKols.length > 3 && ` +${selectedKols.length - 3}更多`}
+              </div>
+            )}
+          </div>
         );
       },
     },
