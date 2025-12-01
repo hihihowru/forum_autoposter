@@ -66,6 +66,37 @@ const BatchScheduleModal: React.FC<BatchScheduleModalProps> = ({
 }) => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
+  const [kolAssignment, setKolAssignment] = useState<string>('random');
+  const [availableKols, setAvailableKols] = useState<Array<{serial: string, nickname: string}>>([]);
+  const [selectedKols, setSelectedKols] = useState<string[]>([]);
+
+  // 🔥 Fetch available KOLs from API
+  useEffect(() => {
+    const fetchKols = async () => {
+      try {
+        const response = await fetch('/api/kol/list');
+        const result = await response.json();
+        if (result.success && result.kols) {
+          setAvailableKols(result.kols.map((kol: any) => ({
+            serial: kol.serial?.toString() || kol.kol_serial?.toString(),
+            nickname: kol.nickname || kol.kol_nickname || `KOL-${kol.serial}`
+          })));
+        }
+      } catch (error) {
+        console.error('Failed to fetch KOLs:', error);
+      }
+    };
+    if (visible) {
+      fetchKols();
+    }
+  }, [visible]);
+
+  // 🔥 Initialize selected KOLs from batch data
+  useEffect(() => {
+    if (visible && batchData?.kol_names) {
+      setSelectedKols(batchData.kol_names);
+    }
+  }, [visible, batchData]);
 
   // 生成排程名稱的函數
   const generateScheduleName = (triggerType: string, stockSorting: string, sessionId: string) => {
@@ -139,9 +170,11 @@ const BatchScheduleModal: React.FC<BatchScheduleModalProps> = ({
           max_stocks: originalMaxStocks, // 🔥 修復：使用原始配置的最大股票數量
           // 🔥 修復：只使用有效的 kol_assignment 值，否則默認為 'random'
           // batchData.kol_assignment 可能是 KOL serial (如 "208") 而不是分配策略
-          kol_assignment: ['fixed', 'random', 'round_robin', 'performance_based'].includes(batchData.kol_assignment)
+          kol_assignment: ['fixed', 'random', 'pool_random'].includes(batchData.kol_assignment)
             ? batchData.kol_assignment
             : 'random',
+          // 🔥 Initialize selected_kols from batch data
+          selected_kols: batchData.kol_names || [],
           content_style: originalConfig.content_style || originalConfig.settings?.content_style || 'technical',
           content_length: originalConfig.content_length || originalConfig.settings?.content_length || 'medium',
           max_words: originalConfig.max_words || originalConfig.settings?.max_words || 1000,
@@ -151,6 +184,13 @@ const BatchScheduleModal: React.FC<BatchScheduleModalProps> = ({
           include_charts: originalConfig.include_charts || false
         }
       });
+
+      // 🔥 Also update state for conditional rendering
+      const initialKolAssignment = ['fixed', 'random', 'pool_random'].includes(batchData.kol_assignment)
+        ? batchData.kol_assignment
+        : 'random';
+      setKolAssignment(initialKolAssignment);
+      setSelectedKols(batchData.kol_names || []);
     }
   }, [visible, batchData, form]);
 
@@ -215,6 +255,12 @@ const BatchScheduleModal: React.FC<BatchScheduleModalProps> = ({
       };
 
       // 🔥 FIX: Build comprehensive schedule_config
+      // 🔥 FIX: Use selectedKols from state (user-selected) for fixed/pool_random modes
+      const kolAssignmentMode = values.generation_config.kol_assignment;
+      const kolsToUse = (kolAssignmentMode === 'fixed' || kolAssignmentMode === 'pool_random')
+        ? (values.generation_config.selected_kols || selectedKols || [])
+        : []; // random mode doesn't need selected_kols
+
       const scheduleConfigData = {
         posting_type: originalConfig.posting_type || values.generation_config.posting_type,
         content_style: originalConfig.content_style || values.generation_config.content_style,
@@ -225,9 +271,9 @@ const BatchScheduleModal: React.FC<BatchScheduleModalProps> = ({
         include_charts: values.generation_config.include_charts,
         enable_news_links: values.generation_config.enable_news_links,
         news_max_links: values.generation_config.news_max_links,
-        kol_assignment: values.generation_config.kol_assignment,
-        // KOL selection from batch
-        selected_kols: batchData.kol_names || [],
+        kol_assignment: kolAssignmentMode,
+        // 🔥 FIX: Use user-selected KOLs for fixed/pool_random modes
+        selected_kols: Array.isArray(kolsToUse) ? kolsToUse : [kolsToUse],
         stock_codes: batchData.stock_codes || [],
         // Store full triggers config for later use
         full_triggers_config: fullTriggersConfig
@@ -545,11 +591,10 @@ const BatchScheduleModal: React.FC<BatchScheduleModalProps> = ({
                 initialValue="random"
                 rules={[{ required: true, message: '請選擇KOL分配方式' }]}
               >
-                <Select>
-                  <Option value="fixed">固定指派</Option>
-                  <Option value="random">隨機分配</Option>
-                  <Option value="round_robin">輪流分配</Option>
-                  <Option value="performance_based">基於表現</Option>
+                <Select onChange={(value) => setKolAssignment(value)}>
+                  <Option value="fixed">固定指派（單一KOL）</Option>
+                  <Option value="random">隨機指派（從所有KOL）</Option>
+                  <Option value="pool_random">角色池指派（從選定KOL隨機）</Option>
                 </Select>
               </Form.Item>
             </Col>
@@ -584,6 +629,40 @@ const BatchScheduleModal: React.FC<BatchScheduleModalProps> = ({
               </Form.Item>
             </Col>
           </Row>
+
+          {/* 🔥 KOL Selector - show when fixed or pool_random is selected */}
+          {(kolAssignment === 'fixed' || kolAssignment === 'pool_random') && (
+            <Row gutter={16}>
+              <Col span={24}>
+                <Form.Item
+                  name={['generation_config', 'selected_kols']}
+                  label={kolAssignment === 'fixed' ? '選擇指定KOL' : '選擇KOL角色池'}
+                  rules={[{ required: true, message: kolAssignment === 'fixed' ? '請選擇一個KOL' : '請至少選擇一個KOL' }]}
+                >
+                  <Select
+                    mode={kolAssignment === 'fixed' ? undefined : 'multiple'}
+                    placeholder={kolAssignment === 'fixed' ? '選擇一個KOL' : '選擇多個KOL'}
+                    value={kolAssignment === 'fixed' ? selectedKols[0] : selectedKols}
+                    onChange={(value) => {
+                      if (kolAssignment === 'fixed') {
+                        setSelectedKols([value as string]);
+                      } else {
+                        setSelectedKols(value as string[]);
+                      }
+                    }}
+                    showSearch
+                    optionFilterProp="children"
+                  >
+                    {availableKols.map(kol => (
+                      <Option key={kol.serial} value={kol.serial}>
+                        {kol.nickname} (#{kol.serial})
+                      </Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+              </Col>
+            </Row>
+          )}
 
           <Row gutter={16}>
             <Col span={8}>
