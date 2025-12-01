@@ -3272,7 +3272,14 @@ async def manual_posting(request: Request):
             "posting_type": posting_type,
             "created_at": now.isoformat(),
             # 🔥 FIX: Store full triggers config for schedule recreation
-            "full_triggers_config": full_triggers_config_from_request
+            "full_triggers_config": full_triggers_config_from_request,
+            # 🔥 FIX: Store data_sources (DTNO settings) for schedule recreation
+            "data_sources": data_sources,
+            # 🔥 FIX: Store additional config for schedule recreation
+            "max_words": max_words,
+            "news_config": body.get('news_config', {}),
+            "model_id_override": model_id_override,
+            "use_kol_default_model": use_kol_default_model
         }
 
         logger.info(f"🔍 DEBUG: generation_params to store: {json.dumps(generation_params, ensure_ascii=False)[:200]}...")
