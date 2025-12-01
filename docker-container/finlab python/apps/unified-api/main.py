@@ -7981,7 +7981,8 @@ async def execute_schedule_now(task_id: str, request: Request):
         kol_serials = []
 
         # Check if schedule has selected_kols (pool_random or fixed mode)
-        selected_kols = schedule.get('selected_kols', [])
+        # 🔥 FIX: selected_kols is stored in schedule_config, not in schedule root
+        selected_kols = schedule_config.get('selected_kols', [])
 
         if kol_assignment == 'pool_random' or kol_assignment == 'fixed':
             # Use user-selected KOL pool
