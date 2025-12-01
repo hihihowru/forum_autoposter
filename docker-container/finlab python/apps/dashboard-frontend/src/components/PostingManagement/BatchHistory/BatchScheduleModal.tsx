@@ -95,12 +95,36 @@ const BatchScheduleModal: React.FC<BatchScheduleModalProps> = ({
     }
   }, [visible]);
 
-  // 🔥 Initialize selected KOLs from batch data
+  // 🔥 Helper function to resolve KOL names to serial numbers
+  const resolveKolNamesToSerials = (kolNames: string[], kols: Array<{serial: string, nickname: string}>): string[] => {
+    return kolNames.map(name => {
+      // If name matches "KOL-{serial}" format, extract the serial
+      const kolMatch = name.match(/^KOL-(\d+)$/);
+      if (kolMatch) {
+        return kolMatch[1]; // Return just the serial number
+      }
+      // If it's already a numeric serial, return as-is
+      if (/^\d+$/.test(name)) {
+        return name;
+      }
+      // Otherwise try to find by nickname
+      const matchingKol = kols.find(k => k.nickname === name);
+      if (matchingKol) {
+        return matchingKol.serial;
+      }
+      return name; // Return as-is if no match found
+    });
+  };
+
+  // 🔥 Initialize selected KOLs from batch data when KOLs are loaded
   useEffect(() => {
-    if (visible && batchData?.kol_names) {
-      setSelectedKols(batchData.kol_names);
+    if (visible && batchData?.kol_names && availableKols.length > 0) {
+      const resolvedSerials = resolveKolNamesToSerials(batchData.kol_names, availableKols);
+      setSelectedKols(resolvedSerials);
+      // Also update the form value
+      form.setFieldValue(['generation_config', 'selected_kols'], resolvedSerials);
     }
-  }, [visible, batchData]);
+  }, [visible, batchData, availableKols, form]);
 
   // 生成排程名稱的函數
   const generateScheduleName = (triggerType: string, stockSorting: string, sessionId: string) => {
@@ -177,8 +201,9 @@ const BatchScheduleModal: React.FC<BatchScheduleModalProps> = ({
           kol_assignment: ['fixed', 'random', 'pool_random'].includes(batchData.kol_assignment)
             ? batchData.kol_assignment
             : 'random',
-          // 🔥 Initialize selected_kols from batch data
-          selected_kols: batchData.kol_names || [],
+          // 🔥 FIX: Don't set selected_kols here - let the separate useEffect handle it
+          // after availableKols is loaded to properly resolve names to serials
+          selected_kols: [],
           content_style: originalConfig.content_style || originalConfig.settings?.content_style || 'technical',
           content_length: originalConfig.content_length || originalConfig.settings?.content_length || 'medium',
           max_words: originalConfig.max_words || originalConfig.settings?.max_words || 1000,
@@ -194,7 +219,8 @@ const BatchScheduleModal: React.FC<BatchScheduleModalProps> = ({
         ? batchData.kol_assignment
         : 'random';
       setKolAssignment(initialKolAssignment);
-      setSelectedKols(batchData.kol_names || []);
+      // 🔥 FIX: Don't set selectedKols here - the separate useEffect will handle it
+      // after availableKols is loaded
     }
   }, [visible, batchData, form]);
 
@@ -280,7 +306,9 @@ const BatchScheduleModal: React.FC<BatchScheduleModalProps> = ({
         selected_kols: Array.isArray(kolsToUse) ? kolsToUse : [kolsToUse],
         stock_codes: batchData.stock_codes || [],
         // Store full triggers config for later use
-        full_triggers_config: fullTriggersConfig
+        full_triggers_config: fullTriggersConfig,
+        // 🔥 FIX: Pass data_sources (DTNO settings) from original batch config
+        data_sources: originalConfig.data_sources || {}
       };
 
       const scheduleConfig = {
@@ -686,7 +714,7 @@ const BatchScheduleModal: React.FC<BatchScheduleModalProps> = ({
                 name={['generation_config', 'enable_news_links']}
                 label="啟用新聞連結"
                 valuePropName="checked"
-                initialValue={true}
+                initialValue={false}
               >
                 <Switch checkedChildren="啟用" unCheckedChildren="停用" />
               </Form.Item>

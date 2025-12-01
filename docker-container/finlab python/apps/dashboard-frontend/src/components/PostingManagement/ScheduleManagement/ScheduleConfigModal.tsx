@@ -36,6 +36,7 @@ interface ScheduleConfigData {
     trigger_type: string;
     stock_codes: string[];
     kol_assignment: string;
+    selected_kols?: string[];  // 🔥 Add selected_kols for fixed/pool_random modes
     max_stocks?: number;
     stock_sorting?: {
       primary_sort?: string;
@@ -66,6 +67,38 @@ const ScheduleConfigModal: React.FC<ScheduleConfigModalProps> = ({
 }) => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
+  // 🔥 NEW: KOL selection state
+  const [kolAssignment, setKolAssignment] = useState<string>('random');
+  const [availableKols, setAvailableKols] = useState<Array<{serial: string, nickname: string}>>([]);
+  const [selectedKols, setSelectedKols] = useState<string[]>([]);
+  const [kolsLoading, setKolsLoading] = useState(false);
+
+  // 🔥 NEW: Fetch available KOLs from API
+  useEffect(() => {
+    const fetchKols = async () => {
+      setKolsLoading(true);
+      try {
+        const response = await fetch('/api/kol/list');
+        const result = await response.json();
+        console.log('🔍 KOL list API response:', result);
+        if (result.success && result.data) {
+          const kols = result.data.map((kol: any) => ({
+            serial: kol.serial?.toString(),
+            nickname: kol.nickname || `KOL-${kol.serial}`
+          }));
+          console.log('🔍 Parsed KOLs:', kols);
+          setAvailableKols(kols);
+        }
+      } catch (error) {
+        console.error('Failed to fetch KOLs:', error);
+      } finally {
+        setKolsLoading(false);
+      }
+    };
+    if (visible) {
+      fetchKols();
+    }
+  }, [visible]);
 
   // 當 initialData 改變時，更新表單
   useEffect(() => {
@@ -86,12 +119,19 @@ const ScheduleConfigModal: React.FC<ScheduleConfigModalProps> = ({
         }
       }
 
+      // 🔥 NEW: Get KOL assignment and selected KOLs from initial data
+      const initialKolAssignment = initialData.trigger_config?.kol_assignment || 'random';
+      const initialSelectedKols = initialData.trigger_config?.selected_kols || [];
+      setKolAssignment(initialKolAssignment);
+      setSelectedKols(initialSelectedKols);
+
       form.setFieldsValue({
         name: initialData.name,
         description: initialData.description,
         trigger_config: {
           trigger_type: initialData.trigger_config?.trigger_type || 'limit_up_after_hours',
-          kol_assignment: initialData.trigger_config?.kol_assignment || 'random',
+          kol_assignment: initialKolAssignment,
+          selected_kols: initialSelectedKols,  // 🔥 NEW: Include selected_kols
           max_stocks: initialData.trigger_config?.max_stocks || 5,
           stock_sorting: initialData.trigger_config?.stock_sorting || {
             primary_sort: 'change_percent_desc',
@@ -109,6 +149,8 @@ const ScheduleConfigModal: React.FC<ScheduleConfigModalProps> = ({
     } else if (visible && !initialData) {
       // 創建模式：重置為預設值
       form.resetFields();
+      setKolAssignment('random');
+      setSelectedKols([]);
     }
   }, [visible, initialData, form]);
 
@@ -304,10 +346,10 @@ const ScheduleConfigModal: React.FC<ScheduleConfigModalProps> = ({
                 label="KOL分配方式"
                 rules={[{ required: true, message: '請選擇KOL分配方式' }]}
               >
-                <Select>
-                  <Option value="fixed">固定指派</Option>
-                  <Option value="random">隨機指派</Option>
-                  <Option value="pool_random">角色池指派</Option>
+                <Select onChange={(value) => setKolAssignment(value)}>
+                  <Option value="fixed">固定指派（單一KOL）</Option>
+                  <Option value="random">隨機指派（從所有KOL）</Option>
+                  <Option value="pool_random">角色池指派（從選定KOL隨機）</Option>
                 </Select>
               </Form.Item>
             </Col>
@@ -321,6 +363,41 @@ const ScheduleConfigModal: React.FC<ScheduleConfigModalProps> = ({
               </Form.Item>
             </Col>
           </Row>
+
+          {/* 🔥 NEW: KOL Selector - show when fixed or pool_random is selected */}
+          {(kolAssignment === 'fixed' || kolAssignment === 'pool_random') && (
+            <Row gutter={16} style={{ marginTop: 16 }}>
+              <Col span={24}>
+                <Form.Item
+                  name={['trigger_config', 'selected_kols']}
+                  label={kolAssignment === 'fixed' ? '選擇指定KOL' : '選擇KOL角色池'}
+                  rules={[{ required: true, message: kolAssignment === 'fixed' ? '請選擇一個KOL' : '請至少選擇一個KOL' }]}
+                >
+                  <Select
+                    mode={kolAssignment === 'fixed' ? undefined : 'multiple'}
+                    placeholder={kolAssignment === 'fixed' ? '選擇一個KOL' : '選擇多個KOL'}
+                    onChange={(value) => {
+                      if (kolAssignment === 'fixed') {
+                        setSelectedKols(value ? [value as string] : []);
+                      } else {
+                        setSelectedKols(value as string[] || []);
+                      }
+                    }}
+                    showSearch
+                    optionFilterProp="children"
+                    loading={kolsLoading}
+                    notFoundContent={kolsLoading ? '載入中...' : (availableKols.length === 0 ? '無可用KOL' : '無此資料')}
+                  >
+                    {availableKols.map(kol => (
+                      <Option key={kol.serial} value={kol.serial}>
+                        {kol.nickname} (#{kol.serial})
+                      </Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+              </Col>
+            </Row>
+          )}
 
           <Divider />
 

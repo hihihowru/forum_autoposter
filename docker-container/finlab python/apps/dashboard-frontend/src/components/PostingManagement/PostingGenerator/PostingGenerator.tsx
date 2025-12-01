@@ -104,7 +104,7 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
       use_realtime_news_api: true,
       search_templates: [],
       time_range: 'd2',  // 預設過去2天
-      enable_news_links: true  // 預設啟用新聞連結
+      enable_news_links: false  // 🔥 FIX: 預設關閉新聞連結
     },
     kol: {
       assignment_mode: 'random',

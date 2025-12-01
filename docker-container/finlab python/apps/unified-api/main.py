@@ -2748,6 +2748,10 @@ async def create_posting(request: Request):
             )
 
         try:
+            # 🔥 FIX: Handle "KOL-{serial}" format by stripping prefix
+            if isinstance(kol_serial_raw, str) and kol_serial_raw.startswith('KOL-'):
+                kol_serial_raw = kol_serial_raw[4:]  # Remove "KOL-" prefix
+                logger.info(f"🔧 Stripped KOL- prefix, using serial: {kol_serial_raw}")
             kol_serial = int(kol_serial_raw)
         except (ValueError, TypeError):
             logger.error(f"❌ Invalid kol_serial format: {kol_serial_raw}")
@@ -2884,6 +2888,10 @@ async def manual_posting(request: Request):
             )
 
         try:
+            # 🔥 FIX: Handle "KOL-{serial}" format by stripping prefix
+            if isinstance(kol_serial_raw, str) and kol_serial_raw.startswith('KOL-'):
+                kol_serial_raw = kol_serial_raw[4:]  # Remove "KOL-" prefix
+                logger.info(f"🔧 Stripped KOL- prefix, using serial: {kol_serial_raw}")
             kol_serial = int(kol_serial_raw)
             logger.info(f"✅ Using KOL serial: {kol_serial}")
         except (ValueError, TypeError):
@@ -8077,8 +8085,8 @@ async def execute_schedule_now(task_id: str, request: Request):
                     # 🔥 FIX: Pass model override settings from generation_config
                     "model_id_override": generation_config.get('model_id_override'),
                     "use_kol_default_model": generation_config.get('use_kol_default_model', True),
-                    # 🔥 FIX: Pass data_sources (DTNO settings) from generation_config
-                    "data_sources": generation_config.get('data_sources', {}),
+                    # 🔥 FIX: Pass data_sources (DTNO settings) from schedule_config or generation_config
+                    "data_sources": schedule_config.get('data_sources', {}) or generation_config.get('data_sources', {}),
                     # 🔥 NEW: Pass topic info if matched
                     "has_trending_topic": matched_topic is not None,
                     "topic_id": matched_topic.get('id') if matched_topic else None,
@@ -8190,8 +8198,8 @@ async def execute_schedule_now(task_id: str, request: Request):
                             "news_config": generation_config.get('news_config', {}),
                             "model_id_override": generation_config.get('model_id_override'),
                             "use_kol_default_model": generation_config.get('use_kol_default_model', True),
-                            # 🔥 FIX: Pass data_sources (DTNO settings) from generation_config
-                            "data_sources": generation_config.get('data_sources', {}),
+                            # 🔥 FIX: Pass data_sources (DTNO settings) from schedule_config or generation_config
+                            "data_sources": schedule_config.get('data_sources', {}) or generation_config.get('data_sources', {}),
                             # 🔥 NEW: Pass topic info
                             "topic_id": topic_id,
                             "topic_title": topic_title,

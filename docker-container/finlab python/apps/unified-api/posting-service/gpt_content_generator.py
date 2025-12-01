@@ -706,20 +706,28 @@ class GPTContentGenerator:
                     if value is not None and value != '':
                         try:
                             num_val = float(value)
-                            # 🔥 FIX: Use Chinese units (百萬、億) and format cleanly
+
+                            # 🔥 FIX: Handle unit conversion based on title
+                            # If title contains "千元", multiply by 1000 to get actual 元 value
+                            # If title contains "百萬", multiply by 1000000
+                            display_title = title
+                            if '(千元)' in title or '（千元）' in title:
+                                num_val = num_val * 1000  # Convert 千元 to 元
+                                display_title = title.replace('(千元)', '').replace('（千元）', '').strip()
+                            elif '(百萬)' in title or '（百萬）' in title:
+                                num_val = num_val * 1000000  # Convert 百萬 to 元
+                                display_title = title.replace('(百萬)', '').replace('（百萬）', '').strip()
+
+                            # 🔥 FIX: Use Chinese units (萬、億) and format cleanly
                             if abs(num_val) >= 100000000:  # 1億以上
                                 formatted = f"{num_val/100000000:.2f}億"
-                            elif abs(num_val) >= 10000000:  # 1千萬以上
-                                formatted = f"{num_val/10000:.0f}萬"
-                            elif abs(num_val) >= 1000000:  # 1百萬以上
-                                formatted = f"{num_val/10000:.0f}萬"
                             elif abs(num_val) >= 10000:  # 1萬以上
                                 formatted = f"{num_val/10000:.2f}萬"
                             elif num_val == int(num_val):  # 整數 (如股價 201.0 → 201)
                                 formatted = f"{int(num_val)}"
                             else:
                                 formatted = f"{num_val:.2f}"
-                            lines.append(f"- {title}: {formatted}")
+                            lines.append(f"- {display_title}: {formatted}")
                         except (ValueError, TypeError):
                             lines.append(f"- {title}: {value}")
 
