@@ -16,6 +16,30 @@ load_dotenv('../../../../.env')
 
 logger = logging.getLogger(__name__)
 
+def format_price(value) -> str:
+    """格式化股價，移除不必要的小數點（如 201.0 → 201）"""
+    try:
+        num = float(value)
+        if num == int(num):
+            return str(int(num))
+        return f"{num:.2f}"
+    except (ValueError, TypeError):
+        return str(value)
+
+def format_number_chinese(value) -> str:
+    """格式化數字為中文單位（萬、億）"""
+    try:
+        num = float(value)
+        if abs(num) >= 100000000:  # 1億以上
+            return f"{num/100000000:.2f}億"
+        elif abs(num) >= 10000:  # 1萬以上
+            return f"{num/10000:.2f}萬"
+        elif num == int(num):
+            return str(int(num))
+        return f"{num:.2f}"
+    except (ValueError, TypeError):
+        return str(value)
+
 class GPTContentGenerator:
     """GPT內容生成器
 
@@ -532,13 +556,14 @@ class GPTContentGenerator:
 
             # 🔥 NEW APPROACH: Provide context instead of pre-formatted text
             # Let GPT naturally integrate the price info into narrative
+            # 🔥 FIX: Use format_price() to remove unnecessary decimal (.0)
             params['ohlc_summary'] = f"""【參考數據 - 請自然融入文章中，不要直接列出】
 時間: {timestamp}
-當前股價: {current_price} 元
+當前股價: {format_price(current_price)} 元
 漲跌: {change_str}
-開盤: {realtime_price_data.get('open_price', 'N/A')} 元
-最高: {high_price} 元
-最低: {low_price} 元
+開盤: {format_price(realtime_price_data.get('open_price', 'N/A'))} 元
+最高: {format_price(high_price)} 元
+最低: {format_price(low_price)} 元
 成交量: {volume:,} 張
 
 """
@@ -552,8 +577,9 @@ class GPTContentGenerator:
             close_price = ohlc_data.get('close', 'N/A')
             change_pct = ohlc_data.get('change_percent', 'N/A')
             volume = ohlc_data.get('volume', 'N/A')
+            # 🔥 FIX: Use format_price() to remove unnecessary decimal (.0)
             params['ohlc_summary'] = f"""價格資訊：
-- 收盤價：{close_price}
+- 收盤價：{format_price(close_price)}
 - 漲跌幅：{change_pct}%
 - 成交量：{volume}
 
@@ -680,10 +706,17 @@ class GPTContentGenerator:
                     if value is not None and value != '':
                         try:
                             num_val = float(value)
-                            if abs(num_val) >= 1000000:
-                                formatted = f"{num_val/1000000:.2f}M"
-                            elif abs(num_val) >= 1000:
-                                formatted = f"{num_val/1000:.2f}K"
+                            # 🔥 FIX: Use Chinese units (百萬、億) and format cleanly
+                            if abs(num_val) >= 100000000:  # 1億以上
+                                formatted = f"{num_val/100000000:.2f}億"
+                            elif abs(num_val) >= 10000000:  # 1千萬以上
+                                formatted = f"{num_val/10000:.0f}萬"
+                            elif abs(num_val) >= 1000000:  # 1百萬以上
+                                formatted = f"{num_val/10000:.0f}萬"
+                            elif abs(num_val) >= 10000:  # 1萬以上
+                                formatted = f"{num_val/10000:.2f}萬"
+                            elif num_val == int(num_val):  # 整數 (如股價 201.0 → 201)
+                                formatted = f"{int(num_val)}"
                             else:
                                 formatted = f"{num_val:.2f}"
                             lines.append(f"- {title}: {formatted}")
@@ -885,8 +918,8 @@ class GPTContentGenerator:
         if not title:
             title = f"{stock_name} 分析"
 
-        # 🔥 標題長度控制（最多 15 字）
-        MAX_TITLE_LENGTH = 15
+        # 🔥 標題長度控制（最多 25 字，CMoney 標題限制約 30 字）
+        MAX_TITLE_LENGTH = 25
         if len(title) > MAX_TITLE_LENGTH:
             logger.warning(f"⚠️ 標題過長 ({len(title)} 字)，進行截斷: {title[:30]}...")
 
