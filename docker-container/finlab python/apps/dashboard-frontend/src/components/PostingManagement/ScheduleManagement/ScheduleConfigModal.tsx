@@ -73,12 +73,15 @@ const ScheduleConfigModal: React.FC<ScheduleConfigModalProps> = ({
   const [selectedKols, setSelectedKols] = useState<string[]>([]);
   const [kolsLoading, setKolsLoading] = useState(false);
 
+  // 🔥 API Base URL for Railway backend
+  const API_BASE = import.meta.env.DEV ? 'http://localhost:8001' : 'https://forumautoposter-production.up.railway.app';
+
   // 🔥 NEW: Fetch available KOLs from API
   useEffect(() => {
     const fetchKols = async () => {
       setKolsLoading(true);
       try {
-        const response = await fetch('/api/kol/list');
+        const response = await fetch(`${API_BASE}/api/kol/list`);
         const result = await response.json();
         console.log('🔍 KOL list API response:', result);
         if (result.success && result.data) {

@@ -70,11 +70,14 @@ const BatchScheduleModal: React.FC<BatchScheduleModalProps> = ({
   const [availableKols, setAvailableKols] = useState<Array<{serial: string, nickname: string}>>([]);
   const [selectedKols, setSelectedKols] = useState<string[]>([]);
 
+  // 🔥 API Base URL for Railway backend
+  const API_BASE = import.meta.env.DEV ? 'http://localhost:8001' : 'https://forumautoposter-production.up.railway.app';
+
   // 🔥 Fetch available KOLs from API
   useEffect(() => {
     const fetchKols = async () => {
       try {
-        const response = await fetch('/api/kol/list');
+        const response = await fetch(`${API_BASE}/api/kol/list`);
         const result = await response.json();
         console.log('🔍 KOL list API response:', result);
         // 🔥 FIX: API returns 'data' not 'kols'
