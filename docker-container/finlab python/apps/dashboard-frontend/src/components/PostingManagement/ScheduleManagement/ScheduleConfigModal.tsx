@@ -71,6 +71,21 @@ const ScheduleConfigModal: React.FC<ScheduleConfigModalProps> = ({
   useEffect(() => {
     if (visible && initialData) {
       // 編輯模式：載入現有數據
+      // 🔥 FIX: Handle daily_execution_time from either schedule_config or root level
+      const timeStr = initialData.schedule_config?.daily_execution_time
+        || (initialData as any).daily_execution_time;
+
+      let parsedTime = null;
+      if (timeStr) {
+        // Handle both string "HH:mm" format and already-parsed dayjs objects
+        if (typeof timeStr === 'string') {
+          parsedTime = dayjs(timeStr, 'HH:mm');
+        } else if (timeStr && typeof timeStr.isValid === 'function') {
+          // Already a dayjs object
+          parsedTime = timeStr;
+        }
+      }
+
       form.setFieldsValue({
         name: initialData.name,
         description: initialData.description,
@@ -86,9 +101,7 @@ const ScheduleConfigModal: React.FC<ScheduleConfigModalProps> = ({
         },
         schedule_config: {
           enabled: initialData.schedule_config?.enabled || false,
-          daily_execution_time: initialData.schedule_config?.daily_execution_time 
-            ? dayjs(initialData.schedule_config.daily_execution_time, 'HH:mm') 
-            : null,
+          daily_execution_time: parsedTime,
           timezone: initialData.schedule_config?.timezone || 'Asia/Taipei'
         },
         auto_posting: (initialData as any).auto_posting ?? false
@@ -123,36 +136,9 @@ const ScheduleConfigModal: React.FC<ScheduleConfigModalProps> = ({
     { value: 'one_month_change_asc', label: '近一月跌幅最多' }
   ];
 
-  // 初始化表單
-  useEffect(() => {
-    if (visible) {
-      if (initialData) {
-        form.setFieldsValue(initialData);
-      } else {
-        form.setFieldsValue({
-          name: '',
-          description: '',
-        trigger_config: {
-          trigger_type: 'limit_up_after_hours',
-          stock_codes: [],
-          kol_assignment: 'random',
-          max_stocks: 5,
-            stock_sorting: {
-              primary_sort: 'change_percent_desc',
-              secondary_sort: 'volume_desc',
-              tertiary_sort: 'current_price_desc'
-            }
-          },
-          schedule_config: {
-            enabled: false,
-            daily_execution_time: null,
-            timezone: 'Asia/Taipei'
-          },
-          auto_posting: false
-        });
-      }
-    }
-  }, [visible, initialData, form]);
+  // 🔥 REMOVED: Duplicate useEffect that was overwriting the first one
+  // The first useEffect (line 71-100) already handles both edit and create modes correctly
+  // This second one was causing the dayjs error by setting raw string values
 
   // 處理保存
   const handleSave = async () => {
