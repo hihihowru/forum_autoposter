@@ -3959,11 +3959,11 @@ async def refresh_kol_interactions(serial: str):
                         shares = data.get("collectedCount", 0)  # Using collections as shares
                         donations = data.get("donation", 0)  # 🔥 打賞數量
 
-                        # Update database (include donations if column exists)
+                        # Update database (include donations and refresh timestamp)
                         with conn.cursor() as update_cursor:
                             update_cursor.execute("""
                                 UPDATE post_records
-                                SET likes = %s, comments = %s, shares = %s, donations = %s
+                                SET likes = %s, comments = %s, shares = %s, donations = %s, updated_at = CURRENT_TIMESTAMP
                                 WHERE post_id = %s
                             """, (likes, comments, shares, donations, post_id))
 
@@ -4145,11 +4145,11 @@ async def refresh_all_interactions():
                                     "total": total_emojis
                                 }
 
-                                # Update database (include donations)
+                                # Update database (include donations and refresh timestamp)
                                 with conn.cursor() as update_cursor:
                                     update_cursor.execute("""
                                         UPDATE post_records
-                                        SET likes = %s, comments = %s, shares = %s, donations = %s
+                                        SET likes = %s, comments = %s, shares = %s, donations = %s, updated_at = CURRENT_TIMESTAMP
                                         WHERE post_id = %s
                                     """, (likes, comments, collections, donations, post_id))
 
@@ -4357,7 +4357,7 @@ async def refresh_filtered_interactions(request: Request):
                                 with conn.cursor() as update_cursor:
                                     update_cursor.execute("""
                                         UPDATE post_records
-                                        SET likes = %s, comments = %s, shares = %s, donations = %s
+                                        SET likes = %s, comments = %s, shares = %s, donations = %s, updated_at = CURRENT_TIMESTAMP
                                         WHERE post_id = %s
                                     """, (likes, comments, collections, donations, post_id))
 
@@ -4368,7 +4368,8 @@ async def refresh_filtered_interactions(request: Request):
                                     "likes": likes,
                                     "comments": comments,
                                     "shares": collections,
-                                    "donations": donations
+                                    "donations": donations,
+                                    "updated_at": datetime.now().isoformat()
                                 })
                             else:
                                 failed_count += 1
