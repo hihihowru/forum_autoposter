@@ -334,8 +334,10 @@ interface DataSourceSelection {
   categories: string[];  // ['fundamental', 'technical', 'chip']
   // 第二層：小分類 (選擇小分類會自動包含該分類下所有欄位)
   subCategories: string[];  // ['revenue', 'eps', 'ma', 'kd', 'institutional']
-  // 新聞來源 (保留)
+  // 新聞來源 (保留 - legacy)
   news_sources: string[];
+  // DTNO 新聞開關
+  enable_dtno_news: boolean;
 }
 
 interface DataSourceSelectorProps {
@@ -349,12 +351,6 @@ interface DataSourceSelectorProps {
 
 const DataSourceSelector: React.FC<DataSourceSelectorProps> = ({ value, onChange }) => {
   const [expandedCategories, setExpandedCategories] = useState<string[]>(['fundamental', 'technical', 'chip']);
-
-  const newsSources = [
-    '工商時報', '經濟日報', '中央社', '鉅亨網', 'MoneyDJ', 'Yahoo財經',
-    '中時電子報', '聯合新聞網', '自由時報', 'ETtoday', '東森新聞',
-    'TVBS', '三立新聞', '非凡新聞', '財訊', '今周刊', '天下雜誌'
-  ];
 
   // 檢查小分類是否被選中
   const isSubCategorySelected = (subCategoryId: string): boolean => {
@@ -410,28 +406,6 @@ const DataSourceSelector: React.FC<DataSourceSelectorProps> = ({ value, onChange
     onChange({
       ...value,
       subCategories: newSubCategories
-    });
-  };
-
-  // 處理新聞來源選擇
-  const handleNewsSourceChange = (source: string, checked: boolean) => {
-    let newSources: string[];
-    if (checked) {
-      newSources = [...(value.news_sources || []), source];
-    } else {
-      newSources = (value.news_sources || []).filter(s => s !== source);
-    }
-
-    onChange({
-      ...value,
-      news_sources: newSources
-    });
-  };
-
-  const handleSelectAllNewsSources = (checked: boolean) => {
-    onChange({
-      ...value,
-      news_sources: checked ? [...newsSources] : []
     });
   };
 
@@ -548,31 +522,23 @@ const DataSourceSelector: React.FC<DataSourceSelectorProps> = ({ value, onChange
         ))}
       </Collapse>
 
-      {/* 新聞來源 */}
+      {/* DTNO 新聞開關 */}
       <Card size="small" style={{ marginTop: '16px' }}>
-        <Title level={5}>新聞來源</Title>
-        <Text type="secondary" style={{ fontSize: '12px' }}>
-          選擇需要的新聞來源 (共{newsSources.length}個來源)
-        </Text>
-        <div style={{ marginTop: '8px' }}>
-          <Space wrap>
-            <Checkbox
-              checked={value.news_sources?.length === newsSources.length}
-              indeterminate={value.news_sources?.length > 0 && value.news_sources?.length < newsSources.length}
-              onChange={(e) => handleSelectAllNewsSources(e.target.checked)}
-            >
-              <Tag color="red">全選</Tag>
-            </Checkbox>
-            {newsSources.map((source) => (
-              <Checkbox
-                key={source}
-                checked={value.news_sources?.includes(source) || false}
-                onChange={(e) => handleNewsSourceChange(source, e.target.checked)}
-              >
-                <Tag color="orange">{source}</Tag>
-              </Checkbox>
-            ))}
-          </Space>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <Title level={5} style={{ margin: 0 }}>📰 DTNO 新聞</Title>
+            <Text type="secondary" style={{ fontSize: '12px' }}>
+              自動獲取個股近3天的相關新聞，注入到文章內容中
+            </Text>
+          </div>
+          <Checkbox
+            checked={value.enable_dtno_news ?? true}
+            onChange={(e) => onChange({ ...value, enable_dtno_news: e.target.checked })}
+          >
+            <Tag color={value.enable_dtno_news !== false ? 'green' : 'default'}>
+              {value.enable_dtno_news !== false ? '啟用' : '停用'}
+            </Tag>
+          </Checkbox>
         </div>
       </Card>
 
@@ -598,16 +564,15 @@ const DataSourceSelector: React.FC<DataSourceSelectorProps> = ({ value, onChange
             );
           })}
 
-          {value.news_sources && value.news_sources.length > 0 && (
-            <div>
-              <Text strong>新聞來源: </Text>
-              <Text type="secondary">({value.news_sources.length} 個來源)</Text>
-            </div>
-          )}
+          <div>
+            <Text strong>DTNO 新聞: </Text>
+            <Tag color={value.enable_dtno_news !== false ? 'green' : 'default'}>
+              {value.enable_dtno_news !== false ? '啟用' : '停用'}
+            </Tag>
+          </div>
 
-          {(!value.subCategories || value.subCategories.length === 0) &&
-           (!value.news_sources || value.news_sources.length === 0) && (
-            <Text type="secondary">尚未選擇任何數據源</Text>
+          {(!value.subCategories || value.subCategories.length === 0) && (
+            <Text type="secondary">尚未選擇任何 DTNO 數據分類</Text>
           )}
         </Space>
       </Card>

@@ -75,7 +75,12 @@ const PostingGenerator: React.FC<PostingGeneratorProps> = ({
       selectedTopics: [], // 添加選中話題的狀態
       // 移除手動選擇熱門話題，改為自動根據觸發器標記
     },
-    dataSources: {},
+    dataSources: {
+      categories: [],
+      subCategories: [],
+      news_sources: [],
+      enable_dtno_news: true  // 🔥 預設啟用 DTNO 新聞
+    },
     explainability: {
       summarizer_enabled: true,
       data_extractor_enabled: true,

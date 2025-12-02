@@ -304,13 +304,27 @@ class DTNOService:
                         # Format numeric values
                         try:
                             num_val = float(value)
-                            if abs(num_val) >= 1000000:
-                                formatted = f"{num_val/1000000:.2f}M"
-                            elif abs(num_val) >= 1000:
-                                formatted = f"{num_val/1000:.2f}K"
+
+                            # 🔥 FIX: Handle unit conversion based on column title
+                            # DTNO data uses (千) for thousands, (百萬) for millions
+                            display_title = title
+                            if '(千)' in title or '（千）' in title or '(千元)' in title or '（千元）' in title:
+                                num_val = num_val * 1000  # Convert 千/千元 to actual value
+                                display_title = title.replace('(千)', '').replace('（千）', '').replace('(千元)', '').replace('（千元）', '').strip()
+                            elif '(百萬)' in title or '（百萬）' in title:
+                                num_val = num_val * 1000000  # Convert 百萬 to actual value
+                                display_title = title.replace('(百萬)', '').replace('（百萬）', '').strip()
+
+                            # 🔥 FIX: Use Chinese units (萬、億) instead of K/M
+                            if abs(num_val) >= 100000000:  # 1億以上
+                                formatted = f"{num_val/100000000:.2f}億"
+                            elif abs(num_val) >= 10000:  # 1萬以上
+                                formatted = f"{num_val/10000:.2f}萬"
+                            elif num_val == int(num_val):  # 整數
+                                formatted = f"{int(num_val)}"
                             else:
                                 formatted = f"{num_val:.2f}"
-                            lines.append(f"- {title}: {formatted}")
+                            lines.append(f"- {display_title}: {formatted}")
                         except (ValueError, TypeError):
                             lines.append(f"- {title}: {value}")
 

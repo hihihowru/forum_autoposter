@@ -685,14 +685,15 @@ class GPTContentGenerator:
                             num_val = float(value)
 
                             # 🔥 FIX: Handle unit conversion based on title
-                            # If title contains "千元", multiply by 1000 to get actual 元 value
+                            # DTNO data uses (千) for thousands - e.g., 單月合併營收(千)
+                            # If title contains "千" or "千元", multiply by 1000 to get actual value
                             # If title contains "百萬", multiply by 1000000
                             display_title = title
-                            if '(千元)' in title or '（千元）' in title:
-                                num_val = num_val * 1000  # Convert 千元 to 元
-                                display_title = title.replace('(千元)', '').replace('（千元）', '').strip()
+                            if '(千)' in title or '（千）' in title or '(千元)' in title or '（千元）' in title:
+                                num_val = num_val * 1000  # Convert 千/千元 to actual value
+                                display_title = title.replace('(千)', '').replace('（千）', '').replace('(千元)', '').replace('（千元）', '').strip()
                             elif '(百萬)' in title or '（百萬）' in title:
-                                num_val = num_val * 1000000  # Convert 百萬 to 元
+                                num_val = num_val * 1000000  # Convert 百萬 to actual value
                                 display_title = title.replace('(百萬)', '').replace('（百萬）', '').strip()
 
                             # 🔥 FIX: Use Chinese units (萬、億) and format cleanly
