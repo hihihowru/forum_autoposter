@@ -4145,16 +4145,16 @@ async def refresh_all_interactions():
                                     "total": total_emojis
                                 }
 
-                                # Update database
+                                # Update database (include donations)
                                 with conn.cursor() as update_cursor:
                                     update_cursor.execute("""
                                         UPDATE post_records
-                                        SET likes = %s, comments = %s, shares = %s
+                                        SET likes = %s, comments = %s, shares = %s, donations = %s
                                         WHERE post_id = %s
-                                    """, (likes, comments, collections, post_id))
+                                    """, (likes, comments, collections, donations, post_id))
 
                                 updated_count += 1
-                                logger.debug(f"Updated post {post_id}: likes={likes}, comments={comments}, collections={collections}")
+                                logger.debug(f"Updated post {post_id}: likes={likes}, comments={comments}, collections={collections}, donations={donations}")
                             else:
                                 logger.warning(f"無法獲取文章 {article_id} 的互動數據: HTTP {interaction_response.status_code}")
                                 failed_count += 1
@@ -4341,6 +4341,7 @@ async def refresh_filtered_interactions(request: Request):
                                 likes = emoji_count.get("like", 0)
                                 comments = data.get("commentCount", 0)
                                 collections = data.get("collectedCount", 0)
+                                donations = data.get("donation", 0)  # 🔥 Add donations
 
                                 emoji_data = {
                                     "like": likes,
@@ -4356,9 +4357,9 @@ async def refresh_filtered_interactions(request: Request):
                                 with conn.cursor() as update_cursor:
                                     update_cursor.execute("""
                                         UPDATE post_records
-                                        SET likes = %s, comments = %s, shares = %s
+                                        SET likes = %s, comments = %s, shares = %s, donations = %s
                                         WHERE post_id = %s
-                                    """, (likes, comments, collections, post_id))
+                                    """, (likes, comments, collections, donations, post_id))
 
                                 updated_count += 1
                                 updated_posts.append({
@@ -4366,7 +4367,8 @@ async def refresh_filtered_interactions(request: Request):
                                     "article_id": article_id,
                                     "likes": likes,
                                     "comments": comments,
-                                    "shares": collections
+                                    "shares": collections,
+                                    "donations": donations
                                 })
                             else:
                                 failed_count += 1
