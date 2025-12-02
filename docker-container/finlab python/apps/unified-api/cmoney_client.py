@@ -686,10 +686,10 @@ class CMoneyClient:
             # 計算總表情數
             total_emojis = likes + dislikes + laughs + money + shock + cry + think + angry
             
-            # 其他互動數據
+            # 其他互動數據 - 使用正確的 CMoney API 欄位名稱
             comments = result.get("commentCount", 0)
             collections = result.get("collectedCount", 0)
-            donations = result.get("donation", 0)
+            donations = result.get("donation", 0)  # 打賞數量
             
             # 計算總互動數 (包含所有表情、留言、收藏、打賞)
             total_interactions = total_emojis + comments + collections + donations

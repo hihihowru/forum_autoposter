@@ -704,8 +704,8 @@ const InteractionAnalysisPage: React.FC = () => {
           likes: post.likes || 0,
           comments: post.comments || 0,
           shares: post.shares || 0,
-          bookmarks: 0, // 目前沒有收藏數據
-          donations: 0, // 目前沒有打賞數據
+          bookmarks: 0,
+          donations: post.donations || 0,  // 🔥 使用 API 返回的打賞數據
           engagement_rate: post.views > 0 ? ((post.likes || 0) + (post.comments || 0) + (post.shares || 0)) / post.views : 0
         }));
 

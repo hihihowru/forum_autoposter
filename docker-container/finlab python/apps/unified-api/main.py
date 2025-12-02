@@ -314,6 +314,7 @@ def create_post_records_table():
                         likes BIGINT DEFAULT 0,
                         comments BIGINT DEFAULT 0,
                         shares BIGINT DEFAULT 0,
+                        donations BIGINT DEFAULT 0,
                         topic_id VARCHAR,
                         topic_title VARCHAR,
                         technical_analysis TEXT,
@@ -330,6 +331,17 @@ def create_post_records_table():
                 logger.info("✅ post_records 表創建成功")
             else:
                 logger.info("✅ post_records 表已存在")
+
+                # 🔥 Migration: Add donations column if not exists
+                cursor.execute("""
+                    SELECT column_name FROM information_schema.columns
+                    WHERE table_name = 'post_records' AND column_name = 'donations'
+                """)
+                if not cursor.fetchone():
+                    logger.info("📦 Adding donations column to post_records...")
+                    cursor.execute("ALTER TABLE post_records ADD COLUMN donations BIGINT DEFAULT 0")
+                    conn.commit()
+                    logger.info("✅ donations column added successfully")
 
     except Exception as e:
         logger.error(f"❌ 創建 post_records 表失敗: {e}")
@@ -3939,35 +3951,24 @@ async def refresh_kol_interactions(serial: str):
                     if interaction_response.status_code == 200:
                         data = interaction_response.json()
 
-                        # Extract interaction metrics
-                        likes = data.get("ArticleReplyDto", {}).get("SatisfiedCount", 0)
-                        comments = data.get("CommentCount", 0)
-                        shares = data.get("ArticleReplyDto", {}).get("ShareCount", 0)
-                        bookmarks = data.get("ArticleReplyDto", {}).get("CollectedCount", 0)
+                        # 🔥 FIX: Use correct CMoney API response field names
+                        # Response: emojiCount.like, commentCount, collectedCount, donation
+                        emoji_count = data.get("emojiCount", {})
+                        likes = emoji_count.get("like", 0)
+                        comments = data.get("commentCount", 0)
+                        shares = data.get("collectedCount", 0)  # Using collections as shares
+                        donations = data.get("donation", 0)  # 🔥 打賞數量
 
-                        # Extract emoji counts
-                        emojis = data.get("ArticleReplyDto", {}).get("PersonEmotionArticleDetailDto", {})
-                        emoji_data = {
-                            "like": emojis.get("Like", 0),
-                            "dislike": emojis.get("Dislike", 0),
-                            "laugh": emojis.get("Laugh", 0),
-                            "money": emojis.get("Money", 0),
-                            "shock": emojis.get("Shock", 0),
-                            "cry": emojis.get("Cry", 0),
-                            "think": emojis.get("Think", 0),
-                            "angry": emojis.get("Angry", 0)
-                        }
-
-                        # Update database
+                        # Update database (include donations if column exists)
                         with conn.cursor() as update_cursor:
                             update_cursor.execute("""
                                 UPDATE post_records
-                                SET likes = %s, comments = %s, shares = %s
+                                SET likes = %s, comments = %s, shares = %s, donations = %s
                                 WHERE post_id = %s
-                            """, (likes, comments, shares, post_id))
+                            """, (likes, comments, shares, donations, post_id))
 
                         updated_count += 1
-                        logger.info(f"Updated post {post_id}: {likes} likes, {comments} comments, {shares} shares")
+                        logger.info(f"Updated post {post_id}: {likes} likes, {comments} comments, {shares} shares, {donations} donations")
 
                 except Exception as e:
                     logger.error(f"Failed to update post {post_id}: {e}")
