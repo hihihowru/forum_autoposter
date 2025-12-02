@@ -53,6 +53,7 @@ interface InteractionPost {
   content: string;
   article_url: string;
   create_time: string;
+  updated_at?: string;  // 互動數據刷新時間
   commodity_tags: Array<{key: string, type: string, bullOrBear: string}>;
   community_topic?: string;
   source: 'system' | 'external';
@@ -706,6 +707,7 @@ const InteractionAnalysisPage: React.FC = () => {
           shares: post.shares || 0,
           bookmarks: 0,
           donations: post.donations || 0,  // 🔥 使用 API 返回的打賞數據
+          updated_at: post.updated_at || '',  // 互動數據刷新時間
           engagement_rate: post.views > 0 ? ((post.likes || 0) + (post.comments || 0) + (post.shares || 0)) / post.views : 0
         }));
 
@@ -913,8 +915,10 @@ const InteractionAnalysisPage: React.FC = () => {
       '讚數',
       '留言數',
       '分享數',
+      '打賞數',
       '總互動',
       '發文時間',
+      '互動數據刷新時間',
       'Article ID',
       '貼文連結'
     ];
@@ -927,8 +931,10 @@ const InteractionAnalysisPage: React.FC = () => {
       post.likes || 0,
       post.comments || 0,
       post.shares || 0,
-      (post.likes || 0) + (post.comments || 0) + (post.shares || 0),
+      post.donations || 0,
+      (post.likes || 0) + (post.comments || 0) + (post.shares || 0) + (post.donations || 0),
       post.create_time || '',
+      post.updated_at || '',
       post.article_id || '',
       post.article_url || ''
     ]);
