@@ -124,16 +124,6 @@ class GPTContentGenerator:
             system_prompt = self._inject_parameters(template['system_prompt_template'], params)
             user_prompt = self._inject_parameters(template['user_prompt_template'], params)
 
-            # 🔍 DEBUG: 印出關鍵參數
-            logger.info(f"🔍 DEBUG params keys: {list(params.keys())}")
-            logger.info(f"🔍 DEBUG has_realtime_price: {params.get('has_realtime_price', False)}")
-            logger.info(f"🔍 DEBUG ohlc_summary 長度: {len(params.get('ohlc_summary', ''))} 字")
-            if params.get('ohlc_summary'):
-                logger.info(f"🔍 DEBUG ohlc_summary 前 200 字: {params['ohlc_summary'][:200]}")
-            logger.info(f"📝 System Prompt 長度: {len(system_prompt)} 字")
-            logger.info(f"📝 User Prompt 長度: {len(user_prompt)} 字")
-            logger.info(f"🔍 DEBUG User Prompt 前 500 字: {user_prompt[:500]}")
-
             # 🔥 判斷是否為 GPT-5 系列
             # ⚠️ GPT-5 已禁用 - OpenAI 尚未發布 gpt-5 模型，會導致 API 錯誤
             is_gpt5_model = False  # chosen_model.startswith('gpt-5') - DISABLED
@@ -297,11 +287,6 @@ class GPTContentGenerator:
                     logger.error(f"❌ API 參數: {api_params}")
                     raise
 
-                # 🔍 DEBUG: 印出完整 response 結構
-                logger.info(f"🔍 DEBUG response.choices 長度: {len(response.choices)}")
-                logger.info(f"🔍 DEBUG response.choices[0].message: {response.choices[0].message}")
-                logger.info(f"🔍 DEBUG response.choices[0].finish_reason: {response.choices[0].finish_reason}")
-
                 # ⚠️ 檢查是否因 token 限制而截斷
                 finish_reason = response.choices[0].finish_reason
                 if finish_reason == "length":
@@ -311,16 +296,8 @@ class GPTContentGenerator:
 
                 content = response.choices[0].message.content
 
-            # 🔍 DEBUG: 印出 GPT 原始回應
-            logger.info(f"🔍 DEBUG GPT 原始回應長度: {len(content) if content else 0} 字")
-            logger.info(f"🔍 DEBUG GPT 原始回應前 200 字: {content[:200] if content else 'None'}")
-
             # 解析GPT回應
             result = self._parse_gpt_response(content, stock_id, stock_name)
-
-            # 🔍 DEBUG: 印出解析後的結果
-            logger.info(f"🔍 DEBUG 解析後 title: {result.get('title', 'None')}")
-            logger.info(f"🔍 DEBUG 解析後 content 長度: {len(result.get('content', ''))}")
 
             # 記錄使用的模板和 prompt
             result['template_id'] = template.get('id')

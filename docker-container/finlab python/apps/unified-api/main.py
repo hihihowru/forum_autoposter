@@ -2921,11 +2921,6 @@ async def manual_posting(request: Request):
         model_id_override = body.get('model_id_override')  # 批量覆蓋模型
         use_kol_default_model = body.get('use_kol_default_model', True)  # 預設使用 KOL 模型
 
-        # 🔍 DEBUG: 印出前端傳來的參數
-        logger.info(f"🔍 DEBUG trigger_type: {repr(trigger_type)} (type: {type(trigger_type).__name__})")
-        logger.info(f"🔍 DEBUG posting_type: {repr(posting_type)} (type: {type(posting_type).__name__})")
-        logger.info(f"🔍 DEBUG model_id_override: {repr(model_id_override)} (type: {type(model_id_override).__name__})")
-        logger.info(f"🔍 DEBUG use_kol_default_model: {repr(use_kol_default_model)} (type: {type(use_kol_default_model).__name__})")
 
         # 確定使用的模型
         chosen_model_id = None
@@ -3035,41 +3030,44 @@ async def manual_posting(request: Request):
                 "disabled": True
             }
 
-        # 🔥 Phase 2: 調用 Serper API 獲取新聞數據
+        # 🔥 Phase 2: 獲取新聞數據 (優先使用 DTNO 新聞，Serper 已停用)
         serper_analysis = {}
-        if serper_service:
-            try:
-                logger.info(f"🔍 開始搜尋 {stock_name}({stock_code}) 相關新聞...")
-                # 從前端獲取新聞配置（如果有）
-                news_config = body.get('news_config', {})
-                search_keywords = news_config.get('search_keywords')
-                time_range = news_config.get('time_range', 'd1')  # 預設過去1天
+        news_config = body.get('news_config', {})
+        enable_news_links = news_config.get('enable_news_links', True)  # 預設開啟
+        news_max_links = news_config.get('max_links', 5)  # 預設5個連結
 
-                # 🔥 FIX: 提取新聞連結設定 (enable_news_links, max_links)
-                enable_news_links = news_config.get('enable_news_links', True)  # 預設開啟
-                news_max_links = news_config.get('max_links', 5)  # 預設5個連結
+        logger.info(f"📰 新聞連結設定: enable={enable_news_links}, max_links={news_max_links}")
 
-                logger.info(f"📰 新聞連結設定: enable={enable_news_links}, max_links={news_max_links}")
+        # 🔥 使用 DTNO 新聞 (取代 Serper API)
+        try:
+            logger.info(f"🔍 開始從 DTNO 獲取 {stock_name}({stock_code}) 相關新聞...")
+            dtno_service = get_dtno_service()
+            dtno_news = await dtno_service.get_stock_news(stock_code, days=3)
 
-                serper_analysis = serper_service.get_comprehensive_stock_analysis(
-                    stock_code=stock_code,
-                    stock_name=stock_name,
-                    search_keywords=search_keywords,
-                    time_range=time_range,
-                    trigger_type=trigger_type
-                )
-
-                # 🔥 FIX: 將新聞連結設定注入到 serper_analysis，供 personalization_module 使用
-                serper_analysis['enable_news_links'] = enable_news_links
-                serper_analysis['news_max_links'] = news_max_links
-
-                news_count = len(serper_analysis.get('news_items', []))
-                logger.info(f"✅ Serper API 調用成功，找到 {news_count} 則新聞")
-            except Exception as serper_error:
-                logger.warning(f"⚠️  Serper API 調用失敗: {serper_error}，繼續使用空數據")
-                serper_analysis = {}
-        else:
-            logger.info("ℹ️  Serper 服務未初始化，跳過新聞搜尋")
+            if dtno_news and len(dtno_news) > 0:
+                logger.info(f"✅ DTNO 新聞獲取成功，找到 {len(dtno_news)} 則新聞")
+                serper_analysis = {
+                    'news_items': dtno_news,
+                    'enable_news_links': enable_news_links,
+                    'news_max_links': news_max_links,
+                    'data_source': 'dtno'
+                }
+            else:
+                logger.info("ℹ️  DTNO 無最近新聞，使用空數據")
+                serper_analysis = {
+                    'news_items': [],
+                    'enable_news_links': enable_news_links,
+                    'news_max_links': news_max_links,
+                    'data_source': 'none'
+                }
+        except Exception as dtno_news_error:
+            logger.warning(f"⚠️  DTNO 新聞獲取失敗: {dtno_news_error}，繼續使用空數據")
+            serper_analysis = {
+                'news_items': [],
+                'enable_news_links': enable_news_links,
+                'news_max_links': news_max_links,
+                'data_source': 'error'
+            }
 
         # 🔥 Phase 3: DTNO 數據 (基本面/技術面/籌碼面)
         dtno_data = {}
@@ -3116,12 +3114,6 @@ async def manual_posting(request: Request):
                     max_words=max_words,
                     model=chosen_model_id  # 🔥 傳遞選定的模型
                 )
-
-                # 🔍 DEBUG: 印出 gpt_result 的完整內容
-                logger.info(f"🔍 DEBUG gpt_result keys: {list(gpt_result.keys())}")
-                logger.info(f"🔍 DEBUG gpt_result title: {gpt_result.get('title', 'None')}")
-                logger.info(f"🔍 DEBUG gpt_result content 長度: {len(gpt_result.get('content', ''))}")
-                logger.info(f"🔍 DEBUG gpt_result content 前 100 字: {gpt_result.get('content', '')[:100]}")
 
                 title = gpt_result.get('title', f"{stock_name}({stock_code}) 分析")
                 content = gpt_result.get('content', '')
@@ -3261,7 +3253,6 @@ async def manual_posting(request: Request):
 
         # 生成參數記錄
         full_triggers_config_from_request = body.get('full_triggers_config', {})
-        logger.info(f"🔍 DEBUG: Received full_triggers_config from request: {json.dumps(full_triggers_config_from_request, ensure_ascii=False)[:200]}...")
 
         generation_params = {
             "method": "manual",
@@ -3281,8 +3272,6 @@ async def manual_posting(request: Request):
             "model_id_override": model_id_override,
             "use_kol_default_model": use_kol_default_model
         }
-
-        logger.info(f"🔍 DEBUG: generation_params to store: {json.dumps(generation_params, ensure_ascii=False)[:200]}...")
 
         # 確認數據庫連接可用
         if not db_pool:
@@ -3828,16 +3817,6 @@ async def get_posts(
 
             # 🔥 FIX: Convert naive UTC datetimes to Taipei timezone
             posts_with_timezone = [convert_post_datetimes_to_taipei(dict(post)) for post in posts]
-
-            # 🔍 DEBUG: Log full_triggers_config content for first post
-            if posts_with_timezone:
-                first_post = posts_with_timezone[0]
-                if 'generation_config' in first_post and first_post['generation_config']:
-                    has_ftc = 'full_triggers_config' in first_post['generation_config']
-                    logger.info(f"🔍 DEBUG: First post generation_config has full_triggers_config: {has_ftc}")
-                    if has_ftc:
-                        ftc_content = first_post['generation_config']['full_triggers_config']
-                        logger.info(f"🔍 DEBUG: full_triggers_config content: {json.dumps(ftc_content, ensure_ascii=False)[:300]}...")
 
             return {
                 "success": True,
@@ -8077,6 +8056,12 @@ async def execute_schedule_now(task_id: str, request: Request):
 
                 # Call manual_posting logic internally
                 # Build request body
+                # 🔥 FIX: Build news_config from schedule_config (has enable_news_links) or generation_config
+                news_config = {
+                    "enable_news_links": schedule_config.get('enable_news_links', generation_config.get('enable_news_links', True)),
+                    "max_links": schedule_config.get('news_max_links', generation_config.get('news_max_links', 5))
+                }
+
                 post_body = {
                     "stock_code": stock_code,
                     "stock_name": stock_name,  # 🔥 FIX: Use actual stock name
@@ -8086,9 +8071,9 @@ async def execute_schedule_now(task_id: str, request: Request):
                     "trigger_type": trigger_key or 'custom_stocks',  # 🔥 FIX: Use actual trigger_key that was executed
                     "generation_mode": "scheduled",  # 🔥 NEW: Mark as scheduled generation
                     "posting_type": generation_config.get('posting_type', 'analysis'),
-                    "max_words": generation_config.get('max_words', 200),
-                    # 🔥 FIX: Pass news_config from generation_config (user's batch settings)
-                    "news_config": generation_config.get('news_config', {}),
+                    "max_words": schedule_config.get('max_words', generation_config.get('max_words', 200)),
+                    # 🔥 FIX: Pass news_config built from schedule_config or generation_config
+                    "news_config": news_config,
                     # 🔥 FIX: Pass model override settings from generation_config
                     "model_id_override": generation_config.get('model_id_override'),
                     "use_kol_default_model": generation_config.get('use_kol_default_model', True),
@@ -8191,6 +8176,12 @@ async def execute_schedule_now(task_id: str, request: Request):
                         logger.info(f"📌 Fixed KOL selected for topic: {kol_serial}")
 
                     try:
+                        # 🔥 FIX: Build news_config from schedule_config or generation_config
+                        topic_news_config = {
+                            "enable_news_links": schedule_config.get('enable_news_links', generation_config.get('enable_news_links', True)),
+                            "max_links": schedule_config.get('news_max_links', generation_config.get('news_max_links', 5))
+                        }
+
                         # Build request body for pure topic post
                         post_body = {
                             "stock_code": None,  # 🔥 No stock code for pure topic
@@ -8201,8 +8192,8 @@ async def execute_schedule_now(task_id: str, request: Request):
                             "trigger_type": 'trending_topics',
                             "generation_mode": "scheduled",
                             "posting_type": generation_config.get('posting_type', 'analysis'),
-                            "max_words": generation_config.get('max_words', 200),
-                            "news_config": generation_config.get('news_config', {}),
+                            "max_words": schedule_config.get('max_words', generation_config.get('max_words', 200)),
+                            "news_config": topic_news_config,
                             "model_id_override": generation_config.get('model_id_override'),
                             "use_kol_default_model": generation_config.get('use_kol_default_model', True),
                             # 🔥 FIX: Pass data_sources (DTNO settings) from schedule_config or generation_config

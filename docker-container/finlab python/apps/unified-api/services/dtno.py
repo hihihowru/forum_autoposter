@@ -317,6 +317,116 @@ class DTNOService:
         return "\n".join(lines)
 
 
+    async def get_stock_news(
+        self,
+        stock_code: str,
+        days: int = 3
+    ) -> Optional[List[Dict[str, Any]]]:
+        """
+        Fetch stock news from DTNO (個股新聞 table)
+
+        Args:
+            stock_code: Stock code (e.g., "2330")
+            days: Number of days to filter (default: 3, only recent news)
+
+        Returns:
+            List of news articles with title, content, and datetime, or None if failed
+            Example: [
+                {
+                    'date': '2025-11-12',
+                    'datetime': '2025/11/12 01:23:10',
+                    'title': '蘋果新品助攻後市看俏...',
+                    'content': '外資高盛證券最新報告...',
+                    'link': '',  # No link for DTNO news
+                    'source': 'CMoney'
+                },
+                ...
+            ]
+        """
+        from datetime import timedelta
+
+        # DTNO Table ID for stock news
+        DTNO_STOCK_NEWS_ID = "105567992"
+
+        if not await self.cmoney.ensure_authenticated():
+            logger.error(f"CMoney authentication failed, cannot fetch news for {stock_code}")
+            return None
+
+        payload = {
+            "action": "getdtnodata",
+            "AppId": "99",
+            "DtNo": DTNO_STOCK_NEWS_ID,
+            "ParamStr": f"AssignID={stock_code};MTPeriod=0;DTMode=0;DTRange=5;DTOrder=1;MajorTable=M173;",
+            "AssignSPID": "",
+            "KeyMap": "",
+            "FilterNo": "0"
+        }
+
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Authorization": f"Bearer {self.cmoney.bearer_token}"
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    self.dtno_url,
+                    headers=headers,
+                    data=payload
+                )
+
+                if response.status_code != 200:
+                    logger.error(f"DTNO News API error: {response.status_code}")
+                    return None
+
+                data = response.json()
+
+                if 'Title' not in data or 'Data' not in data:
+                    logger.warning(f"DTNO News: Invalid response structure for {stock_code}")
+                    return None
+
+                rows = data['Data']
+                logger.info(f"DTNO News: Got {len(rows)} total news for {stock_code}")
+
+                # Filter news from last N days
+                cutoff_date = datetime.now() - timedelta(days=days)
+                recent_news = []
+
+                for row in rows:
+                    if len(row) < 4:  # Need at least date, datetime, title, content
+                        continue
+
+                    # Parse date (format: YYYYMMDD)
+                    date_str = str(row[0])
+                    try:
+                        if len(date_str) == 8 and date_str.isdigit():
+                            news_date = datetime.strptime(date_str, '%Y%m%d')
+                        else:
+                            continue  # Skip invalid dates
+
+                        # Only include news from last N days
+                        if news_date >= cutoff_date:
+                            recent_news.append({
+                                'date': news_date.strftime('%Y-%m-%d'),
+                                'datetime': str(row[1]),  # 發布日期時間
+                                'title': str(row[2]),  # 新聞標題
+                                'snippet': str(row[3])[:200],  # 新聞內容 (truncated for prompt)
+                                'content': str(row[3]),  # Full content
+                                'link': '',  # DTNO news don't have links
+                                'source': 'CMoney'
+                            })
+                    except Exception as e:
+                        # Skip unparseable dates
+                        continue
+
+                logger.info(f"DTNO News: Filtered {len(recent_news)} news from last {days} days for {stock_code}")
+                return recent_news if len(recent_news) > 0 else None
+
+        except Exception as e:
+            logger.error(f"Error fetching DTNO news for {stock_code}: {e}")
+            return None
+
+
 # Singleton instance
 _dtno_service: Optional[DTNOService] = None
 

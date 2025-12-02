@@ -342,26 +342,26 @@ class SerperNewsService:
         return min(score, 10.0)  # 最高10分
     
     def _get_mock_news(self, stock_code: str, stock_name: str) -> List[Dict[str, Any]]:
-        """模擬新聞數據"""
+        """模擬新聞數據 - 不包含連結（避免假連結）"""
         return [
             {
                 'title': f'{stock_name}({stock_code}) 最新財報表現亮眼',
                 'snippet': f'{stock_name} 發布最新財報，營收成長超預期，獲利能力持續提升，市場看好後市表現。',
-                'link': f'https://example.com/news/{stock_code}',
+                'link': '',  # 🔥 FIX: 模擬數據不提供連結
                 'date': datetime.now().strftime('%Y-%m-%d'),
                 'source': '模擬新聞'
             },
             {
                 'title': f'{stock_name} 技術面突破關鍵阻力位',
                 'snippet': f'{stock_name} 技術指標顯示強勢突破，成交量放大，後市可期。',
-                'link': f'https://example.com/analysis/{stock_code}',
+                'link': '',  # 🔥 FIX: 模擬數據不提供連結
                 'date': datetime.now().strftime('%Y-%m-%d'),
                 'source': '模擬分析'
             }
         ]
     
     def _get_mock_limit_up_analysis(self, stock_code: str, stock_name: str) -> Dict[str, Any]:
-        """模擬漲停分析數據"""
+        """模擬漲停分析數據 - 不包含連結（避免假連結）"""
         return {
             'stock_code': stock_code,
             'stock_name': stock_name,
@@ -369,7 +369,7 @@ class SerperNewsService:
                 {
                     'title': f'{stock_name} 財報亮眼帶動股價上漲',
                     'snippet': f'{stock_name} 最新財報表現優異，營收成長超預期，獲利能力持續提升。',
-                    'link': f'https://example.com/news/{stock_code}',
+                    'link': '',  # 🔥 FIX: 模擬數據不提供連結
                     'relevance_score': 8.5
                 }
             ],
@@ -377,7 +377,7 @@ class SerperNewsService:
                 {
                     'event': f'{stock_name} 營收成長超預期',
                     'description': f'{stock_name} 最新營收數據顯示強勁成長動能。',
-                    'link': f'https://example.com/earnings/{stock_code}'
+                    'link': ''  # 🔥 FIX: 模擬數據不提供連結
                 }
             ],
             'market_sentiment': 'positive',
