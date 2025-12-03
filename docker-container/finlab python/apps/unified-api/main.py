@@ -3153,7 +3153,9 @@ async def manual_posting(request: Request):
             # No custom content - generate with GPT
             logger.info(f"使用 GPT 生成器生成內容: stock_code={stock_code}, kol={kol_profile.get('nickname')}, model={chosen_model_id}")
             try:
-                gpt_result = gpt_generator.generate_stock_analysis(
+                # 🔥 FIX: Run GPT generation in thread pool to prevent blocking event loop
+                gpt_result = await asyncio.to_thread(
+                    gpt_generator.generate_stock_analysis,
                     stock_id=stock_code,
                     stock_name=stock_name,
                     kol_profile=kol_profile,  # 🔥 傳完整 profile
@@ -3550,7 +3552,9 @@ async def performance_test(request: Request):
 
         if gpt_generator:
             try:
-                gpt_result = gpt_generator.generate_stock_analysis(
+                # 🔥 FIX: Run GPT generation in thread pool to prevent blocking event loop
+                gpt_result = await asyncio.to_thread(
+                    gpt_generator.generate_stock_analysis,
                     stock_id=stock_code,
                     stock_name=stock_name,
                     kol_profile=kol_profile,  # 🔥 傳完整 profile
