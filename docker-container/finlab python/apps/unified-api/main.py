@@ -422,16 +422,21 @@ def create_schedule_tasks_table():
         if conn:
             return_db_connection(conn)
 
+# 🔥 Track running schedule executions to prevent duplicates
+_running_schedule_executions: set = set()
+
 # 🔥 APScheduler Background Job - Check and execute schedules
 async def check_schedules():
     """
     Background job that runs every minute to check for schedules ready to execute.
 
+    🔥 FIX: Now spawns schedule executions as background tasks instead of blocking.
+    This allows check_schedules to return quickly and not block subsequent checks.
+
     Flow:
     1. Find schedules where status='active' AND next_run <= NOW()
-    2. Execute each schedule (generate posts)
-    3. If auto_posting=true: Publish posts with queue intervals
-    4. Calculate and update next_run for next execution
+    2. Spawn background task for each schedule execution (non-blocking)
+    3. Background task handles: execute → auto-publish → update next_run
     """
     conn = None
     try:
@@ -486,56 +491,25 @@ async def check_schedules():
 
             logger.info(f"🚀 [APScheduler] Found {len(ready_schedules)} schedule(s) ready to execute NOW")
 
-            # Execute each schedule
+            # 🔥 FIX: Spawn background tasks for each schedule execution (non-blocking)
             for schedule in ready_schedules:
-                try:
-                    schedule_id = schedule['schedule_id']
-                    schedule_name = schedule['schedule_name']
-                    auto_posting = schedule.get('auto_posting', False)
-                    interval_seconds = schedule.get('interval_seconds', 300)
+                schedule_id = schedule['schedule_id']
+                schedule_name = schedule['schedule_name']
 
-                    logger.info(f"🚀 [APScheduler] Executing schedule: {schedule_name} (ID: {schedule_id})")
-                    logger.info(f"🔧 [APScheduler] auto_posting={auto_posting}, interval_seconds={interval_seconds}")
-
-                    # Import necessary modules for execution
-                    import httpx
-
-                    # Call the existing execute endpoint internally
-                    # We'll construct a request body similar to what the API endpoint expects
-                    async with httpx.AsyncClient(timeout=300.0) as client:
-                        # Call our own execute endpoint - use internal port for self-calls
-                        internal_port = os.getenv('PORT', '8000')
-                        api_url = f"http://127.0.0.1:{internal_port}"
-                        logger.info(f"🔗 [APScheduler] Calling internal API: {api_url}/api/schedule/execute/{schedule_id}")
-                        response = await client.post(
-                            f"{api_url}/api/schedule/execute/{schedule_id}",
-                            json={}
-                        )
-
-                        if response.status_code == 200:
-                            result = response.json()
-                            logger.info(f"✅ [APScheduler] Schedule executed successfully: {schedule_name}")
-
-                            # If auto_posting is enabled, publish posts with intervals
-                            if auto_posting and result.get('success'):
-                                # 🔥 FIX: posts is at root level, not in 'data'
-                                posts = result.get('posts', [])
-                                if posts:
-                                    logger.info(f"📤 [APScheduler] Auto-posting enabled - Publishing {len(posts)} posts with {interval_seconds}s intervals")
-                                    await publish_posts_with_queue(posts, interval_seconds)
-                                else:
-                                    logger.warning(f"⚠️ [APScheduler] No posts to publish for schedule: {schedule_name}")
-
-                            # Calculate next_run for the next execution
-                            await update_next_run(schedule_id, schedule, is_post_execution=True)
-                        else:
-                            logger.error(f"❌ [APScheduler] Schedule execution failed: {schedule_name}, status={response.status_code}")
-
-                except Exception as schedule_error:
-                    logger.error(f"❌ [APScheduler] Error executing schedule {schedule.get('schedule_name')}: {schedule_error}")
-                    logger.error(traceback.format_exc())
-                    # Continue with next schedule even if this one fails
+                # Skip if this schedule is already being executed
+                if schedule_id in _running_schedule_executions:
+                    logger.warning(f"⏭️ [APScheduler] Schedule already running, skipping: {schedule_name} (ID: {schedule_id})")
                     continue
+
+                logger.info(f"🚀 [APScheduler] Spawning background task for schedule: {schedule_name} (ID: {schedule_id})")
+
+                # 🔥 Spawn execution as background task - doesn't block check_schedules
+                asyncio.create_task(
+                    execute_schedule_background(schedule),
+                    name=f"schedule_{schedule_id}"
+                )
+
+            logger.info(f"✅ [APScheduler] Spawned {len(ready_schedules)} schedule execution task(s) - check_schedules returning")
 
     except Exception as e:
         logger.error(f"❌ [APScheduler] Error in check_schedules: {e}")
@@ -543,6 +517,74 @@ async def check_schedules():
     finally:
         if conn:
             return_db_connection(conn)
+
+async def execute_schedule_background(schedule: Dict):
+    """
+    🔥 NEW: Execute a single schedule as a background task.
+
+    This function runs independently of check_schedules, allowing multiple
+    schedules to execute concurrently without blocking the scheduler.
+
+    Args:
+        schedule: Schedule dictionary from database
+    """
+    schedule_id = schedule['schedule_id']
+    schedule_name = schedule['schedule_name']
+    auto_posting = schedule.get('auto_posting', False)
+    interval_seconds = schedule.get('interval_seconds', 300)
+
+    # Track this execution to prevent duplicates
+    _running_schedule_executions.add(schedule_id)
+
+    try:
+        logger.info(f"🚀 [Background] Starting execution: {schedule_name} (ID: {schedule_id})")
+        logger.info(f"🔧 [Background] auto_posting={auto_posting}, interval_seconds={interval_seconds}")
+
+        import httpx
+
+        # Call the existing execute endpoint internally
+        async with httpx.AsyncClient(timeout=300.0) as client:
+            internal_port = os.getenv('PORT', '8000')
+            api_url = f"http://127.0.0.1:{internal_port}"
+            logger.info(f"🔗 [Background] Calling internal API: {api_url}/api/schedule/execute/{schedule_id}")
+
+            response = await client.post(
+                f"{api_url}/api/schedule/execute/{schedule_id}",
+                json={}
+            )
+
+            if response.status_code == 200:
+                result = response.json()
+                logger.info(f"✅ [Background] Schedule executed successfully: {schedule_name}")
+
+                # If auto_posting is enabled, publish posts with intervals
+                if auto_posting and result.get('success'):
+                    posts = result.get('posts', [])
+                    if posts:
+                        logger.info(f"📤 [Background] Auto-posting {len(posts)} posts with {interval_seconds}s intervals")
+                        await publish_posts_with_queue(posts, interval_seconds)
+                    else:
+                        logger.warning(f"⚠️ [Background] No posts to publish for schedule: {schedule_name}")
+
+                # Calculate next_run for the next execution
+                await update_next_run(schedule_id, schedule, is_post_execution=True)
+            else:
+                logger.error(f"❌ [Background] Schedule execution failed: {schedule_name}, status={response.status_code}")
+                # Still update next_run even on failure to prevent stuck schedules
+                await update_next_run(schedule_id, schedule, is_post_execution=True)
+
+    except Exception as e:
+        logger.error(f"❌ [Background] Error executing schedule {schedule_name}: {e}")
+        logger.error(traceback.format_exc())
+        # Update next_run even on exception to prevent stuck schedules
+        try:
+            await update_next_run(schedule_id, schedule, is_post_execution=True)
+        except:
+            pass
+    finally:
+        # Remove from tracking set when done
+        _running_schedule_executions.discard(schedule_id)
+        logger.info(f"🏁 [Background] Execution completed: {schedule_name} (ID: {schedule_id})")
 
 async def publish_posts_with_queue(posts: List[Dict], interval_seconds: int):
     """
