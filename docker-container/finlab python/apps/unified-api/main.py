@@ -48,6 +48,122 @@ def get_current_time():
     """Returns current time in Asia/Taipei timezone"""
     return datetime.now(pytz.timezone('Asia/Taipei'))
 
+def sanitize_content_numbers(content: str) -> str:
+    """
+    🔥 Sanitize machine-like number formatting to sound more natural/human-like.
+
+    Fixes:
+    - Trailing zeros: 2.50萬 → 2.5萬, 3.00億 → 3億
+    - Awkward raw numbers: 112340千元 → 1.12億元, 15000張 → 1.5萬張
+    - Over-precise decimals: 1.234567億 → 1.23億
+    - Inconsistent units: 混合使用千/萬/億
+
+    Args:
+        content: The GPT-generated content to sanitize
+
+    Returns:
+        Sanitized content with natural number formatting
+    """
+    import re
+
+    if not content:
+        return content
+
+    result = content
+
+    # 1. Fix trailing zeros in decimals (2.50 → 2.5, 3.00 → 3)
+    # Pattern: number with trailing zeros before unit
+    result = re.sub(r'(\d+)\.0+([萬億千張元%股])', r'\1\2', result)  # 3.00萬 → 3萬
+    result = re.sub(r'(\d+\.\d*[1-9])0+([萬億千張元%股])', r'\1\2', result)  # 2.50萬 → 2.5萬
+
+    # 2. Convert awkward 千元 to proper units (112340千元 → 1.12億元)
+    def convert_qian_to_proper_unit(match):
+        num_str = match.group(1)
+        unit_suffix = match.group(2) if match.group(2) else '元'
+        try:
+            num = float(num_str)
+            actual_value = num * 1000  # 千 = 1000
+
+            if actual_value >= 100000000:  # >= 1億
+                formatted = actual_value / 100000000
+                if formatted == int(formatted):
+                    return f"{int(formatted)}億{unit_suffix}"
+                else:
+                    return f"{formatted:.2f}億{unit_suffix}".rstrip('0').rstrip('.')  + unit_suffix if unit_suffix != '元' else f"{formatted:.2f}".rstrip('0').rstrip('.') + "億元"
+            elif actual_value >= 10000:  # >= 1萬
+                formatted = actual_value / 10000
+                if formatted == int(formatted):
+                    return f"{int(formatted)}萬{unit_suffix}"
+                else:
+                    return f"{formatted:.2f}萬{unit_suffix}".rstrip('0').rstrip('.')
+            else:
+                return match.group(0)  # Keep original if small
+        except:
+            return match.group(0)
+
+    result = re.sub(r'(\d+(?:\.\d+)?)\s*千\s*(元)?', convert_qian_to_proper_unit, result)
+
+    # 3. Convert large raw numbers to 萬/億 units
+    def convert_large_number(match):
+        prefix = match.group(1) or ''
+        num_str = match.group(2)
+        unit = match.group(3)
+        try:
+            num = float(num_str.replace(',', ''))
+
+            # Skip if already has Chinese unit modifier
+            if num < 10000:
+                return match.group(0)
+
+            if num >= 100000000:  # >= 1億
+                formatted = num / 100000000
+                if formatted == int(formatted):
+                    return f"{prefix}{int(formatted)}億{unit}"
+                else:
+                    return f"{prefix}{formatted:.2f}億{unit}".replace('.00', '')
+            elif num >= 10000:  # >= 1萬
+                formatted = num / 10000
+                if formatted == int(formatted):
+                    return f"{prefix}{int(formatted)}萬{unit}"
+                else:
+                    # Remove trailing zeros
+                    formatted_str = f"{formatted:.2f}".rstrip('0').rstrip('.')
+                    return f"{prefix}{formatted_str}萬{unit}"
+            else:
+                return match.group(0)
+        except:
+            return match.group(0)
+
+    # Match patterns like: 15000張, 成交量15000張, etc.
+    result = re.sub(r'(成交量|買超|賣超|持股)?[\s]*(\d{5,}(?:,\d{3})*(?:\.\d+)?)\s*(張|股|元|手)', convert_large_number, result)
+
+    # 4. Fix over-precise decimals (1.234567億 → 1.23億)
+    def fix_decimal_precision(match):
+        num = match.group(1)
+        unit = match.group(2)
+        try:
+            # Parse and reformat with max 2 decimal places
+            num_float = float(num)
+            if num_float == int(num_float):
+                return f"{int(num_float)}{unit}"
+            else:
+                formatted = f"{num_float:.2f}".rstrip('0').rstrip('.')
+                return f"{formatted}{unit}"
+        except:
+            return match.group(0)
+
+    result = re.sub(r'(\d+\.\d{3,})(萬|億|%)', fix_decimal_precision, result)
+
+    # 5. Clean up redundant patterns
+    result = re.sub(r'(\d+)\.0([萬億])', r'\1\2', result)  # 5.0萬 → 5萬
+
+    # 6. Fix patterns like "X.XX萬元元" (double unit)
+    result = re.sub(r'(萬|億)(元)(元)', r'\1\2', result)
+
+    logger.debug(f"📝 Content sanitized: {len(content)} → {len(result)} chars")
+
+    return result
+
 def convert_post_datetimes_to_taipei(post_dict):
     """
     Convert naive UTC datetime fields in post dictionary to Taipei timezone strings.
@@ -3173,6 +3289,11 @@ async def manual_posting(request: Request):
 
                 title = gpt_result.get('title', f"{stock_name}({stock_code}) 分析")
                 content = gpt_result.get('content', '')
+
+                # 🔥 Sanitize content to fix machine-like number formatting
+                content = sanitize_content_numbers(content)
+                title = sanitize_content_numbers(title)
+
                 logger.info(f"✅ GPT 內容生成成功: title={title[:30]}...")
 
                 # 🔥 NEW: 附加簽名檔（在新聞連結之前）
@@ -3569,6 +3690,10 @@ async def performance_test(request: Request):
                 )
                 title = gpt_result.get('title', f"{stock_name}({stock_code}) 分析")
                 content = gpt_result.get('content', '')
+
+                # 🔥 Sanitize content to fix machine-like number formatting
+                content = sanitize_content_numbers(content)
+                title = sanitize_content_numbers(title)
             except Exception as gpt_error:
                 title = f"{stock_name}({stock_code}) 測試標題"
                 content = f"測試內容 - GPT 失敗: {gpt_error}"
