@@ -19,6 +19,7 @@ import {
   ThunderboltOutlined,
   LineChartOutlined,
   TeamOutlined,
+  ReadOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 // import type { MenuItem } from '../../types';
@@ -152,6 +153,11 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onRefresh }) => {
       key: '/engagement-management',
       label: '互動管理',
       icon: <LikeOutlined />,
+    },
+    {
+      key: '/investment-blog',
+      label: '投資網誌',
+      icon: <ReadOutlined />,
     },
     // ❌ DISABLED: 互動分析 (entire section - mock data, not helpful)
     // {

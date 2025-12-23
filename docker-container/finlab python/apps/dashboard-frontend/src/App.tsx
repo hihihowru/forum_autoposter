@@ -39,6 +39,9 @@ import ManualPostingPage from './components/PostingManagement/ManualPostingPage'
 // 互動管理組件
 import EngagementManagementPage from './pages/EngagementManagementPage';
 
+// 投資網誌組件
+import InvestmentBlogPage from './pages/InvestmentBlogPage';
+
 // 系統設置和用戶管理組件
 import SettingsPage from './components/Settings/SettingsPage';
 import UserManagement from './components/UserManagement/UserManagement';
@@ -320,6 +323,12 @@ const App: React.FC = () => {
                 <Route
                   path="/engagement-management/analytics"
                   element={<EngagementManagementPage />}
+                />
+
+                {/* 投資網誌路由 */}
+                <Route
+                  path="/investment-blog"
+                  element={<InvestmentBlogPage />}
                 />
 
                 {/* 系統設置路由 */}

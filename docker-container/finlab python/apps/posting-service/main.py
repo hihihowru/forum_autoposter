@@ -156,8 +156,10 @@ app.add_middleware(
 # 包含路由模組
 from routes import main_router
 from routes.schedule_routes_simple import router as schedule_router
+from routes.investment_blog_routes import router as investment_blog_router
 app.include_router(main_router)
 app.include_router(schedule_router, prefix="/api/schedule")
+app.include_router(investment_blog_router, prefix="/api")
 
 # API 端點配置
 TRENDING_API_URL = os.getenv("TRENDING_API_URL", "http://localhost:8004")
