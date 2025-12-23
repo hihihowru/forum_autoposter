@@ -156,11 +156,24 @@ app.add_middleware(
 # 包含路由模組
 from routes import main_router
 from routes.schedule_routes_simple import router as schedule_router
-from routes.investment_blog_routes import router as investment_blog_router
 app.include_router(main_router)
 app.include_router(schedule_router, prefix="/api/schedule")
-app.include_router(investment_blog_router, prefix="/api")
-print("✅ Investment Blog routes registered at /api/investment-blog/*")
+
+# 投資網誌路由 - 單獨處理避免影響其他服務
+try:
+    from routes.investment_blog_routes import router as investment_blog_router
+    app.include_router(investment_blog_router, prefix="/api")
+    print("✅ Investment Blog routes registered at /api/investment-blog/*")
+except Exception as e:
+    print(f"❌ Failed to load investment_blog_routes: {e}")
+    import traceback
+    traceback.print_exc()
+
+# 投資網誌測試端點 (直接在 main.py 定義，避免導入問題)
+@app.get("/api/investment-blog/test")
+async def investment_blog_test():
+    """測試端點 - 確認路由是否正常"""
+    return {"success": True, "message": "Investment Blog API is working!"}
 
 # API 端點配置
 TRENDING_API_URL = os.getenv("TRENDING_API_URL", "http://localhost:8004")
