@@ -8736,6 +8736,326 @@ except Exception as e:
     logger.error(traceback.format_exc())
 
 
+# ==================== 投資網誌 API Routes ====================
+# Investment Blog API endpoints
+
+try:
+    from investment_blog_service import investment_blog_service
+
+    @app.get("/api/investment-blog/sync-state")
+    async def get_investment_blog_sync_state(author_id: str = "newsyoudeservetoknow"):
+        """Get current sync state for investment blog author"""
+        try:
+            state = investment_blog_service.get_sync_state(author_id)
+            if state:
+                return {
+                    "author_id": state.get("author_id", author_id),
+                    "last_seen_article_id": state.get("last_seen_article_id"),
+                    "last_sync_at": state.get("last_sync_at").isoformat() if state.get("last_sync_at") else None,
+                    "articles_synced_count": state.get("articles_synced_count", 0)
+                }
+            else:
+                return {
+                    "author_id": author_id,
+                    "last_seen_article_id": None,
+                    "last_sync_at": None,
+                    "articles_synced_count": 0
+                }
+        except Exception as e:
+            logger.error(f"Failed to get sync state: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.post("/api/investment-blog/fetch")
+    async def fetch_investment_blog_articles(
+        author_id: str = "newsyoudeservetoknow",
+        fetch_content: bool = True
+    ):
+        """Fetch new articles from CMoney API and save to database"""
+        try:
+            # Fetch new articles
+            new_articles = await investment_blog_service.fetch_new_articles(
+                author_id=author_id,
+                fetch_content=fetch_content
+            )
+
+            # Save to database
+            saved_count = 0
+            if new_articles:
+                saved_count = investment_blog_service.save_articles(new_articles)
+
+            # Convert for response (truncate content)
+            articles_data = []
+            for article in new_articles:
+                content = article.get("content", "")
+                articles_data.append({
+                    "id": article.get("id"),
+                    "title": article.get("title"),
+                    "content": content[:500] + "..." if content and len(content) > 500 else content,
+                    "stock_tags": article.get("stock_tags", []),
+                    "preview_img_url": article.get("preview_img_url"),
+                    "total_views": article.get("total_views", 0),
+                    "created_at": article.get("created_at"),
+                    "updated_at": article.get("updated_at"),
+                    "status": "pending"
+                })
+
+            return {
+                "success": True,
+                "message": f"Fetched {len(new_articles)} new articles, saved {saved_count} to database",
+                "articles_count": len(new_articles),
+                "new_articles_count": saved_count,
+                "articles": articles_data
+            }
+        except Exception as e:
+            logger.error(f"Failed to fetch articles: {e}")
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.get("/api/investment-blog/articles")
+    async def get_investment_blog_articles(
+        status: str = None,
+        limit: int = 50
+    ):
+        """Get articles from database with optional status filter"""
+        try:
+            articles = investment_blog_service.get_all_articles(limit=limit, status=status)
+
+            articles_data = []
+            for article in articles:
+                content = article.get("content", "")
+                articles_data.append({
+                    "id": article.get("id"),
+                    "title": article.get("title"),
+                    "content": content[:500] + "..." if content and len(content) > 500 else content,
+                    "stock_tags": article.get("stock_tags") or [],
+                    "preview_img_url": article.get("preview_img_url"),
+                    "total_views": article.get("total_views"),
+                    "status": article.get("status"),
+                    "posted_at": article.get("posted_at").isoformat() if article.get("posted_at") else None,
+                    "posted_by": article.get("posted_by"),
+                    "cmoney_post_url": article.get("cmoney_post_url"),
+                    "fetched_at": article.get("fetched_at").isoformat() if article.get("fetched_at") else None,
+                    "cmoney_created_at": article.get("cmoney_created_at"),
+                    "cmoney_updated_at": article.get("cmoney_updated_at"),
+                })
+
+            return {
+                "success": True,
+                "articles": articles_data,
+                "total": len(articles_data)
+            }
+        except Exception as e:
+            logger.error(f"Failed to get articles: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.get("/api/investment-blog/articles/{article_id}")
+    async def get_investment_blog_article(article_id: str):
+        """Get single article with full content"""
+        try:
+            article = investment_blog_service.get_article_by_id(article_id)
+
+            if not article:
+                raise HTTPException(status_code=404, detail="Article not found")
+
+            return {
+                "success": True,
+                "article": {
+                    "id": article.get("id"),
+                    "title": article.get("title"),
+                    "content": article.get("content"),  # Full content
+                    "stock_tags": article.get("stock_tags") or [],
+                    "preview_img_url": article.get("preview_img_url"),
+                    "total_views": article.get("total_views"),
+                    "status": article.get("status"),
+                    "posted_at": article.get("posted_at").isoformat() if article.get("posted_at") else None,
+                    "posted_by": article.get("posted_by"),
+                    "cmoney_post_id": article.get("cmoney_post_id"),
+                    "cmoney_post_url": article.get("cmoney_post_url"),
+                    "post_error": article.get("post_error"),
+                    "fetched_at": article.get("fetched_at").isoformat() if article.get("fetched_at") else None,
+                    "cmoney_created_at": article.get("cmoney_created_at"),
+                    "cmoney_updated_at": article.get("cmoney_updated_at"),
+                }
+            }
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Failed to get article: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.post("/api/investment-blog/post")
+    async def post_investment_blog_article(
+        article_id: str,
+        poster_email: str = "forum_190@cmoney.com.tw",
+        stock_tags: list = None
+    ):
+        """Post an article to CMoney forum"""
+        try:
+            # Get article from database
+            article = investment_blog_service.get_article_by_id(article_id)
+
+            if not article:
+                raise HTTPException(status_code=404, detail="Article not found")
+
+            if article.get("status") == "posted":
+                return {
+                    "success": False,
+                    "message": "Article already posted",
+                    "article_id": article_id,
+                    "cmoney_post_url": article.get("cmoney_post_url")
+                }
+
+            # Use stock tags from request or article
+            tags_to_use = stock_tags or article.get("stock_tags") or []
+
+            # Format commodity tags for CMoney
+            commodity_tags = []
+            for stock_code in tags_to_use:
+                commodity_tags.append({
+                    "type": "Stock",
+                    "key": stock_code,
+                    "bullOrBear": 0  # Neutral
+                })
+
+            logger.info(f"📤 Publishing article {article_id} with {len(commodity_tags)} stock tags")
+
+            # Import CMoney client
+            from cmoney_client import CMoneyClient, LoginCredentials, ArticleData
+
+            # Poster credentials
+            POSTER_CREDENTIALS = {
+                "forum_186@cmoney.com.tw": "t7L9uY0f",
+                "forum_187@cmoney.com.tw": "a4E9jV8t",
+                "forum_188@cmoney.com.tw": "z6G5wN2m",
+                "forum_189@cmoney.com.tw": "c8L5nO3q",
+                "forum_190@cmoney.com.tw": "W4x6hU0r",
+                "forum_191@cmoney.com.tw": "H7u4rE2j",
+                "forum_192@cmoney.com.tw": "S3c6oJ9h",
+                "forum_193@cmoney.com.tw": "X2t1vU7l",
+                "forum_194@cmoney.com.tw": "j3H5dM7p",
+                "forum_195@cmoney.com.tw": "P9n1fT3x",
+                "forum_196@cmoney.com.tw": "b4C1pL3r",
+                "forum_197@cmoney.com.tw": "O8a3pF4c",
+                "forum_198@cmoney.com.tw": "i0L5fC3s",
+            }
+
+            poster_password = POSTER_CREDENTIALS.get(poster_email)
+            if not poster_password:
+                raise HTTPException(status_code=400, detail=f"No credentials found for {poster_email}")
+
+            # Login
+            cmoney_client = CMoneyClient()
+            credentials = LoginCredentials(email=poster_email, password=poster_password)
+            access_token = await cmoney_client.login(credentials)
+
+            if not access_token or not access_token.token:
+                raise HTTPException(status_code=401, detail="Login failed")
+
+            logger.info(f"✅ Logged in as {poster_email}")
+
+            # Build article data
+            article_data = ArticleData(
+                title=article.get("title"),
+                text=article.get("content"),
+                commodity_tags=commodity_tags if commodity_tags else None,
+                communityTopic=None
+            )
+
+            # Publish
+            publish_result = await cmoney_client.publish_article(access_token.token, article_data)
+
+            if publish_result.success:
+                post_url = f"https://www.cmoney.tw/forum/article/{publish_result.post_id}"
+
+                # Update article status
+                investment_blog_service.update_article_status(
+                    article_id=article_id,
+                    status="posted",
+                    posted_by=poster_email,
+                    cmoney_post_id=publish_result.post_id,
+                    cmoney_post_url=post_url
+                )
+
+                logger.info(f"✅ Article posted: {post_url}")
+
+                return {
+                    "success": True,
+                    "message": "Article posted successfully",
+                    "article_id": article_id,
+                    "cmoney_post_id": publish_result.post_id,
+                    "cmoney_post_url": post_url
+                }
+            else:
+                # Update with error
+                investment_blog_service.update_article_status(
+                    article_id=article_id,
+                    status="failed",
+                    error=publish_result.error_message or "Unknown error"
+                )
+
+                return {
+                    "success": False,
+                    "message": f"Failed to post: {publish_result.error_message or 'Unknown error'}",
+                    "article_id": article_id
+                }
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Failed to post article: {e}")
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.post("/api/investment-blog/articles/{article_id}/skip")
+    async def skip_investment_blog_article(article_id: str):
+        """Mark an article as skipped"""
+        try:
+            result = investment_blog_service.update_article_status(article_id, status="skipped")
+
+            if not result:
+                raise HTTPException(status_code=404, detail="Article not found or update failed")
+
+            return {
+                "success": True,
+                "message": "Article marked as skipped",
+                "article_id": article_id
+            }
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Failed to skip article: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.post("/api/investment-blog/articles/{article_id}/reset")
+    async def reset_investment_blog_article(article_id: str):
+        """Reset an article status back to pending"""
+        try:
+            result = investment_blog_service.update_article_status(article_id, status="pending")
+
+            if not result:
+                raise HTTPException(status_code=404, detail="Article not found or update failed")
+
+            return {
+                "success": True,
+                "message": "Article reset to pending",
+                "article_id": article_id
+            }
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Failed to reset article: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    logger.info("✅ Investment Blog routes registered successfully")
+
+except Exception as e:
+    logger.error(f"❌ Failed to register Investment Blog routes: {e}")
+    import traceback
+    logger.error(traceback.format_exc())
+
+
 if __name__ == "__main__":
     import uvicorn
 
