@@ -8981,9 +8981,15 @@ try:
             logger.info(f"✅ Logged in as {poster_email}")
 
             # Build content with source link at the end (with UTM tracking)
+            # Remove images since 同學會 only supports text and links
+            content = article.get('content', '')
+            content = re.sub(r'<img[^>]*>', '', content)  # Remove <img> tags
+            content = re.sub(r'!\[.*?\]\(.*?\)', '', content)  # Remove markdown images ![alt](url)
+            content = content.strip()
+
             author_id = article.get("author_id", "newsyoudeservetoknow")
             source_url = f"https://cmnews.com.tw/article/{author_id}-{article_id}?utm_source=aigc_forum"
-            content_with_source = f"{article.get('content', '')}\n\n原文連結：{source_url}"
+            content_with_source = f"{content}\n\n原文連結：{source_url}"
 
             # Build article data
             article_data = ArticleData(
