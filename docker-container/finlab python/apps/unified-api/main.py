@@ -8910,8 +8910,18 @@ try:
             tags_to_use = stock_tags or article.get("stock_tags") or []
 
             # Format commodity tags for CMoney
+            # Extract stock code from formats like "弘塑(3131)" → "3131"
+            import re
             commodity_tags = []
-            for stock_code in tags_to_use:
+            for tag in tags_to_use:
+                # Try to extract code from "Name(Code)" format
+                match = re.search(r'\((\d+)\)', str(tag))
+                if match:
+                    stock_code = match.group(1)
+                else:
+                    # Already just the code or unknown format
+                    stock_code = str(tag)
+
                 commodity_tags.append({
                     "type": "Stock",
                     "key": stock_code,
