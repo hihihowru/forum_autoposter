@@ -8929,12 +8929,14 @@ try:
                     stock_code = str(tag)
 
                 # Determine stock type:
-                # - All numbers → Taiwan stock (Stock)
-                # - Contains letters or # → US stock/index (USStock)
-                if stock_code.isdigit():
-                    stock_type = "Stock"  # Taiwan stock
+                # - All numbers (3131) → Taiwan stock (Stock)
+                # - Starts with TW (TWA00) → Taiwan index (Stock)
+                # - Starts with # (#DJI) → US index (USStock)
+                # - Other letters (AAPL) → US stock (USStock)
+                if stock_code.isdigit() or stock_code.upper().startswith("TW"):
+                    stock_type = "Stock"  # Taiwan stock or index
                 else:
-                    stock_type = "USStock"  # US stock or index (contains letters or #)
+                    stock_type = "USStock"  # US stock or index
 
                 commodity_tags.append({
                     "type": stock_type,
