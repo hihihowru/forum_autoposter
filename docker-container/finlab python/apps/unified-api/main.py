@@ -673,11 +673,10 @@ async def auto_post_investment_blog():
                 content = re.sub(r'\n\s*\n\s*\n+', '\n\n', content)
                 content = content.strip()
 
-                # Add source link with UTM (using short URL)
+                # Add source link with UTM
                 author_id = article.get("author_id", "newsyoudeservetoknow")
-                original_url = f"https://cmnews.com.tw/article/{author_id}-{article_id}?utm_source=aigc_forum"
-                short_url = create_short_url(original_url)
-                content_with_source = f"{content}\n\n原文連結：{short_url}"
+                source_url = f"https://cmnews.com.tw/article/{author_id}-{article_id}?utm_source=aigc_forum"
+                content_with_source = f"{content}\n\n原文連結：{source_url}"
 
                 # Build and publish
                 article_data = ArticleData(
@@ -9232,11 +9231,10 @@ try:
             content = re.sub(r'\n\s*\n\s*\n+', '\n\n', content)  # Max 2 newlines
             content = content.strip()
 
-            # Create short URL for source link
+            # Add source link with UTM
             author_id = article.get("author_id", "newsyoudeservetoknow")
-            original_url = f"https://cmnews.com.tw/article/{author_id}-{article_id}?utm_source=aigc_forum"
-            short_url = create_short_url(original_url)
-            content_with_source = f"{content}\n\n原文連結：{short_url}"
+            source_url = f"https://cmnews.com.tw/article/{author_id}-{article_id}?utm_source=aigc_forum"
+            content_with_source = f"{content}\n\n原文連結：{source_url}"
 
             # Build article data
             article_data = ArticleData(
