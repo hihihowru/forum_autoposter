@@ -8740,7 +8740,7 @@ except Exception as e:
 # Investment Blog API endpoints
 
 try:
-    from investment_blog_service import investment_blog_service
+    from investment_blog_api import investment_blog_service
 
     @app.get("/api/investment-blog/sync-state")
     async def get_investment_blog_sync_state(author_id: str = "newsyoudeservetoknow"):
