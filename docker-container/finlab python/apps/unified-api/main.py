@@ -8885,13 +8885,18 @@ try:
             raise HTTPException(status_code=500, detail=str(e))
 
     @app.post("/api/investment-blog/post")
-    async def post_investment_blog_article(
-        article_id: str,
-        poster_email: str = "forum_190@cmoney.com.tw",
-        stock_tags: list = None
-    ):
+    async def post_investment_blog_article(request: Request):
         """Post an article to CMoney forum"""
         try:
+            # Parse JSON body
+            body = await request.json()
+            article_id = body.get("article_id")
+            poster_email = body.get("poster_email", "forum_190@cmoney.com.tw")
+            stock_tags = body.get("stock_tags")
+
+            if not article_id:
+                raise HTTPException(status_code=400, detail="article_id is required")
+
             # Get article from database
             article = investment_blog_service.get_article_by_id(article_id)
 
