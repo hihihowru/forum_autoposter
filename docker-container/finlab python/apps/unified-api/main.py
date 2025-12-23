@@ -20,7 +20,8 @@ Recent Updates:
 
 from fastapi import FastAPI, Query, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
+import hashlib
 import logging
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
@@ -163,6 +164,49 @@ def sanitize_content_numbers(content: str) -> str:
     logger.debug(f"📝 Content sanitized: {len(content)} → {len(result)} chars")
 
     return result
+
+
+# ==================== URL Shortener ====================
+# Short URL format: /r/cmnews/{short_id}
+# This keeps cmnews context visible in the URL
+
+def create_short_url(original_url: str) -> str:
+    """
+    Create a short URL for cmnews article links.
+    Returns format: https://[API_HOST]/r/cmnews/{short_id}
+
+    The short_id is first 8 chars of MD5 hash of the original URL.
+    Stores mapping in database for redirect lookup.
+    """
+    try:
+        # Generate short ID from URL hash (first 8 chars)
+        short_id = hashlib.md5(original_url.encode()).hexdigest()[:8]
+
+        # Store in database
+        conn = get_db_connection()
+        if conn:
+            try:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        INSERT INTO short_urls (short_id, original_url, created_at)
+                        VALUES (%s, %s, NOW())
+                        ON CONFLICT (short_id) DO UPDATE SET
+                            hit_count = short_urls.hit_count + 0,
+                            original_url = EXCLUDED.original_url
+                    """, (short_id, original_url))
+                    conn.commit()
+            finally:
+                return_db_connection(conn)
+
+        # Get API host from environment or use default
+        api_host = os.getenv("API_HOST", "https://forum-autoposter-production.up.railway.app")
+        return f"{api_host}/r/cmnews/{short_id}"
+
+    except Exception as e:
+        logger.error(f"Failed to create short URL: {e}")
+        # Fallback to original URL if short URL creation fails
+        return original_url
+
 
 def convert_post_datetimes_to_taipei(post_dict):
     """
@@ -629,10 +673,11 @@ async def auto_post_investment_blog():
                 content = re.sub(r'\n\s*\n\s*\n+', '\n\n', content)
                 content = content.strip()
 
-                # Add source link with UTM
+                # Add source link with UTM (using short URL)
                 author_id = article.get("author_id", "newsyoudeservetoknow")
-                source_url = f"https://cmnews.com.tw/article/{author_id}-{article_id}?utm_source=aigc_forum"
-                content_with_source = f"{content}\n\n原文連結：{source_url}"
+                original_url = f"https://cmnews.com.tw/article/{author_id}-{article_id}?utm_source=aigc_forum"
+                short_url = create_short_url(original_url)
+                content_with_source = f"{content}\n\n原文連結：{short_url}"
 
                 # Build and publish
                 article_data = ArticleData(
@@ -1344,6 +1389,45 @@ async def health_check():
             "database_dependent": 11
         }
     }
+
+
+# ==================== URL Shortener Redirect ====================
+@app.get("/r/cmnews/{short_id}")
+async def redirect_short_url(short_id: str):
+    """
+    Redirect short URL to original cmnews article URL.
+    Format: /r/cmnews/{short_id} → https://cmnews.com.tw/article/...
+    """
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # Look up the original URL and increment hit count
+            cur.execute("""
+                UPDATE short_urls
+                SET hit_count = hit_count + 1
+                WHERE short_id = %s
+                RETURNING original_url
+            """, (short_id,))
+            result = cur.fetchone()
+            conn.commit()
+
+            if result:
+                logger.info(f"🔗 Short URL redirect: {short_id} → {result['original_url'][:50]}...")
+                return RedirectResponse(url=result['original_url'], status_code=302)
+            else:
+                logger.warning(f"⚠️ Short URL not found: {short_id}")
+                raise HTTPException(status_code=404, detail="Short URL not found")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Short URL redirect failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            return_db_connection(conn)
+
 
 @app.get("/api/kols")
 async def get_kols():
@@ -9148,9 +9232,11 @@ try:
             content = re.sub(r'\n\s*\n\s*\n+', '\n\n', content)  # Max 2 newlines
             content = content.strip()
 
+            # Create short URL for source link
             author_id = article.get("author_id", "newsyoudeservetoknow")
-            source_url = f"https://cmnews.com.tw/article/{author_id}-{article_id}?utm_source=aigc_forum"
-            content_with_source = f"{content}\n\n原文連結：{source_url}"
+            original_url = f"https://cmnews.com.tw/article/{author_id}-{article_id}?utm_source=aigc_forum"
+            short_url = create_short_url(original_url)
+            content_with_source = f"{content}\n\n原文連結：{short_url}"
 
             # Build article data
             article_data = ArticleData(
