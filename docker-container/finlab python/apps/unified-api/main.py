@@ -8954,10 +8954,15 @@ try:
 
             logger.info(f"✅ Logged in as {poster_email}")
 
+            # Build content with source link at the end
+            author_id = article.get("author_id", "newsyoudeservetoknow")
+            source_url = f"https://cmnews.com.tw/article/{author_id}-{article_id}"
+            content_with_source = f"{article.get('content', '')}\n\n原文連結：{source_url}"
+
             # Build article data
             article_data = ArticleData(
                 title=article.get("title"),
-                text=article.get("content"),
+                text=content_with_source,
                 commodity_tags=commodity_tags if commodity_tags else None,
                 communityTopic=None
             )
