@@ -8915,23 +8915,26 @@ try:
             tags_to_use = stock_tags or article.get("stock_tags") or []
 
             # Format commodity tags for CMoney
-            # Extract stock code from formats like "弘塑(3131)" → "3131"
+            # Extract stock code from formats like "弘塑(3131)" → "3131", "道瓊(#DJI)" → "#DJI"
             import re
             commodity_tags = []
             for tag in tags_to_use:
-                # Try to extract code from "Name(Code)" format - handles both TW "弘塑(3131)" and US "蘋果(AAPL)"
-                match = re.search(r'\(([A-Za-z0-9]+)\)', str(tag))
+                # Try to extract code from "Name(Code)" format
+                # Includes # for indices like #DJI, #GSPC, #IXIC
+                match = re.search(r'\((#?[A-Za-z0-9]+)\)', str(tag))
                 if match:
                     stock_code = match.group(1)
                 else:
                     # Already just the code or unknown format
                     stock_code = str(tag)
 
-                # Determine stock type: USStock if contains letters, Stock if all numbers
+                # Determine stock type:
+                # - All numbers → Taiwan stock (Stock)
+                # - Contains letters or # → US stock/index (USStock)
                 if stock_code.isdigit():
                     stock_type = "Stock"  # Taiwan stock
                 else:
-                    stock_type = "USStock"  # US stock (contains letters)
+                    stock_type = "USStock"  # US stock or index (contains letters or #)
 
                 commodity_tags.append({
                     "type": stock_type,
