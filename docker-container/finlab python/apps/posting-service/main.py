@@ -160,6 +160,7 @@ from routes.investment_blog_routes import router as investment_blog_router
 app.include_router(main_router)
 app.include_router(schedule_router, prefix="/api/schedule")
 app.include_router(investment_blog_router, prefix="/api")
+print("✅ Investment Blog routes registered at /api/investment-blog/*")
 
 # API 端點配置
 TRENDING_API_URL = os.getenv("TRENDING_API_URL", "http://localhost:8004")
