@@ -8919,16 +8919,22 @@ try:
             import re
             commodity_tags = []
             for tag in tags_to_use:
-                # Try to extract code from "Name(Code)" format
-                match = re.search(r'\((\d+)\)', str(tag))
+                # Try to extract code from "Name(Code)" format - handles both TW "弘塑(3131)" and US "蘋果(AAPL)"
+                match = re.search(r'\(([A-Za-z0-9]+)\)', str(tag))
                 if match:
                     stock_code = match.group(1)
                 else:
                     # Already just the code or unknown format
                     stock_code = str(tag)
 
+                # Determine stock type: USStock if contains letters, Stock if all numbers
+                if stock_code.isdigit():
+                    stock_type = "Stock"  # Taiwan stock
+                else:
+                    stock_type = "USStock"  # US stock (contains letters)
+
                 commodity_tags.append({
-                    "type": "Stock",
+                    "type": stock_type,
                     "key": stock_code,
                     "bullOrBear": 0  # Neutral
                 })
