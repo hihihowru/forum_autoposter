@@ -16,6 +16,7 @@ import {
   Tooltip,
   Modal,
   Statistic,
+  Switch,
 } from 'antd';
 import {
   SendOutlined,
@@ -29,6 +30,7 @@ import {
   EyeOutlined,
   LinkOutlined,
   ReloadOutlined,
+  RobotOutlined,
 } from '@ant-design/icons';
 
 const { Title, Text } = Typography;
@@ -71,6 +73,8 @@ const InvestmentBlogPage: React.FC = () => {
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
   const [contentModalVisible, setContentModalVisible] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
+  const [autoPostEnabled, setAutoPostEnabled] = useState(false);
+  const [togglingAutoPost, setTogglingAutoPost] = useState(false);
 
   // 指定發文帳號
   const [posterConfig] = useState<PostingConfig>({
@@ -87,7 +91,43 @@ const InvestmentBlogPage: React.FC = () => {
   useEffect(() => {
     loadSyncState();
     loadArticles();
+    loadAutoPostStatus();
   }, [statusFilter]);
+
+  // 載入自動發文狀態
+  const loadAutoPostStatus = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/investment-blog/auto-post/status`);
+      if (!response.ok) throw new Error('載入自動發文狀態失敗');
+      const data = await response.json();
+      setAutoPostEnabled(data.enabled || false);
+    } catch (error) {
+      console.error('載入自動發文狀態失敗:', error);
+    }
+  };
+
+  // 切換自動發文
+  const toggleAutoPost = async (enabled: boolean) => {
+    try {
+      setTogglingAutoPost(true);
+      const response = await fetch(`${API_BASE}/api/investment-blog/auto-post/toggle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled })
+      });
+
+      if (!response.ok) throw new Error('切換自動發文失敗');
+      const data = await response.json();
+
+      setAutoPostEnabled(data.enabled);
+      message.success(data.message);
+    } catch (error) {
+      console.error('切換自動發文失敗:', error);
+      message.error('切換自動發文失敗');
+    } finally {
+      setTogglingAutoPost(false);
+    }
+  };
 
   // 載入同步狀態
   const loadSyncState = async () => {
@@ -404,6 +444,37 @@ const InvestmentBlogPage: React.FC = () => {
               <Statistic title="待處理" value={pendingCount} valueStyle={{ color: '#1890ff' }} />
               <Statistic title="已發佈" value={postedCount} valueStyle={{ color: '#52c41a' }} />
             </Space>
+          </Col>
+        </Row>
+      </Card>
+
+      {/* 自動發文開關 */}
+      <Card style={{ marginBottom: '24px' }}>
+        <Row align="middle" justify="space-between">
+          <Col>
+            <Space>
+              <RobotOutlined style={{ fontSize: '20px', color: autoPostEnabled ? '#52c41a' : '#999' }} />
+              <div>
+                <Text strong style={{ fontSize: '16px' }}>自動發文</Text>
+                <div>
+                  <Text type="secondary">
+                    {autoPostEnabled
+                      ? '已開啟 - 每小時自動抓取新文章並發佈'
+                      : '已關閉 - 需手動抓取和發佈文章'}
+                  </Text>
+                </div>
+              </div>
+            </Space>
+          </Col>
+          <Col>
+            <Switch
+              checked={autoPostEnabled}
+              onChange={toggleAutoPost}
+              loading={togglingAutoPost}
+              checkedChildren="開"
+              unCheckedChildren="關"
+              style={{ transform: 'scale(1.3)' }}
+            />
           </Col>
         </Row>
       </Card>

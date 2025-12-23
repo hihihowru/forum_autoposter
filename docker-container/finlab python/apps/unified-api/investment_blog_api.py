@@ -404,6 +404,51 @@ class InvestmentBlogService:
             logger.error(f"Failed to update article status: {e}")
             return False
 
+    # ==================== Auto-Post Management ====================
+
+    def get_auto_post_status(self, author_id: str = None) -> bool:
+        """Get auto-post enabled status"""
+        author_id = author_id or self.DEFAULT_AUTHOR_ID
+        try:
+            conn = get_db_connection()
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT auto_post_enabled FROM investment_blog_sync_state
+                    WHERE author_id = %s
+                """, (author_id,))
+                result = cur.fetchone()
+            conn.close()
+            return result.get("auto_post_enabled", False) if result else False
+        except Exception as e:
+            logger.error(f"Failed to get auto-post status: {e}")
+            return False
+
+    def set_auto_post_status(self, enabled: bool, author_id: str = None) -> bool:
+        """Set auto-post enabled status"""
+        author_id = author_id or self.DEFAULT_AUTHOR_ID
+        try:
+            conn = get_db_connection()
+            with conn.cursor() as cur:
+                # Upsert the status
+                cur.execute("""
+                    INSERT INTO investment_blog_sync_state (author_id, auto_post_enabled)
+                    VALUES (%s, %s)
+                    ON CONFLICT (author_id)
+                    DO UPDATE SET auto_post_enabled = EXCLUDED.auto_post_enabled,
+                                  updated_at = CURRENT_TIMESTAMP
+                """, (author_id, enabled))
+                conn.commit()
+            conn.close()
+            logger.info(f"Auto-post {'enabled' if enabled else 'disabled'} for {author_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to set auto-post status: {e}")
+            return False
+
+    def get_pending_articles(self, limit: int = 10) -> List[Dict]:
+        """Get pending articles for auto-posting"""
+        return self.get_all_articles(limit=limit, status="pending")
+
 
 # Singleton instance
 investment_blog_service = InvestmentBlogService()

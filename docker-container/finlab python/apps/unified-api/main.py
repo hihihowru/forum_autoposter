@@ -541,6 +541,138 @@ def create_schedule_tasks_table():
 # 🔥 Track running schedule executions to prevent duplicates
 _running_schedule_executions: set = set()
 
+# 🔥 Investment Blog Auto-Post Job
+async def auto_post_investment_blog():
+    """
+    Background job that runs every hour to auto-post investment blog articles.
+    Only runs if auto_post_enabled is True.
+    """
+    try:
+        from investment_blog_api import investment_blog_service
+        from cmoney_client import CMoneyClient, LoginCredentials, ArticleData
+        import re
+
+        logger.info("📰 [Investment Blog] Checking auto-post status...")
+
+        # Check if auto-post is enabled
+        if not investment_blog_service.get_auto_post_status():
+            logger.info("📰 [Investment Blog] Auto-post is disabled, skipping")
+            return
+
+        logger.info("📰 [Investment Blog] Auto-post is enabled, starting...")
+
+        # Fetch new articles first
+        new_articles = await investment_blog_service.fetch_new_articles(fetch_content=True)
+        if new_articles:
+            saved = investment_blog_service.save_articles(new_articles)
+            logger.info(f"📰 [Investment Blog] Fetched and saved {saved} new articles")
+
+        # Get pending articles
+        pending_articles = investment_blog_service.get_pending_articles(limit=10)
+        if not pending_articles:
+            logger.info("📰 [Investment Blog] No pending articles to post")
+            return
+
+        logger.info(f"📰 [Investment Blog] Found {len(pending_articles)} pending articles to post")
+
+        # Poster credentials
+        poster_email = "forum_190@cmoney.com.tw"
+        poster_password = "W4x6hU0r"
+
+        # Login once
+        cmoney_client = CMoneyClient()
+        credentials = LoginCredentials(email=poster_email, password=poster_password)
+        access_token = await cmoney_client.login(credentials)
+
+        if not access_token or not access_token.token:
+            logger.error("📰 [Investment Blog] Failed to login, aborting auto-post")
+            return
+
+        posted_count = 0
+        for article in pending_articles:
+            try:
+                article_id = article.get("id")
+                logger.info(f"📰 [Investment Blog] Auto-posting article: {article_id}")
+
+                # Process stock tags
+                stock_tags = article.get("stock_tags") or []
+                commodity_tags = []
+                for tag in stock_tags:
+                    match = re.search(r'\((#?[A-Za-z0-9]+)\)', str(tag))
+                    if match:
+                        stock_code = match.group(1)
+                    else:
+                        stock_code = str(tag)
+
+                    if stock_code.isdigit() or stock_code.upper().startswith("TW"):
+                        stock_type = "Stock"
+                    else:
+                        stock_type = "USStock"
+
+                    commodity_tags.append({
+                        "type": stock_type,
+                        "key": stock_code,
+                        "bullOrBear": 0
+                    })
+
+                # Clean content
+                content = article.get('content', '')
+                content = re.sub(r'<figure[^>]*>.*?</figure>', '', content, flags=re.IGNORECASE | re.DOTALL)
+                content = re.sub(r'<picture[^>]*>.*?</picture>', '', content, flags=re.IGNORECASE | re.DOTALL)
+                content = re.sub(r'<img[^>]*/?>', '', content, flags=re.IGNORECASE)
+                content = re.sub(r'<h[1-6][^>]*>(.*?)</h[1-6]>', r'\n\n\1\n', content, flags=re.IGNORECASE | re.DOTALL)
+                content = re.sub(r'</p>', '\n\n', content, flags=re.IGNORECASE)
+                content = re.sub(r'</div>', '\n\n', content, flags=re.IGNORECASE)
+                content = re.sub(r'<br\s*/?>', '\n', content, flags=re.IGNORECASE)
+                content = re.sub(r'</li>', '\n', content, flags=re.IGNORECASE)
+                content = re.sub(r'<[^>]+>', '', content)
+                content = re.sub(r'\n\s*\n\s*\n+', '\n\n', content)
+                content = content.strip()
+
+                # Add source link with UTM
+                author_id = article.get("author_id", "newsyoudeservetoknow")
+                source_url = f"https://cmnews.com.tw/article/{author_id}-{article_id}?utm_source=aigc_forum"
+                content_with_source = f"{content}\n\n原文連結：{source_url}"
+
+                # Build and publish
+                article_data = ArticleData(
+                    title=article.get("title"),
+                    text=content_with_source,
+                    commodity_tags=commodity_tags if commodity_tags else None,
+                    communityTopic=None
+                )
+
+                publish_result = await cmoney_client.publish_article(access_token.token, article_data)
+
+                if publish_result.success:
+                    post_url = f"https://www.cmoney.tw/forum/article/{publish_result.post_id}"
+                    investment_blog_service.update_article_status(
+                        article_id=article_id,
+                        status="posted",
+                        posted_by=poster_email,
+                        cmoney_post_id=publish_result.post_id,
+                        cmoney_post_url=post_url
+                    )
+                    posted_count += 1
+                    logger.info(f"📰 [Investment Blog] Posted: {post_url}")
+                else:
+                    investment_blog_service.update_article_status(
+                        article_id=article_id,
+                        status="failed",
+                        error=publish_result.error_message or "Unknown error"
+                    )
+                    logger.error(f"📰 [Investment Blog] Failed to post {article_id}: {publish_result.error_message}")
+
+            except Exception as article_error:
+                logger.error(f"📰 [Investment Blog] Error posting article {article.get('id')}: {article_error}")
+
+        logger.info(f"📰 [Investment Blog] Auto-post complete: {posted_count}/{len(pending_articles)} posted")
+
+    except Exception as e:
+        logger.error(f"📰 [Investment Blog] Auto-post job failed: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+
 # 🔥 APScheduler Background Job - Check and execute schedules
 async def check_schedules():
     """
@@ -1000,9 +1132,19 @@ async def startup_event():
             max_instances=1  # Prevent overlapping runs
         )
 
+        # Add job for investment blog auto-posting (every hour)
+        scheduler.add_job(
+            auto_post_investment_blog,
+            'interval',
+            hours=1,
+            id='auto_post_investment_blog',
+            replace_existing=True,
+            max_instances=1
+        )
+
         # Start the scheduler
         scheduler.start()
-        logger.info("✅ [APScheduler] 排程器啟動成功 - 每分鐘檢查排程任務")
+        logger.info("✅ [APScheduler] 排程器啟動成功 - 每分鐘檢查排程任務, 每小時檢查投資網誌自動發文")
 
     except Exception as scheduler_error:
         logger.error(f"❌ [APScheduler] 排程器啟動失敗: {scheduler_error}")
@@ -9102,6 +9244,46 @@ try:
             raise
         except Exception as e:
             logger.error(f"Failed to reset article: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    # ==================== Auto-Post Endpoints ====================
+
+    @app.get("/api/investment-blog/auto-post/status")
+    async def get_auto_post_status():
+        """Get auto-post enabled status"""
+        try:
+            enabled = investment_blog_service.get_auto_post_status()
+            sync_state = investment_blog_service.get_sync_state()
+            return {
+                "success": True,
+                "enabled": enabled,
+                "last_sync_at": sync_state.get("last_sync_at").isoformat() if sync_state and sync_state.get("last_sync_at") else None,
+                "articles_synced_count": sync_state.get("articles_synced_count", 0) if sync_state else 0
+            }
+        except Exception as e:
+            logger.error(f"Failed to get auto-post status: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.post("/api/investment-blog/auto-post/toggle")
+    async def toggle_auto_post(request: Request):
+        """Toggle auto-post on/off"""
+        try:
+            body = await request.json()
+            enabled = body.get("enabled", False)
+
+            result = investment_blog_service.set_auto_post_status(enabled)
+            if not result:
+                raise HTTPException(status_code=500, detail="Failed to update auto-post status")
+
+            return {
+                "success": True,
+                "enabled": enabled,
+                "message": f"自動發文已{'開啟' if enabled else '關閉'}"
+            }
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Failed to toggle auto-post: {e}")
             raise HTTPException(status_code=500, detail=str(e))
 
     logger.info("✅ Investment Blog routes registered successfully")
