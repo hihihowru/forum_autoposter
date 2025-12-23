@@ -8980,9 +8980,9 @@ try:
 
             logger.info(f"✅ Logged in as {poster_email}")
 
-            # Build content with source link at the end
+            # Build content with source link at the end (with UTM tracking)
             author_id = article.get("author_id", "newsyoudeservetoknow")
-            source_url = f"https://cmnews.com.tw/article/{author_id}-{article_id}"
+            source_url = f"https://cmnews.com.tw/article/{author_id}-{article_id}?utm_source=aigc_forum"
             content_with_source = f"{article.get('content', '')}\n\n原文連結：{source_url}"
 
             # Build article data
