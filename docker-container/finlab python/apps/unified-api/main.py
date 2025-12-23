@@ -8981,13 +8981,24 @@ try:
             logger.info(f"✅ Logged in as {poster_email}")
 
             # Build content with source link at the end (with UTM tracking)
-            # Remove images since 同學會 only supports text and links
+            # Clean HTML - 同學會 only supports plain text and links
             content = article.get('content', '')
-            content = re.sub(r'<img[^>]*/?>', '', content, flags=re.IGNORECASE)  # Remove <img> tags
-            content = re.sub(r'<figure[^>]*>.*?</figure>', '', content, flags=re.IGNORECASE | re.DOTALL)  # Remove <figure> blocks
-            content = re.sub(r'<picture[^>]*>.*?</picture>', '', content, flags=re.IGNORECASE | re.DOTALL)  # Remove <picture> blocks
-            content = re.sub(r'!\[.*?\]\(.*?\)', '', content)  # Remove markdown images ![alt](url)
-            content = re.sub(r'\n\s*\n\s*\n', '\n\n', content)  # Clean up excessive newlines
+
+            # Remove image-related elements entirely
+            content = re.sub(r'<figure[^>]*>.*?</figure>', '', content, flags=re.IGNORECASE | re.DOTALL)
+            content = re.sub(r'<picture[^>]*>.*?</picture>', '', content, flags=re.IGNORECASE | re.DOTALL)
+            content = re.sub(r'<img[^>]*/?>', '', content, flags=re.IGNORECASE)
+            content = re.sub(r'!\[.*?\]\(.*?\)', '', content)  # Markdown images
+
+            # Convert <p> and <br> to newlines
+            content = re.sub(r'</p>\s*<p[^>]*>', '\n\n', content, flags=re.IGNORECASE)
+            content = re.sub(r'<br\s*/?>', '\n', content, flags=re.IGNORECASE)
+
+            # Remove all remaining HTML tags but keep text
+            content = re.sub(r'<[^>]+>', '', content)
+
+            # Clean up whitespace
+            content = re.sub(r'\n\s*\n\s*\n+', '\n\n', content)
             content = content.strip()
 
             author_id = article.get("author_id", "newsyoudeservetoknow")
