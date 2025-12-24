@@ -699,6 +699,9 @@ async def auto_post_investment_blog():
                     )
                     posted_count += 1
                     logger.info(f"📰 [Investment Blog] Posted: {post_url}")
+
+                    # Wait 30 seconds before next post to avoid rate limiting
+                    await asyncio.sleep(30)
                 else:
                     investment_blog_service.update_article_status(
                         article_id=article_id,
@@ -1176,11 +1179,11 @@ async def startup_event():
             max_instances=1  # Prevent overlapping runs
         )
 
-        # Add job for investment blog auto-posting (every hour)
+        # Add job for investment blog auto-posting (every 30 minutes)
         scheduler.add_job(
             auto_post_investment_blog,
             'interval',
-            hours=1,
+            minutes=30,
             id='auto_post_investment_blog',
             replace_existing=True,
             max_instances=1
@@ -1188,7 +1191,7 @@ async def startup_event():
 
         # Start the scheduler
         scheduler.start()
-        logger.info("✅ [APScheduler] 排程器啟動成功 - 每分鐘檢查排程任務, 每小時檢查投資網誌自動發文")
+        logger.info("✅ [APScheduler] 排程器啟動成功 - 每分鐘檢查排程任務, 每30分鐘檢查投資網誌自動發文")
 
     except Exception as scheduler_error:
         logger.error(f"❌ [APScheduler] 排程器啟動失敗: {scheduler_error}")
