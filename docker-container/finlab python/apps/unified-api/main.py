@@ -175,16 +175,17 @@ def create_short_url(original_url: str) -> str:
     Example: https://is.gd/abc123
     """
     import urllib.parse
-    import requests
 
     try:
         encoded_url = urllib.parse.quote(original_url, safe='')
         api_url = f"https://is.gd/create.php?format=simple&url={encoded_url}"
 
-        response = requests.get(api_url, timeout=10, headers={
-            'User-Agent': 'Mozilla/5.0 (compatible; ForumAutoPoster/1.0)'
-        })
-        response.raise_for_status()
+        # Use httpx (sync) instead of requests
+        with httpx.Client(timeout=10.0) as client:
+            response = client.get(api_url, headers={
+                'User-Agent': 'Mozilla/5.0 (compatible; ForumAutoPoster/1.0)'
+            })
+            response.raise_for_status()
 
         short_url = response.text.strip()
         logger.info(f"🔗 Short URL created: {short_url}")
