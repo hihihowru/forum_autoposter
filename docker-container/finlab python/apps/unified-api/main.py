@@ -166,45 +166,33 @@ def sanitize_content_numbers(content: str) -> str:
     return result
 
 
-# ==================== URL Shortener ====================
-# Short URL format: /r/cmnews/{short_id}
-# This keeps cmnews context visible in the URL
-
+# ==================== URL Shortener (is.gd) ====================
 def create_short_url(original_url: str) -> str:
     """
-    Create a short URL for cmnews article links.
-    Returns format: https://[API_HOST]/r/cmnews/{short_id}
+    Create a short URL using is.gd service.
+    Free, no API key required.
 
-    The short_id is first 8 chars of MD5 hash of the original URL.
-    Stores mapping in database for redirect lookup.
+    Example: https://is.gd/abc123
     """
+    import urllib.parse
+    import requests
+
     try:
-        # Generate short ID from URL hash (first 8 chars)
-        short_id = hashlib.md5(original_url.encode()).hexdigest()[:8]
+        encoded_url = urllib.parse.quote(original_url, safe='')
+        api_url = f"https://is.gd/create.php?format=simple&url={encoded_url}"
 
-        # Store in database
-        conn = get_db_connection()
-        if conn:
-            try:
-                with conn.cursor() as cur:
-                    cur.execute("""
-                        INSERT INTO short_urls (short_id, original_url, created_at)
-                        VALUES (%s, %s, NOW())
-                        ON CONFLICT (short_id) DO UPDATE SET
-                            hit_count = short_urls.hit_count + 0,
-                            original_url = EXCLUDED.original_url
-                    """, (short_id, original_url))
-                    conn.commit()
-            finally:
-                return_db_connection(conn)
+        response = requests.get(api_url, timeout=10, headers={
+            'User-Agent': 'Mozilla/5.0 (compatible; ForumAutoPoster/1.0)'
+        })
+        response.raise_for_status()
 
-        # Get API host from environment or use default
-        api_host = os.getenv("API_HOST", "https://forum-autoposter-production.up.railway.app")
-        return f"{api_host}/r/cmnews/{short_id}"
+        short_url = response.text.strip()
+        logger.info(f"🔗 Short URL created: {short_url}")
+        return short_url
 
     except Exception as e:
         logger.error(f"Failed to create short URL: {e}")
-        # Fallback to original URL if short URL creation fails
+        # Fallback to original URL if shortening fails
         return original_url
 
 
@@ -673,10 +661,11 @@ async def auto_post_investment_blog():
                 content = re.sub(r'\n\s*\n\s*\n+', '\n\n', content)
                 content = content.strip()
 
-                # Add source link with UTM
+                # Add source link with UTM (shortened via is.gd)
                 author_id = article.get("author_id", "newsyoudeservetoknow")
-                source_url = f"https://cmnews.com.tw/article/{author_id}-{article_id}?utm_source=aigc_forum"
-                content_with_source = f"{content}\n\n原文連結：{source_url}"
+                original_url = f"https://cmnews.com.tw/article/{author_id}-{article_id}?utm_source=aigc_forum"
+                short_url = create_short_url(original_url)
+                content_with_source = f"{content}\n\n原文連結：{short_url}"
 
                 # Build and publish
                 article_data = ArticleData(
@@ -9234,10 +9223,11 @@ try:
             content = re.sub(r'\n\s*\n\s*\n+', '\n\n', content)  # Max 2 newlines
             content = content.strip()
 
-            # Add source link with UTM
+            # Add source link with UTM (shortened via is.gd)
             author_id = article.get("author_id", "newsyoudeservetoknow")
-            source_url = f"https://cmnews.com.tw/article/{author_id}-{article_id}?utm_source=aigc_forum"
-            content_with_source = f"{content}\n\n原文連結：{source_url}"
+            original_url = f"https://cmnews.com.tw/article/{author_id}-{article_id}?utm_source=aigc_forum"
+            short_url = create_short_url(original_url)
+            content_with_source = f"{content}\n\n原文連結：{short_url}"
 
             # Build article data
             article_data = ArticleData(
