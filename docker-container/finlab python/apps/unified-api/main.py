@@ -197,6 +197,88 @@ def create_short_url(original_url: str) -> str:
         return original_url
 
 
+# ==================== Stock Mention Extractor ====================
+# Cache for name→code mapping (built once from stock_mapping)
+_stock_name_to_code_cache = None
+
+def build_stock_name_cache():
+    """Build reverse mapping from company_name to stock_code"""
+    global _stock_name_to_code_cache
+    if _stock_name_to_code_cache is not None:
+        return _stock_name_to_code_cache
+
+    _stock_name_to_code_cache = {}
+    for stock_id, info in stock_mapping.items():
+        company_name = info.get('company_name', '')
+        if company_name and len(company_name) >= 2:
+            # Store both full name and common variations
+            _stock_name_to_code_cache[company_name] = stock_id
+            # Also add without -KY suffix for foreign stocks
+            if company_name.endswith('-KY'):
+                _stock_name_to_code_cache[company_name[:-3]] = stock_id
+
+    logger.info(f"📊 Built stock name cache: {len(_stock_name_to_code_cache)} entries")
+    return _stock_name_to_code_cache
+
+
+def extract_stock_mentions(content: str, existing_codes: list = None) -> list:
+    """
+    Extract stock codes mentioned in content text.
+
+    Args:
+        content: Article content to scan
+        existing_codes: Already tagged stock codes to skip
+
+    Returns:
+        List of additional commodity_tags to add
+    """
+    import re
+
+    if not content or not stock_mapping:
+        return []
+
+    existing_codes = existing_codes or []
+    existing_set = set(str(c) for c in existing_codes)
+
+    additional_tags = []
+    found_codes = set()
+
+    # Method 1: Find patterns like "台積電(2330)" or "聯發科（2454）"
+    pattern1 = re.findall(r'[\u4e00-\u9fff]+[（(](\d{4})[)）]', content)
+    for code in pattern1:
+        if code not in existing_set and code not in found_codes and code in stock_mapping:
+            found_codes.add(code)
+            additional_tags.append({
+                "type": "Stock",
+                "key": code,
+                "bullOrBear": 0
+            })
+
+    # Method 2: Search for company names in content using cache
+    name_cache = build_stock_name_cache()
+
+    # Sort by name length (longer first) to match "台積電" before "台積"
+    sorted_names = sorted(name_cache.keys(), key=len, reverse=True)
+
+    for company_name in sorted_names:
+        if len(company_name) < 2:
+            continue
+        if company_name in content:
+            code = name_cache[company_name]
+            if code not in existing_set and code not in found_codes:
+                found_codes.add(code)
+                additional_tags.append({
+                    "type": "Stock",
+                    "key": code,
+                    "bullOrBear": 0
+                })
+
+    if additional_tags:
+        logger.info(f"📈 Extracted {len(additional_tags)} additional stock mentions: {[t['key'] for t in additional_tags]}")
+
+    return additional_tags
+
+
 def convert_post_datetimes_to_taipei(post_dict):
     """
     Convert naive UTC datetime fields in post dictionary to Taipei timezone strings.
@@ -650,6 +732,13 @@ async def auto_post_investment_blog():
 
                 # Clean content
                 content = article.get('content', '')
+
+                # Extract additional stock mentions from content (Taiwan stocks only)
+                existing_codes = [t['key'] for t in commodity_tags]
+                additional_tags = extract_stock_mentions(content, existing_codes)
+                commodity_tags.extend(additional_tags)
+
+                # Clean HTML
                 content = re.sub(r'<figure[^>]*>.*?</figure>', '', content, flags=re.IGNORECASE | re.DOTALL)
                 content = re.sub(r'<picture[^>]*>.*?</picture>', '', content, flags=re.IGNORECASE | re.DOTALL)
                 content = re.sub(r'<img[^>]*/?>', '', content, flags=re.IGNORECASE)
@@ -9161,6 +9250,12 @@ try:
                     "key": stock_code,
                     "bullOrBear": 0  # Neutral
                 })
+
+            # Extract additional stock mentions from content (Taiwan stocks only)
+            raw_content = article.get('content', '')
+            existing_codes = [t['key'] for t in commodity_tags]
+            additional_tags = extract_stock_mentions(raw_content, existing_codes)
+            commodity_tags.extend(additional_tags)
 
             logger.info(f"📤 Publishing article {article_id} with {len(commodity_tags)} stock tags")
 
