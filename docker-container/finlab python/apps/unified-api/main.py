@@ -225,6 +225,9 @@ def extract_stock_mentions(content: str, existing_codes: list = None) -> list:
     """
     Extract stock codes mentioned in content text.
 
+    Only tags a stock if BOTH the stock code AND company name appear in the content.
+    This prevents false positives from partial name matches.
+
     Args:
         content: Article content to scan
         existing_codes: Already tagged stock codes to skip
@@ -243,7 +246,8 @@ def extract_stock_mentions(content: str, existing_codes: list = None) -> list:
     additional_tags = []
     found_codes = set()
 
-    # Method 1: Find patterns like "台積電(2330)" or "聯發科（2454）"
+    # Method 1: Find explicit patterns like "台積電(2330)" or "聯發科（2454）"
+    # These are already confirmed pairs, so we tag them directly
     pattern1 = re.findall(r'[\u4e00-\u9fff]+[（(](\d{4})[)）]', content)
     for code in pattern1:
         if code not in existing_set and code not in found_codes and code in stock_mapping:
@@ -254,24 +258,25 @@ def extract_stock_mentions(content: str, existing_codes: list = None) -> list:
                 "bullOrBear": 0
             })
 
-    # Method 2: Search for company names in content using cache
+    # Method 2: Only tag if BOTH stock code AND company name appear in content
+    # This prevents false positives from matching common words
     name_cache = build_stock_name_cache()
 
-    # Sort by name length (longer first) to match "台積電" before "台積"
-    sorted_names = sorted(name_cache.keys(), key=len, reverse=True)
-
-    for company_name in sorted_names:
+    for company_name, code in name_cache.items():
         if len(company_name) < 2:
             continue
-        if company_name in content:
-            code = name_cache[company_name]
-            if code not in existing_set and code not in found_codes:
-                found_codes.add(code)
-                additional_tags.append({
-                    "type": "Stock",
-                    "key": code,
-                    "bullOrBear": 0
-                })
+        # Skip if already found or already tagged
+        if code in existing_set or code in found_codes:
+            continue
+        # BOTH name AND code must appear in content
+        if company_name in content and code in content:
+            found_codes.add(code)
+            additional_tags.append({
+                "type": "Stock",
+                "key": code,
+                "bullOrBear": 0
+            })
+            logger.info(f"📈 Found stock mention: {company_name} ({code})")
 
     if additional_tags:
         logger.info(f"📈 Extracted {len(additional_tags)} additional stock mentions: {[t['key'] for t in additional_tags]}")
