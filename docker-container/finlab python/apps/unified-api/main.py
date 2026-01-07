@@ -760,7 +760,7 @@ async def auto_post_investment_blog():
                 author_id = article.get("author_id", "newsyoudeservetoknow")
                 original_url = f"https://cmnews.com.tw/article/{author_id}-{article_id}?utm_source=aigc_forum"
                 short_url = create_short_url(original_url)
-                content_with_source = f"{content}\n\n原文連結：{short_url}"
+                content_with_source = f"{content}\n\n原文連結：\n{short_url}"
 
                 # Build and publish
                 article_data = ArticleData(
@@ -9328,7 +9328,7 @@ try:
             author_id = article.get("author_id", "newsyoudeservetoknow")
             original_url = f"https://cmnews.com.tw/article/{author_id}-{article_id}?utm_source=aigc_forum"
             short_url = create_short_url(original_url)
-            content_with_source = f"{content}\n\n原文連結：{short_url}"
+            content_with_source = f"{content}\n\n原文連結：\n{short_url}"
 
             # Build article data
             article_data = ArticleData(
